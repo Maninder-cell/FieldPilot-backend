@@ -173,16 +173,40 @@ class Subscription(models.Model):
     
     def update_usage_counts(self):
         """Update current usage counts."""
-        from django_tenants.utils import schema_context
-        
-        with schema_context(self.tenant.schema_name):
-            from apps.authentication.models import User
-            from apps.equipment.models import Equipment
+        try:
+            # For multi-tenant setup with PostgreSQL
+            if hasattr(self.tenant, 'schema_name'):
+                from django_tenants.utils import schema_context
+                with schema_context(self.tenant.schema_name):
+                    from apps.authentication.models import User
+                    from apps.equipment.models import Equipment
+                    
+                    self.current_users_count = User.objects.filter(is_active=True).count()
+                    self.current_equipment_count = Equipment.objects.count()
+            else:
+                # For single-tenant setup (SQLite development)
+                from apps.tenants.models import TenantMember
+                
+                # Count tenant members
+                self.current_users_count = TenantMember.objects.filter(
+                    tenant=self.tenant,
+                    is_active=True
+                ).count()
+                
+                # Equipment count - will be 0 for now if equipment app not set up
+                try:
+                    from apps.equipment.models import Equipment
+                    self.current_equipment_count = Equipment.objects.count()
+                except:
+                    self.current_equipment_count = 0
             
-            self.current_users_count = User.objects.filter(is_active=True).count()
-            self.current_equipment_count = Equipment.objects.count()
             # TODO: Calculate storage usage
             self.save(update_fields=['current_users_count', 'current_equipment_count'])
+        except Exception as e:
+            # Don't fail subscription creation if usage count fails
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to update usage counts: {str(e)}")
 
 
 class Invoice(models.Model):

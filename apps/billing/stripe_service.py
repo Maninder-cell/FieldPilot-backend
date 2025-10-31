@@ -3,8 +3,10 @@ Stripe Integration Service
 
 Copyright (c) 2025 FieldPilot. All rights reserved.
 This source code is proprietary and confidential.
+
+NOTE: Stripe is ONLY used for payment processing.
+Subscription management is handled by our backend.
 """
-import stripe
 from django.conf import settings
 from django.utils import timezone
 from datetime import datetime
@@ -14,8 +16,21 @@ from .models import Subscription, SubscriptionPlan, Invoice, Payment
 
 logger = logging.getLogger(__name__)
 
-# Configure Stripe
-stripe.api_key = settings.STRIPE_SECRET_KEY
+# Try to import Stripe, but make it optional
+STRIPE_ENABLED = False
+try:
+    import stripe
+    stripe_key = getattr(settings, 'STRIPE_SECRET_KEY', None)
+    if stripe_key and stripe_key.strip() and not stripe_key.startswith('sk_test_dummy'):
+        stripe.api_key = stripe_key
+        STRIPE_ENABLED = True
+        logger.info("Stripe payment processing enabled")
+    else:
+        logger.warning("Stripe not configured - payment processing disabled")
+except ImportError:
+    logger.warning("Stripe library not installed - payment processing disabled")
+except Exception as e:
+    logger.error(f"Error configuring Stripe: {str(e)}")
 
 
 class StripeService:
@@ -27,8 +42,14 @@ class StripeService:
     def create_customer(tenant, user):
         """
         Create a Stripe customer for the tenant.
+        Only used for payment processing, not subscription management.
         """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe payment processing is not enabled. Check your STRIPE_SECRET_KEY configuration.")
+        
         try:
+            logger.info(f"Creating Stripe customer for tenant: {tenant.name}")
+            
             customer = stripe.Customer.create(
                 email=user.email,
                 name=f"{user.first_name} {user.last_name}",
@@ -42,8 +63,8 @@ class StripeService:
             logger.info(f"Stripe customer created: {customer.id} for tenant {tenant.name}")
             return customer
             
-        except stripe.error.StripeError as e:
-            logger.error(f"Failed to create Stripe customer: {str(e)}")
+        except Exception as e:
+            logger.error(f"Failed to create Stripe customer: {str(e)}", exc_info=True)
             raise
     
     @staticmethod
@@ -278,16 +299,72 @@ class StripeService:
     def create_setup_intent(customer_id):
         """
         Create a setup intent for saving payment method.
+        This is ONLY for collecting payment information.
+        The card will be saved for future recurring charges.
         """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe payment processing is not enabled. Check your STRIPE_SECRET_KEY configuration.")
+        
         try:
+            logger.info(f"Creating setup intent for customer: {customer_id}")
+            
             setup_intent = stripe.SetupIntent.create(
                 customer=customer_id,
                 payment_method_types=['card'],
-                usage='off_session'
+                usage='off_session'  # Important: allows charging without customer present
             )
             
+            logger.info(f"Setup intent created: {setup_intent.id}")
             return setup_intent
             
+        except Exception as e:
+            logger.error(f"Failed to create setup intent: {str(e)}", exc_info=True)
+            raise
+    
+    @staticmethod
+    def charge_customer(customer_id, amount, description):
+        """
+        Charge a customer's saved payment method.
+        Used for recurring subscription payments.
+        
+        Args:
+            customer_id: Stripe customer ID
+            amount: Amount to charge (Decimal)
+            description: Charge description
+            
+        Returns:
+            Stripe Charge object
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe payment processing is not enabled.")
+        
+        try:
+            logger.info(f"Charging customer {customer_id}: ${amount}")
+            
+            # Convert amount to cents (Stripe uses smallest currency unit)
+            amount_cents = int(float(amount) * 100)
+            
+            # Create payment intent with saved payment method
+            payment_intent = stripe.PaymentIntent.create(
+                amount=amount_cents,
+                currency='usd',
+                customer=customer_id,
+                description=description,
+                off_session=True,  # Customer not present
+                confirm=True,  # Automatically confirm and charge
+                payment_method_types=['card']
+            )
+            
+            logger.info(f"Payment successful: {payment_intent.id}")
+            return payment_intent
+            
+        except stripe.error.CardError as e:
+            # Card was declined
+            logger.error(f"Card declined: {str(e)}")
+            raise
         except stripe.error.StripeError as e:
-            logger.error(f"Failed to create setup intent: {str(e)}")
+            logger.error(f"Stripe error: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Failed to charge customer: {str(e)}", exc_info=True)
             raise
