@@ -109,37 +109,6 @@ FieldPilot is a comprehensive, multi-tenant SaaS platform designed to revolution
 - Redis 7+
 - Docker (recommended)
 
-### Option 1: Docker Setup (Recommended)
-
-```bash
-# Clone the repository
-git clone https://github.com/your-org/fieldpilot.git
-cd fieldpilot
-
-# Copy environment files
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-
-# Start all services
-docker-compose up -d
-
-# Run migrations
-docker-compose exec backend python manage.py migrate_schemas --shared
-docker-compose exec backend python manage.py migrate_schemas --tenant
-
-# Create superuser
-docker-compose exec backend python manage.py createsuperuser
-
-# Access the application
-# Frontend: http://localhost:3000
-# Backend API: http://localhost:8000
-# Admin Panel: http://localhost:8000/admin
-```
-
-### Option 2: Manual Setup
-
-See [DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) for detailed setup instructions.
-
 ## 📚 Documentation
 
 Comprehensive documentation is available in the `/docs` folder:
@@ -152,29 +121,6 @@ Comprehensive documentation is available in the `/docs` folder:
 - **[Security](docs/SECURITY.md)** - Security measures and compliance
 - **[MVP Sprint Plan](docs/MVP_SPRINT_PLAN.md)** - 4-week development plan
 - **[Contributing](docs/CONTRIBUTING.md)** - Contribution guidelines
-
-## 🎬 Demo
-
-### Live Demo
-Visit [demo.fieldpilot.com](https://demo.fieldpilot.com) to try FieldPilot
-
-**Demo Credentials:**
-- Admin: `admin@demo.com` / `demo123`
-- Technician: `tech@demo.com` / `demo123`
-- Customer: `customer@demo.com` / `demo123`
-
-### Screenshots
-
-<div align="center">
-
-| Dashboard | Equipment Management |
-|-----------|---------------------|
-| ![Dashboard](https://via.placeholder.com/400x300?text=Dashboard) | ![Equipment](https://via.placeholder.com/400x300?text=Equipment) |
-
-| Task Management | Mobile Interface |
-|-----------------|------------------|
-| ![Tasks](https://via.placeholder.com/400x300?text=Tasks) | ![Mobile](https://via.placeholder.com/400x300?text=Mobile) |
-
 </div>
 
 ## 🗺️ Roadmap
@@ -228,24 +174,6 @@ Please see our [Contributing Guide](docs/CONTRIBUTING.md) for internal developme
 3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
-## 🧪 Testing
-
-```bash
-# Backend tests
-cd backend
-python manage.py test
-coverage run --source='.' manage.py test
-coverage report
-
-# Frontend tests
-cd frontend
-npm run test
-npm run test:coverage
-
-# E2E tests
-npm run test:e2e
-```
 
 ## 📈 Performance
 

@@ -1,12 +1,23 @@
 #!/usr/bin/env python
-"""Django's command-line utility for administrative tasks."""
+"""
+FieldPilot Django Management Script
+
+Copyright (c) 2025 FieldPilot. All rights reserved.
+This source code is proprietary and confidential.
+"""
 import os
 import sys
 
-
 def main():
     """Run administrative tasks."""
-    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'myproject.settings')
+    # Load .env file first
+    try:
+        from decouple import config
+        settings_module = config('DJANGO_SETTINGS_MODULE', default='config.settings_dev')
+        os.environ['DJANGO_SETTINGS_MODULE'] = settings_module
+    except ImportError:
+        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings_dev')
+    
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
