@@ -256,12 +256,17 @@ else
     print_success "Superuser exists"
 fi
 
-# Step 19: Collect static files (if needed)
+# Step 19: Seed subscription plans
+print_status "Seeding subscription plans..."
+python manage.py seed_plans > /dev/null 2>&1 || true
+print_success "Subscription plans seeded"
+
+# Step 20: Collect static files (if needed)
 print_status "Collecting static files..."
 python manage.py collectstatic --noinput > /dev/null 2>&1 || true
 print_success "Static files collected"
 
-# Step 20: Final system check
+# Step 21: Final system check
 print_status "Running final system check..."
 if python manage.py check; then
     print_success "System check passed"
