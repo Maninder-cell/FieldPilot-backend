@@ -117,7 +117,7 @@ def current_subscription(request):
 @extend_schema(
     tags=['Billing'],
     summary='Create subscription',
-    description='Create a new subscription for the tenant (Admin only). Subscription management is handled by backend. Stripe payment is optional.',
+    description='Create a new subscription for the tenant (Owner/Admin only). Subscription management is handled by backend. Stripe payment is optional.',
     request=CreateSubscriptionSerializer,
     responses={
         201: SubscriptionSerializer,
@@ -125,7 +125,7 @@ def current_subscription(request):
     }
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([IsAuthenticated])
 def create_subscription(request):
     """
     Create a new subscription for the tenant.
@@ -216,7 +216,7 @@ def create_subscription(request):
 @extend_schema(
     tags=['Billing'],
     summary='Update subscription',
-    description='Update subscription plan or billing cycle (upgrade/downgrade) - Admin only',
+    description='Update subscription plan or billing cycle (upgrade/downgrade) - Owner/Admin only',
     request=UpdateSubscriptionSerializer,
     responses={
         200: SubscriptionSerializer,
@@ -225,7 +225,7 @@ def create_subscription(request):
     }
 )
 @api_view(['PUT'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([IsAuthenticated])
 def update_subscription(request):
     """
     Update current subscription (upgrade/downgrade).
@@ -301,7 +301,7 @@ def update_subscription(request):
 @extend_schema(
     tags=['Billing'],
     summary='Cancel subscription',
-    description='Cancel current subscription immediately or at period end (Admin only)',
+    description='Cancel current subscription immediately or at period end (Owner/Admin only)',
     request={'type': 'object', 'properties': {
         'cancel_immediately': {'type': 'boolean', 'default': False},
         'reason': {'type': 'string'}
@@ -312,7 +312,7 @@ def update_subscription(request):
     }
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([IsAuthenticated])
 def cancel_subscription(request):
     """
     Cancel current subscription.
@@ -492,7 +492,7 @@ def payments(request):
     }
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([IsAuthenticated])
 def create_setup_intent(request):
     """
     Create setup intent for saving payment method.
@@ -550,7 +550,7 @@ def create_setup_intent(request):
 @extend_schema(
     tags=['Billing'],
     summary='Add payment method',
-    description='Add payment method to customer account (Admin only)',
+    description='Add payment method to customer account (Owner/Admin only)',
     request=PaymentMethodSerializer,
     responses={
         200: {'description': 'Payment method added successfully'},
@@ -558,7 +558,7 @@ def create_setup_intent(request):
     }
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated, IsAdminUser])
+@permission_classes([IsAuthenticated])
 def add_payment_method(request):
     """
     Add payment method to customer.
