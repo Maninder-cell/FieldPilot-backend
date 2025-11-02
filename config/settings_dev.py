@@ -21,8 +21,13 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
-# Application definition
-INSTALLED_APPS = [
+# Multi-tenancy configuration
+TENANT_MODEL = "tenants.Tenant"
+TENANT_DOMAIN_MODEL = "tenants.Domain"
+
+# Shared apps (available to all tenants)
+SHARED_APPS = [
+    'django_tenants',  # Must be first
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -30,20 +35,42 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     
-    # Third party
+    # Third party shared
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-    'drf_spectacular',  # OpenAPI/Swagger documentation
+    'drf_spectacular',
     
-    # Local apps
-    'apps.core',
-    'apps.authentication',
+    # Local shared apps
     'apps.tenants',
     'apps.billing',
 ]
 
+# Tenant-specific apps (isolated per tenant)
+TENANT_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    
+    # Local tenant apps
+    'apps.authentication',
+    'apps.facilities',
+    'apps.equipment',
+    'apps.tasks',
+    'apps.maintenance',
+    'apps.technicians',
+    'apps.service_requests',
+    'apps.inventory',
+    'apps.notifications',
+    'apps.analytics',
+]
+
+INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
+
 MIDDLEWARE = [
+    'django_tenants.middleware.main.TenantMainMiddleware',  # Must be first
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -74,16 +101,25 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database - PostgreSQL for development
+# Database - PostgreSQL with django-tenants backend
 import dj_database_url
+
+DATABASE_URL = config('DATABASE_URL', default='postgresql://fieldpilot_user:fieldpilot_password@localhost:5432/fieldpilot_db')
 
 DATABASES = {
     'default': dj_database_url.config(
-        default=config('DATABASE_URL', default='postgresql://fieldpilot_user:fieldpilot_password@localhost:5432/fieldpilot_db'),
+        default=DATABASE_URL,
         conn_max_age=600,
         conn_health_checks=True,
     )
 }
+
+# Override engine to use django-tenants PostgreSQL backend
+DATABASES['default']['ENGINE'] = 'django_tenants.postgresql_backend'
+
+DATABASE_ROUTERS = (
+    'django_tenants.routers.TenantSyncRouter',
+)
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [

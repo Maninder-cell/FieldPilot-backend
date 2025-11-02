@@ -1,5 +1,5 @@
 """
-Tenant Models (Simplified without django-tenants)
+Tenant Models with django-tenants for schema-per-tenant multi-tenancy
 
 Copyright (c) 2025 FieldPilot. All rights reserved.
 This source code is proprietary and confidential.
@@ -8,11 +8,16 @@ import uuid
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from django_tenants.models import TenantMixin, DomainMixin
 
 
-class Tenant(models.Model):
+class Tenant(TenantMixin):
     """
     Tenant/Company model - represents an organization using the platform.
+    Uses django-tenants for schema-per-tenant isolation.
+    
+    Note: We override the default auto-incrementing id from TenantMixin
+    to use UUID as primary key (existing database constraint).
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255, help_text="Company/Organization name")
@@ -70,8 +75,19 @@ class Tenant(models.Model):
         return self.name
     
     def save(self, *args, **kwargs):
+        # Generate slug from name if not provided
         if not self.slug:
             self.slug = slugify(self.name)
+        
+        # Generate schema_name from slug if not provided
+        # Schema names must be lowercase and use underscores
+        if not self.schema_name:
+            self.schema_name = self.slug.replace('-', '_').lower()
+        
+        # Set auto_create_schema to True by default
+        if not hasattr(self, 'auto_create_schema'):
+            self.auto_create_schema = True
+        
         super().save(*args, **kwargs)
     
     @property
@@ -93,6 +109,20 @@ class Tenant(models.Model):
         else:
             self.trial_ends_at = timezone.now() + timezone.timedelta(days=days)
         self.save()
+
+
+class Domain(DomainMixin):
+    """
+    Domain model for tenant routing.
+    Links domains to tenants for schema-per-tenant routing.
+    """
+    class Meta:
+        db_table = 'tenants_domains'
+        verbose_name = 'Domain'
+        verbose_name_plural = 'Domains'
+    
+    def __str__(self):
+        return f"{self.domain} ({'primary' if self.is_primary else 'secondary'})"
 
 
 class TenantMember(models.Model):
