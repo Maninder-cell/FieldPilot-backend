@@ -77,8 +77,8 @@ class Subscription(models.Model):
     plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT)
     
     # Stripe integration
-    stripe_customer_id = models.CharField(max_length=255, blank=True)
-    stripe_subscription_id = models.CharField(max_length=255, blank=True, unique=True)
+    stripe_customer_id = models.CharField(max_length=255, blank=True, null=True)
+    stripe_subscription_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
     
     # Subscription details
     status = models.CharField(

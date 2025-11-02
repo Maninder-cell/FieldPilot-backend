@@ -169,8 +169,8 @@ def create_subscription(request):
                 billing_cycle=billing_cycle,
                 current_period_start=now,
                 current_period_end=period_end,
-                stripe_customer_id='',  # Optional - only if using Stripe
-                stripe_subscription_id=''  # Optional - only if using Stripe
+                stripe_customer_id=None,  # Optional - only if using Stripe
+                stripe_subscription_id=None  # Optional - only if using Stripe
             )
             
             # If payment method provided, link to Stripe for future charging
