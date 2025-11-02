@@ -349,7 +349,7 @@ def invite_member(request):
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Add as member
+            # Add as member directly
             TenantMember.objects.create(
                 tenant=membership.tenant,
                 user=user,
@@ -359,8 +359,43 @@ def invite_member(request):
             message = f"User {email} added to company"
             
         except User.DoesNotExist:
-            # TODO: Send invitation email
-            message = f"Invitation sent to {email}"
+            # Create invitation for non-existent user
+            from apps.tenants.models import TenantInvitation
+            import secrets
+            from datetime import timedelta
+            
+            # Check if invitation already exists
+            existing_invitation = TenantInvitation.objects.filter(
+                tenant=membership.tenant,
+                email=email,
+                status='pending'
+            ).first()
+            
+            if existing_invitation:
+                if existing_invitation.is_valid():
+                    return error_response(
+                        message=f"An invitation has already been sent to {email}",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                else:
+                    # Delete expired invitation
+                    existing_invitation.delete()
+            
+            # Create new invitation
+            invitation = TenantInvitation.objects.create(
+                tenant=membership.tenant,
+                email=email,
+                role=role,
+                invited_by=request.user,
+                token=secrets.token_urlsafe(32),
+                expires_at=timezone.now() + timedelta(days=7)
+            )
+            
+            # TODO: Send invitation email with token
+            # For now, user needs to register with the invited email
+            logger.info(f"Invitation created for {email} to join {membership.tenant.name}")
+            
+            message = f"Invitation sent to {email}. They need to register with this email to join."
         
         return success_response(
             message=message
@@ -370,5 +405,179 @@ def invite_member(request):
         logger.error(f"Failed to invite member: {str(e)}")
         return error_response(
             message="Failed to send invitation",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Get pending invitations',
+    description='Get list of pending invitations for the tenant (Owner/Admin only)',
+    responses={
+        200: {'description': 'List of pending invitations'},
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def pending_invitations(request):
+    """
+    Get pending invitations for the tenant.
+    """
+    try:
+        membership = request.user.tenant_memberships.filter(is_active=True).first()
+        
+        if not membership:
+            return error_response(
+                message="No company found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        if membership.role not in ['owner', 'admin']:
+            return error_response(
+                message="Only owners and admins can view invitations",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        from apps.tenants.models import TenantInvitation
+        
+        invitations = TenantInvitation.objects.filter(
+            tenant=membership.tenant,
+            status='pending'
+        ).order_by('-created_at')
+        
+        data = []
+        for inv in invitations:
+            data.append({
+                'id': str(inv.id),
+                'email': inv.email,
+                'role': inv.role,
+                'invited_by': inv.invited_by.email if inv.invited_by else None,
+                'created_at': inv.created_at.isoformat(),
+                'expires_at': inv.expires_at.isoformat(),
+                'is_valid': inv.is_valid()
+            })
+        
+        return success_response(
+            data=data,
+            message=f"Found {len(data)} pending invitations"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get pending invitations: {str(e)}")
+        return error_response(
+            message="Failed to retrieve invitations",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Check invitation by email',
+    description='Check if there is a pending invitation for the current user\'s email',
+    responses={
+        200: {'description': 'Invitation details if found'},
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def check_invitation(request):
+    """
+    Check if user has any pending invitations.
+    """
+    try:
+        from apps.tenants.models import TenantInvitation
+        
+        invitations = TenantInvitation.objects.filter(
+            email=request.user.email,
+            status='pending'
+        ).order_by('-created_at')
+        
+        data = []
+        for inv in invitations:
+            if inv.is_valid():
+                data.append({
+                    'id': str(inv.id),
+                    'tenant_name': inv.tenant.name,
+                    'role': inv.role,
+                    'invited_by': inv.invited_by.email if inv.invited_by else None,
+                    'created_at': inv.created_at.isoformat(),
+                    'expires_at': inv.expires_at.isoformat()
+                })
+        
+        return success_response(
+            data=data,
+            message=f"Found {len(data)} pending invitations"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to check invitations: {str(e)}")
+        return error_response(
+            message="Failed to check invitations",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Accept invitation',
+    description='Accept a pending invitation to join a tenant',
+    responses={
+        200: {'description': 'Invitation accepted successfully'},
+        404: {'description': 'Invitation not found or expired'},
+    }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def accept_invitation(request, invitation_id):
+    """
+    Accept an invitation to join a tenant.
+    """
+    try:
+        from apps.tenants.models import TenantInvitation
+        
+        invitation = TenantInvitation.objects.get(
+            id=invitation_id,
+            email=request.user.email,
+            status='pending'
+        )
+        
+        if not invitation.is_valid():
+            return error_response(
+                message="This invitation has expired",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if user is already a member
+        if invitation.tenant.members.filter(user=request.user).exists():
+            invitation.status = 'accepted'
+            invitation.accepted_at = timezone.now()
+            invitation.save()
+            
+            return error_response(
+                message="You are already a member of this company",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Accept invitation (creates membership)
+        invitation.accept(request.user)
+        
+        return success_response(
+            data={
+                'tenant_name': invitation.tenant.name,
+                'role': invitation.role
+            },
+            message=f"Successfully joined {invitation.tenant.name}"
+        )
+        
+    except TenantInvitation.DoesNotExist:
+        return error_response(
+            message="Invitation not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Failed to accept invitation: {str(e)}")
+        return error_response(
+            message="Failed to accept invitation",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

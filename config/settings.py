@@ -44,6 +44,7 @@ SHARED_APPS = [
     # Local shared apps
     'apps.tenants',
     'apps.billing',
+    'apps.authentication',  # Shared - users can belong to multiple tenants
 ]
 
 # Tenant-specific apps (isolated per tenant)
@@ -55,7 +56,6 @@ TENANT_APPS = [
     'django.contrib.messages',
     
     # Local tenant apps
-    'apps.authentication',
     'apps.facilities',
     'apps.equipment',
     'apps.tasks',

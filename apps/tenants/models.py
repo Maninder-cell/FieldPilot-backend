@@ -196,3 +196,74 @@ class TenantSettings(models.Model):
     
     def __str__(self):
         return f"Settings for {self.tenant.name}"
+
+
+
+class TenantInvitation(models.Model):
+    """
+    Pending invitations for users to join a tenant.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='invitations')
+    email = models.EmailField()
+    role = models.CharField(
+        max_length=20,
+        choices=[
+            ('owner', 'Owner'),
+            ('admin', 'Admin'),
+            ('manager', 'Manager'),
+            ('employee', 'Employee'),
+        ],
+        default='employee'
+    )
+    invited_by = models.ForeignKey('authentication.User', on_delete=models.SET_NULL, null=True, related_name='sent_invitations')
+    
+    # Invitation token for verification
+    token = models.CharField(max_length=100, unique=True, db_index=True)
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('accepted', 'Accepted'),
+            ('expired', 'Expired'),
+            ('revoked', 'Revoked'),
+        ],
+        default='pending'
+    )
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    accepted_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        db_table = 'tenant_invitations'
+        unique_together = ['tenant', 'email']
+        ordering = ['-created_at']
+        verbose_name = 'Tenant Invitation'
+        verbose_name_plural = 'Tenant Invitations'
+    
+    def __str__(self):
+        return f"Invitation for {self.email} to {self.tenant.name}"
+    
+    def is_valid(self):
+        """Check if invitation is still valid."""
+        return (
+            self.status == 'pending' and
+            timezone.now() < self.expires_at
+        )
+    
+    def accept(self, user):
+        """Mark invitation as accepted."""
+        self.status = 'accepted'
+        self.accepted_at = timezone.now()
+        self.save()
+        
+        # Create tenant membership
+        TenantMember.objects.create(
+            tenant=self.tenant,
+            user=user,
+            role=self.role
+        )

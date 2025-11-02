@@ -19,4 +19,9 @@ urlpatterns = [
     # Members
     path('members/', views.tenant_members, name='tenant_members'),
     path('members/invite/', views.invite_member, name='invite_member'),
+    
+    # Invitations
+    path('invitations/pending/', views.pending_invitations, name='pending_invitations'),
+    path('invitations/check/', views.check_invitation, name='check_invitation'),
+    path('invitations/<uuid:invitation_id>/accept/', views.accept_invitation, name='accept_invitation'),
 ]
