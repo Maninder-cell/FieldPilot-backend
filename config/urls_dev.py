@@ -28,6 +28,8 @@ urlpatterns = [
     path('api/v1/auth/', include('apps.authentication.urls')),
     path('api/v1/onboarding/', include('apps.tenants.urls')),
     path('api/v1/billing/', include('apps.billing.urls')),
+    path('api/v1/', include('apps.facilities.urls')),
+    path('api/v1/', include('apps.equipment.urls')),
     
     # Health check
     path('health/', include('apps.core.urls')),

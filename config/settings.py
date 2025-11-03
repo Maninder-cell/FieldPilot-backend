@@ -42,6 +42,7 @@ SHARED_APPS = [
     'drf_spectacular',
     
     # Local shared apps
+    'apps.core',
     'apps.tenants',
     'apps.billing',
     'apps.authentication',  # Shared - users can belong to multiple tenants
@@ -162,7 +163,7 @@ AUTH_USER_MODEL = 'authentication.User'
 # REST Framework configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.authentication.authentication.TenantJWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
