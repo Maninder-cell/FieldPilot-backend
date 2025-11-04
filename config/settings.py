@@ -180,16 +180,122 @@ REST_FRAMEWORK = {
 # DRF Spectacular (Swagger/OpenAPI) Configuration
 SPECTACULAR_SETTINGS = {
     'TITLE': 'FieldPilot API',
-    'DESCRIPTION': 'Field Service Management Platform API',
+    'DESCRIPTION': '''
+# FieldPilot API Documentation
+
+AI-Powered Multi-Tenant Facility & Equipment Management SaaS Platform
+
+## Getting Started
+
+1. **Register** a new user account
+2. **Verify** your email with OTP
+3. **Login** to get JWT access token
+4. **Create** your company/tenant
+5. **Subscribe** to a plan
+6. **Invite** team members
+
+## Authentication
+
+All protected endpoints require a JWT token in the Authorization header:
+```
+Authorization: Bearer <your_access_token>
+```
+
+Get your token by calling the `/api/v1/auth/login/` endpoint.
+
+## Multi-Tenancy
+
+This API uses subdomain-based multi-tenancy. Each tenant has their own subdomain:
+- Development: `http://{tenant}.localhost:8000`
+- Production: `https://{tenant}.fieldpilot.com`
+
+## Support
+
+For support, contact: support@fieldpilot.com
+    ''',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
     'COMPONENT_SPLIT_REQUEST': True,
-    'SCHEMA_PATH_PREFIX': r'/api/v[0-9]',
+    'SCHEMA_PATH_PREFIX': '/api/v1/',
+    
+    # Swagger UI settings
     'SWAGGER_UI_SETTINGS': {
         'deepLinking': True,
         'persistAuthorization': True,
-        'displayOperationId': True,
+        'displayOperationId': False,
+        'defaultModelsExpandDepth': 1,
+        'defaultModelExpandDepth': 1,
+        'defaultModelRendering': 'model',
+        'displayRequestDuration': True,
+        'docExpansion': 'none',
+        'filter': True,
+        'showExtensions': True,
+        'showCommonExtensions': True,
+        'syntaxHighlight.theme': 'monokai',
     },
+    
+    # Servers - Use relative URL to support multi-tenant subdomains
+    'SERVERS': [
+        {'url': '/', 'description': 'Current tenant (auto-detected)'},
+    ],
+    
+    # Tags (organized by feature)
+    'TAGS': [
+        {
+            'name': 'Authentication',
+            'description': 'User registration, login, profile management, and password operations'
+        },
+        {
+            'name': 'Onboarding',
+            'description': 'Company/tenant creation, team member management, and onboarding flow'
+        },
+        {
+            'name': 'Billing',
+            'description': 'Subscription plans, payment methods, invoices, and billing management'
+        },
+        {
+            'name': 'Customers',
+            'description': 'Customer management, invitations, and access control'
+        },
+        {
+            'name': 'Facilities',
+            'description': 'Facility management and operations'
+        },
+        {
+            'name': 'Buildings',
+            'description': 'Building management within facilities'
+        },
+        {
+            'name': 'Equipment',
+            'description': 'Equipment tracking and management'
+        },
+    ],
+    
+    # Contact and license
+    'CONTACT': {
+        'name': 'FieldPilot Support',
+        'email': 'support@fieldpilot.com',
+        'url': 'https://fieldpilot.com/support',
+    },
+    'LICENSE': {
+        'name': 'Proprietary',
+        'url': 'https://fieldpilot.com/license',
+    },
+    
+    # Schema generation settings
+    'ENUM_NAME_OVERRIDES': {},
+    'POSTPROCESSING_HOOKS': ['config.spectacular_hooks.postprocessing_hook'],
+    'PREPROCESSING_HOOKS': [],
+    'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
+    'SERVE_AUTHENTICATION': None,
+    
+    # Component settings
+    'COMPONENT_NO_READ_ONLY_REQUIRED': False,
+    'CAMELIZE_NAMES': False,
+    'SCHEMA_COERCE_PATH_PK': True,
+    'SCHEMA_COERCE_METHOD_NAMES': {},
+    
+    # Security
     'SECURITY': [
         {
             'Bearer': {
@@ -220,8 +326,30 @@ SIMPLE_JWT = {
 }
 
 # CORS Configuration
-CORS_ALLOWED_ORIGINS = config('CORS_ALLOWED_ORIGINS', default='http://localhost:3000').split(',')
-CORS_ALLOW_CREDENTIALS = True
+# In production, use environment variable to set allowed origins
+# Example: CORS_ALLOWED_ORIGINS=https://app.fieldpilot.com,https://admin.fieldpilot.com
+if DEBUG:
+    # Development: Allow all localhost subdomains
+    CORS_ALLOW_ALL_ORIGINS = True
+    CORS_ALLOW_CREDENTIALS = True
+else:
+    # Production: Use specific origins from environment variable
+    cors_origins = config('CORS_ALLOWED_ORIGINS', default='')
+    if cors_origins:
+        CORS_ALLOWED_ORIGINS = [origin.strip() for origin in cors_origins.split(',') if origin.strip()]
+    else:
+        CORS_ALLOWED_ORIGINS = []
+    
+    # Allow credentials for authenticated requests
+    CORS_ALLOW_CREDENTIALS = True
+    
+    # Allow tenant subdomains using regex pattern
+    # Example: *.fieldpilot.com
+    cors_domain = config('CORS_ALLOWED_DOMAIN', default='fieldpilot.com')
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        rf"^https://.*\.{cors_domain}$",  # Allow any subdomain
+        rf"^https://{cors_domain}$",       # Allow main domain
+    ]
 
 # Email Configuration
 EMAIL_BACKEND = config('EMAIL_BACKEND', default='django.core.mail.backends.console.EmailBackend')

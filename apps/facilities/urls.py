@@ -15,6 +15,7 @@ urlpatterns = [
     path('customers/<uuid:customer_id>/', views.customer_detail, name='customer-detail'),
     path('customers/invite/', views.customer_invite, name='customer-invite'),
     path('customers/<uuid:customer_id>/assets/', views.customer_assets, name='customer-assets'),
+    path('customers/invitations/verify/', views.verify_customer_invitation, name='verify-customer-invitation'),
     path('customers/invitations/accept/', views.accept_customer_invitation, name='accept-customer-invitation'),
     
     # Facility endpoints

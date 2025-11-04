@@ -236,10 +236,9 @@ For support, contact: support@fieldpilot.com
         'syntaxHighlight.theme': 'monokai',
     },
     
-    # Servers
+    # Servers - Use relative URL to support multi-tenant subdomains
     'SERVERS': [
-        {'url': 'http://127.0.0.1:8000', 'description': 'Development server'},
-        {'url': 'https://api.fieldpilot.com', 'description': 'Production server'},
+        {'url': '/', 'description': 'Current tenant (auto-detected)'},
     ],
     
     # Tags (organized by feature)
@@ -271,7 +270,7 @@ For support, contact: support@fieldpilot.com
     
     # Schema generation settings
     'ENUM_NAME_OVERRIDES': {},
-    'POSTPROCESSING_HOOKS': [],
+    'POSTPROCESSING_HOOKS': ['config.spectacular_hooks.postprocessing_hook'],
     'PREPROCESSING_HOOKS': [],
     'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
     'SERVE_AUTHENTICATION': None,
@@ -301,12 +300,27 @@ SIMPLE_JWT = {
     'TOKEN_TYPE_CLAIM': 'token_type',
 }
 
-# CORS Configuration
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-]
+# CORS Configuration - Allow all origins in development for multi-tenant subdomains
+CORS_ALLOW_ALL_ORIGINS = True  # For development only
 CORS_ALLOW_CREDENTIALS = True
+
+# Alternative: Specific origins (uncomment if you want to restrict)
+# CORS_ALLOWED_ORIGINS = [
+#     'http://localhost:3000',
+#     'http://127.0.0.1:3000',
+#     'http://localhost:8000',
+#     'http://127.0.0.1:8000',
+#     'http://jumba.localhost:8000',
+#     'http://amazon.localhost:8000',
+#     'http://acme.localhost:8000',
+# ]
+
+# Allow all localhost subdomains using regex (more secure than ALLOW_ALL)
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^http://localhost:\d+$",
+    r"^http://127\.0\.0\.1:\d+$",
+    r"^http://.*\.localhost:\d+$",  # Allow any subdomain of localhost
+]
 
 # Email Configuration (Console for development)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
         OpenApiParameter('status', str, description='Filter by status (active, inactive, pending)'),
         OpenApiParameter('search', str, description='Search by name, email, or company name'),
     ],
+    request=CreateCustomerSerializer,
     responses={
         200: CustomerSerializer(many=True),
         201: CustomerSerializer,
@@ -127,6 +128,7 @@ def customer_list_create(request):
     tags=['Customers'],
     summary='Get, update, or delete customer',
     description='Retrieve customer details, update customer information, or soft delete a customer',
+    request=UpdateCustomerSerializer,
     responses={
         200: CustomerSerializer,
         404: {'description': 'Customer not found'},
@@ -343,8 +345,50 @@ def customer_assets(request, customer_id):
 
 @extend_schema(
     tags=['Customers'],
+    summary='Verify customer invitation',
+    description='Verify a customer invitation token (public endpoint - no auth required)',
+    request=AcceptInvitationSerializer,
+    responses={
+        200: CustomerInvitationSerializer,
+        400: {'description': 'Invalid or expired invitation'},
+    }
+)
+@api_view(['POST'])
+@permission_classes([])  # Public endpoint
+def verify_customer_invitation(request):
+    """
+    Verify a customer invitation token.
+    This is a public endpoint that customers can use to check if their invitation is valid
+    before registering.
+    """
+    serializer = AcceptInvitationSerializer(data=request.data)
+    
+    if not serializer.is_valid():
+        return error_response(
+            message='Invalid invitation data',
+            details=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        invitation = serializer.invitation
+        
+        return success_response(
+            data=CustomerInvitationSerializer(invitation).data,
+            message='Invitation is valid'
+        )
+    except Exception as e:
+        logger.error(f"Failed to verify invitation: {str(e)}", exc_info=True)
+        return error_response(
+            message='Failed to verify invitation',
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Customers'],
     summary='Accept customer invitation',
-    description='Accept a customer invitation and link user account',
+    description='Accept a customer invitation and link user account (requires authentication)',
     request=AcceptInvitationSerializer,
     responses={
         200: {'description': 'Invitation accepted successfully'},
@@ -356,6 +400,7 @@ def customer_assets(request, customer_id):
 def accept_customer_invitation(request):
     """
     Accept a customer invitation.
+    User must be authenticated to accept the invitation.
     """
     serializer = AcceptInvitationSerializer(data=request.data)
     
@@ -369,6 +414,13 @@ def accept_customer_invitation(request):
     try:
         with transaction.atomic():
             invitation = serializer.invitation
+            
+            # Verify email matches
+            if invitation.email.lower() != request.user.email.lower():
+                return error_response(
+                    message='Invitation email does not match your account email',
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
             
             # Accept invitation and link user
             invitation.accept(request.user)
@@ -405,6 +457,7 @@ def accept_customer_invitation(request):
         OpenApiParameter('customer', str, description='Filter by customer ID'),
         OpenApiParameter('search', str, description='Search by name or code'),
     ],
+    request=CreateFacilitySerializer,
     responses={
         200: FacilityListSerializer(many=True),
         201: FacilitySerializer,
@@ -511,6 +564,7 @@ def facility_list_create(request):
     tags=['Facilities'],
     summary='Get, update, or delete facility',
     description='Retrieve facility details, update facility information, or soft delete a facility',
+    request=UpdateFacilitySerializer,
     responses={
         200: FacilitySerializer,
         404: {'description': 'Facility not found'},
@@ -767,6 +821,7 @@ def facility_equipment(request, facility_id):
         OpenApiParameter('customer', str, description='Filter by customer ID'),
         OpenApiParameter('search', str, description='Search by name or code'),
     ],
+    request=CreateBuildingSerializer,
     responses={
         200: BuildingListSerializer(many=True),
         201: BuildingSerializer,
@@ -879,6 +934,7 @@ def building_list_create(request):
     tags=['Buildings'],
     summary='Get, update, or delete building',
     description='Retrieve building details, update building information, or soft delete a building',
+    request=UpdateBuildingSerializer,
     responses={
         200: BuildingSerializer,
         404: {'description': 'Building not found'},
@@ -1060,6 +1116,7 @@ def building_equipment(request, building_id):
         OpenApiParameter('entity_type', str, description='Filter by entity type (facility, building, equipment, etc.)'),
         OpenApiParameter('entity_id', str, description='Filter by entity ID'),
     ],
+    request=CreateLocationSerializer,
     responses={
         200: LocationSerializer(many=True),
         201: LocationSerializer,
@@ -1137,6 +1194,7 @@ def location_list_create(request):
     tags=['Locations'],
     summary='Get, update, or delete location',
     description='Retrieve location details, update location information, or delete a location',
+    request=UpdateLocationSerializer,
     responses={
         200: LocationSerializer,
         404: {'description': 'Location not found'},

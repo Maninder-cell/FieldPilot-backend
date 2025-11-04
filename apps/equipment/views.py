@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
         OpenApiParameter('customer', str, description='Filter by customer ID'),
         OpenApiParameter('search', str, description='Search by name or equipment number'),
     ],
+    request=CreateEquipmentSerializer,
     responses={
         200: EquipmentListSerializer(many=True),
         201: EquipmentSerializer,
@@ -160,6 +161,7 @@ def equipment_list_create(request):
     tags=['Equipment'],
     summary='Get, update, or delete equipment',
     description='Retrieve equipment details, update equipment information, or soft delete equipment',
+    request=UpdateEquipmentSerializer,
     responses={
         200: EquipmentSerializer,
         404: {'description': 'Equipment not found'},
