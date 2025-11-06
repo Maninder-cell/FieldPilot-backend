@@ -29,6 +29,22 @@ print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
+# Function to show progress for long-running commands
+show_progress() {
+    local pid=$1
+    local message=$2
+    local spin='-\|/'
+    local i=0
+    
+    echo -n "   $message "
+    while kill -0 $pid 2>/dev/null; do
+        i=$(( (i+1) %4 ))
+        printf "\r   $message ${spin:$i:1}"
+        sleep 0.1
+    done
+    printf "\r   $message ✓\n"
+}
+
 # Print banner
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
@@ -67,16 +83,33 @@ print_success "docker-compose is installed"
 print_status "Checking Python installation..."
 if ! command -v python3 &> /dev/null; then
     print_error "Python 3 is not installed. Please install Python 3.8 or higher."
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        echo "On macOS, install with: brew install python3"
+    fi
     exit 1
 fi
 PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
 print_success "Python $PYTHON_VERSION is installed"
 
+# Check if pip is available
+if ! python3 -m pip --version &> /dev/null; then
+    print_warning "pip is not available, installing..."
+    python3 -m ensurepip --upgrade || {
+        print_error "Failed to install pip"
+        exit 1
+    }
+fi
+
 # Step 5: Check if virtual environment exists, create if not
 print_status "Checking virtual environment..."
 if [ ! -d "venv" ]; then
     print_warning "Virtual environment not found. Creating..."
-    python3 -m venv venv
+    echo "   This may take a minute..."
+    python3 -m venv venv || {
+        print_error "Failed to create virtual environment"
+        echo "Try running: python3 -m pip install --upgrade pip setuptools"
+        exit 1
+    }
     print_success "Virtual environment created"
 else
     print_success "Virtual environment exists"
@@ -84,7 +117,11 @@ fi
 
 # Step 6: Activate virtual environment
 print_status "Activating virtual environment..."
-source venv/bin/activate
+source venv/bin/activate || {
+    print_error "Failed to activate virtual environment"
+    echo "Try running: source venv/bin/activate"
+    exit 1
+}
 print_success "Virtual environment activated"
 
 # Step 7: Check if requirements.txt exists
@@ -94,10 +131,36 @@ if [ ! -f "requirements.txt" ]; then
 fi
 
 # Step 8: Install/Update Python dependencies
-print_status "Installing/Updating Python dependencies..."
-pip install --upgrade pip > /dev/null 2>&1
-pip install -r requirements.txt > /dev/null 2>&1
-print_success "Python dependencies installed"
+print_status "Installing/Updating Python dependencies (this may take a few minutes)..."
+
+# Check if requirements have changed
+REQUIREMENTS_HASH=""
+if [ -f ".requirements_hash" ]; then
+    REQUIREMENTS_HASH=$(cat .requirements_hash)
+fi
+CURRENT_HASH=$(md5sum requirements.txt 2>/dev/null || md5 requirements.txt 2>/dev/null | awk '{print $1}')
+
+if [ "$REQUIREMENTS_HASH" = "$CURRENT_HASH" ]; then
+    print_success "Dependencies are up to date (skipping installation)"
+else
+    echo "   Upgrading pip..."
+    pip install --upgrade pip --quiet || pip install --upgrade pip
+    
+    echo "   Installing requirements (showing progress)..."
+    echo "   This may take 2-5 minutes on first run..."
+    pip install -r requirements.txt || {
+        print_error "Failed to install dependencies"
+        echo ""
+        echo "Try running manually:"
+        echo "  source venv/bin/activate"
+        echo "  pip install -r requirements.txt"
+        exit 1
+    }
+    
+    # Save hash to skip next time
+    echo "$CURRENT_HASH" > .requirements_hash
+    print_success "Python dependencies installed"
+fi
 
 # Step 9: Check if .env file exists
 print_status "Checking environment configuration..."
@@ -191,7 +254,7 @@ MAX_RETRIES=3
 RETRY=0
 
 while [ $RETRY -lt $MAX_RETRIES ]; do
-    if docker-compose up -d 2>&1; then
+    if docker-compose up -d; then
         print_success "Docker services started"
         break
     else
@@ -209,7 +272,8 @@ while [ $RETRY -lt $MAX_RETRIES ]; do
             echo "  docker-compose down -v"
             echo "  docker network prune -f"
             echo "  docker system prune -f"
-            echo "  sudo systemctl restart docker  # On Linux"
+            echo "  # On Linux: sudo systemctl restart docker"
+            echo "  # On macOS: Restart Docker Desktop"
             echo ""
             echo "Then run ./start.sh again"
             exit 1
@@ -255,8 +319,13 @@ fi
 
 # Step 16: Create migrations if needed
 print_status "Creating database migrations..."
-python manage.py makemigrations > /dev/null 2>&1 || true
-print_success "Migrations created"
+MIGRATION_OUTPUT=$(python manage.py makemigrations 2>&1)
+if echo "$MIGRATION_OUTPUT" | grep -q "No changes detected"; then
+    print_success "No new migrations needed"
+else
+    echo "$MIGRATION_OUTPUT"
+    print_success "Migrations created"
+fi
 
 # Step 17: Apply migrations (Multi-tenant setup)
 print_status "Applying database migrations for shared schema..."
@@ -291,7 +360,8 @@ TENANT_EXISTS=$(python manage.py shell -c "from apps.tenants.models import Tenan
 
 if [ "$TENANT_EXISTS" = "False" ]; then
     print_warning "No tenant found. Creating default tenant..."
-    python manage.py shell <<EOF
+    echo "   Creating tenant 'Default Company'..."
+    python manage.py shell <<'EOF'
 from apps.tenants.models import Tenant, Domain
 from django.utils.text import slugify
 
@@ -307,12 +377,12 @@ Domain.objects.create(domain="localhost:8000", tenant=tenant, is_primary=False)
 Domain.objects.create(domain="127.0.0.1:8000", tenant=tenant, is_primary=False)
 Domain.objects.create(domain="default.localhost", tenant=tenant, is_primary=True)
 
-print(f"✓ Created tenant: {tenant.name} (schema: {tenant.schema_name})")
-print(f"✓ Access via: http://localhost:8000 or http://127.0.0.1:8000")
+print(f"   ✓ Created tenant: {tenant.name} (schema: {tenant.schema_name})")
+print(f"   ✓ Domains configured: localhost:8000, 127.0.0.1:8000, default.localhost")
 EOF
     
     # Run migrations for the new tenant
-    print_status "Running migrations for new tenant..."
+    echo "   Running migrations for new tenant..."
     python manage.py migrate_schemas --tenant
     print_success "Default tenant created and configured"
 else
