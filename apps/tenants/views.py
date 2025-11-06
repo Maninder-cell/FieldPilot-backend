@@ -55,7 +55,12 @@ logger = logging.getLogger(__name__)
 def create_tenant(request):
     """
     Create a new tenant/company and add current user as owner.
+    
+    Note: Tenant creation must happen in the public schema.
+    This view automatically switches to public schema.
     """
+    from django.db import connection
+    
     serializer = CreateTenantSerializer(data=request.data)
     
     if not serializer.is_valid():
@@ -67,6 +72,9 @@ def create_tenant(request):
     
     try:
         with transaction.atomic():
+            # Switch to public schema for tenant creation
+            connection.set_schema_to_public()
+            
             # Create tenant
             tenant = serializer.save()
             
@@ -83,10 +91,24 @@ def create_tenant(request):
                 role='owner'
             )
             
+            # Automatically create domain for the tenant
+            from apps.tenants.models import Domain
+            domain_name = f"{tenant.slug}.localhost"
+            Domain.objects.create(
+                domain=domain_name,
+                tenant=tenant,
+                is_primary=True
+            )
+            
             logger.info(f"Tenant created: {tenant.name} by {request.user.email}")
+            logger.info(f"Domain created: {domain_name} -> {tenant.schema_name}")
             
             return success_response(
-                data=TenantSerializer(tenant).data,
+                data={
+                    **TenantSerializer(tenant).data,
+                    'domain': domain_name,
+                    'access_url': f"http://{domain_name}:8000"
+                },
                 message="Company created successfully",
                 status_code=status.HTTP_201_CREATED
             )
@@ -155,38 +177,47 @@ def current_tenant(request):
 def update_tenant(request):
     """
     Update tenant information.
+    
+    Note: Tenant updates must happen in the public schema.
+    This view automatically switches to public schema.
     """
+    from django.db import connection
+    
     try:
-        membership = request.user.tenant_memberships.filter(is_active=True).first()
-        
-        if not membership:
-            return error_response(
-                message="No company found",
-                status_code=status.HTTP_404_NOT_FOUND
+        with transaction.atomic():
+            # Switch to public schema for tenant updates
+            connection.set_schema_to_public()
+            
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            if membership.role not in ['owner', 'admin']:
+                return error_response(
+                    message="Only owners and admins can update company information",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            tenant = membership.tenant
+            serializer = UpdateTenantSerializer(tenant, data=request.data, partial=True)
+            
+            if not serializer.is_valid():
+                return error_response(
+                    message="Invalid company data",
+                    details=serializer.errors,
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            serializer.save()
+            
+            return success_response(
+                data=TenantSerializer(tenant).data,
+                message="Company updated successfully"
             )
-        
-        if membership.role not in ['owner', 'admin']:
-            return error_response(
-                message="Only owners and admins can update company information",
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-        
-        tenant = membership.tenant
-        serializer = UpdateTenantSerializer(tenant, data=request.data, partial=True)
-        
-        if not serializer.is_valid():
-            return error_response(
-                message="Invalid company data",
-                details=serializer.errors,
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-        
-        serializer.save()
-        
-        return success_response(
-            data=TenantSerializer(tenant).data,
-            message="Company updated successfully"
-        )
         
     except Exception as e:
         logger.error(f"Failed to update tenant: {str(e)}")
@@ -211,7 +242,12 @@ def update_tenant(request):
 def complete_onboarding_step(request):
     """
     Complete an onboarding step.
+    
+    Note: Tenant updates must happen in the public schema.
+    This view automatically switches to public schema.
     """
+    from django.db import connection
+    
     serializer = OnboardingStepSerializer(data=request.data)
     
     if not serializer.is_valid():
@@ -222,31 +258,35 @@ def complete_onboarding_step(request):
         )
     
     try:
-        membership = request.user.tenant_memberships.filter(is_active=True).first()
-        
-        if not membership:
-            return error_response(
-                message="No company found",
-                status_code=status.HTTP_404_NOT_FOUND
+        with transaction.atomic():
+            # Switch to public schema for tenant updates
+            connection.set_schema_to_public()
+            
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            tenant = membership.tenant
+            step = serializer.validated_data['step']
+            
+            # Update onboarding step
+            if step > tenant.onboarding_step:
+                tenant.onboarding_step = step
+            
+            # Mark onboarding as completed if on final step
+            if step >= 5:
+                tenant.onboarding_completed = True
+            
+            tenant.save()
+            
+            return success_response(
+                data=TenantSerializer(tenant).data,
+                message=f"Onboarding step {step} completed"
             )
-        
-        tenant = membership.tenant
-        step = serializer.validated_data['step']
-        
-        # Update onboarding step
-        if step > tenant.onboarding_step:
-            tenant.onboarding_step = step
-        
-        # Mark onboarding as completed if on final step
-        if step >= 5:
-            tenant.onboarding_completed = True
-        
-        tenant.save()
-        
-        return success_response(
-            data=TenantSerializer(tenant).data,
-            message=f"Onboarding step {step} completed"
-        )
         
     except Exception as e:
         logger.error(f"Failed to complete onboarding step: {str(e)}")
@@ -310,7 +350,12 @@ def tenant_members(request):
 def invite_member(request):
     """
     Invite a member to tenant.
+    
+    Note: TenantMember operations must happen in the public schema.
+    This view automatically switches to public schema.
     """
+    from django.db import connection
+    
     serializer = InviteMemberSerializer(data=request.data)
     
     if not serializer.is_valid():
@@ -321,7 +366,11 @@ def invite_member(request):
         )
     
     try:
-        membership = request.user.tenant_memberships.filter(is_active=True).first()
+        with transaction.atomic():
+            # Switch to public schema for tenant member operations
+            connection.set_schema_to_public()
+            
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
         
         if not membership:
             return error_response(
@@ -532,43 +581,52 @@ def check_invitation(request):
 def accept_invitation(request, invitation_id):
     """
     Accept an invitation to join a tenant.
+    
+    Note: Tenant operations must happen in the public schema.
+    This view automatically switches to public schema.
     """
+    from django.db import connection
+    
     try:
-        from apps.tenants.models import TenantInvitation
-        
-        invitation = TenantInvitation.objects.get(
-            id=invitation_id,
-            email=request.user.email,
-            status='pending'
-        )
-        
-        if not invitation.is_valid():
-            return error_response(
-                message="This invitation has expired",
-                status_code=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Check if user is already a member
-        if invitation.tenant.members.filter(user=request.user).exists():
-            invitation.status = 'accepted'
-            invitation.accepted_at = timezone.now()
-            invitation.save()
+        with transaction.atomic():
+            # Switch to public schema for tenant operations
+            connection.set_schema_to_public()
             
-            return error_response(
-                message="You are already a member of this company",
-                status_code=status.HTTP_400_BAD_REQUEST
+            from apps.tenants.models import TenantInvitation
+            
+            invitation = TenantInvitation.objects.get(
+                id=invitation_id,
+                email=request.user.email,
+                status='pending'
             )
-        
-        # Accept invitation (creates membership)
-        invitation.accept(request.user)
-        
-        return success_response(
-            data={
-                'tenant_name': invitation.tenant.name,
-                'role': invitation.role
-            },
-            message=f"Successfully joined {invitation.tenant.name}"
-        )
+            
+            if not invitation.is_valid():
+                return error_response(
+                    message="This invitation has expired",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if user is already a member
+            if invitation.tenant.members.filter(user=request.user).exists():
+                invitation.status = 'accepted'
+                invitation.accepted_at = timezone.now()
+                invitation.save()
+                
+                return error_response(
+                    message="You are already a member of this company",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Accept invitation (creates membership)
+            invitation.accept(request.user)
+            
+            return success_response(
+                data={
+                    'tenant_name': invitation.tenant.name,
+                    'role': invitation.role
+                },
+                message=f"Successfully joined {invitation.tenant.name}"
+            )
         
     except TenantInvitation.DoesNotExist:
         return error_response(

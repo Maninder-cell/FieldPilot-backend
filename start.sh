@@ -359,35 +359,58 @@ print_status "Checking for default tenant..."
 TENANT_EXISTS=$(python manage.py shell -c "from apps.tenants.models import Tenant; print(Tenant.objects.exclude(schema_name='public').exists())" 2>/dev/null || echo "False")
 
 if [ "$TENANT_EXISTS" = "False" ]; then
-    print_warning "No tenant found. Creating default tenant..."
-    echo "   Creating tenant 'Default Company'..."
+    print_warning "No tenant found. Creating public schema for onboarding..."
+    echo "   Creating public tenant..."
     python manage.py shell <<'EOF'
 from apps.tenants.models import Tenant, Domain
-from django.utils.text import slugify
 
-# Create default tenant
-tenant = Tenant.objects.create(
-    name="Default Company",
-    schema_name="default",
-    slug="default"
+# Create public tenant (for onboarding/registration)
+public_tenant = Tenant.objects.create(
+    schema_name="public",
+    name="Public",
+    slug="public"
 )
 
-# Create domains for easy access
+# Map localhost to public schema for onboarding
 # Note: django-tenants uses hostname WITHOUT port
-Domain.objects.create(domain="localhost", tenant=tenant, is_primary=True)
-Domain.objects.create(domain="127.0.0.1", tenant=tenant, is_primary=False)
-Domain.objects.create(domain="default.localhost", tenant=tenant, is_primary=False)
+Domain.objects.create(domain="localhost", tenant=public_tenant, is_primary=True)
+Domain.objects.create(domain="127.0.0.1", tenant=public_tenant, is_primary=False)
+Domain.objects.create(domain="public.localhost", tenant=public_tenant, is_primary=False)
 
-print(f"   ✓ Created tenant: {tenant.name} (schema: {tenant.schema_name})")
-print(f"   ✓ Domains configured: localhost, 127.0.0.1, default.localhost")
+print(f"   ✓ Created public tenant")
+print(f"   ✓ Domains: localhost, 127.0.0.1, public.localhost")
+print(f"   ✓ Use localhost:8000 for registration and company creation")
 EOF
     
-    # Run migrations for the new tenant
-    echo "   Running migrations for new tenant..."
-    python manage.py migrate_schemas --tenant
-    print_success "Default tenant created and configured"
+    print_success "Public tenant created and configured"
 else
     print_success "Tenant(s) exist"
+    
+    # Ensure public tenant has correct domains
+    python manage.py shell <<'EOF' 2>/dev/null || true
+from apps.tenants.models import Tenant, Domain
+
+# Get or create public tenant
+public_tenant, created = Tenant.objects.get_or_create(
+    schema_name='public',
+    defaults={
+        'name': 'Public',
+        'slug': 'public'
+    }
+)
+
+# Ensure localhost points to public
+Domain.objects.get_or_create(
+    domain='localhost',
+    defaults={'tenant': public_tenant, 'is_primary': True}
+)
+Domain.objects.get_or_create(
+    domain='127.0.0.1',
+    defaults={'tenant': public_tenant, 'is_primary': False}
+)
+
+print("   ✓ Verified public tenant configuration")
+EOF
 fi
 
 # Step 19: Seed subscription plans
