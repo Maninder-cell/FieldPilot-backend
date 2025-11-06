@@ -20,12 +20,11 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        # Step 1: Add schema_name field without unique constraint
+        # Step 1: Add schema_name field without any index or constraint
         migrations.AddField(
             model_name="tenant",
             name="schema_name",
             field=models.CharField(
-                db_index=True,
                 max_length=63,
                 null=True,
                 blank=True,
@@ -35,11 +34,11 @@ class Migration(migrations.Migration):
         # Step 2: Populate schema_name from slug for existing records
         migrations.RunPython(populate_schema_names, migrations.RunPython.noop),
         # Step 3: Make schema_name non-nullable and unique
+        # unique=True creates both the constraint and index automatically
         migrations.AlterField(
             model_name="tenant",
             name="schema_name",
             field=models.CharField(
-                db_index=True,
                 max_length=63,
                 unique=True,
                 validators=[django_tenants.postgresql_backend.base._check_schema_name],
@@ -60,9 +59,9 @@ class Migration(migrations.Migration):
                 ),
                 (
                     "domain",
-                    models.CharField(db_index=True, max_length=253, unique=True),
+                    models.CharField(max_length=253, unique=True),
                 ),
-                ("is_primary", models.BooleanField(db_index=True, default=True)),
+                ("is_primary", models.BooleanField(default=True, db_index=True)),
                 (
                     "tenant",
                     models.ForeignKey(
