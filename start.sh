@@ -373,12 +373,13 @@ tenant = Tenant.objects.create(
 )
 
 # Create domains for easy access
-Domain.objects.create(domain="localhost:8000", tenant=tenant, is_primary=False)
-Domain.objects.create(domain="127.0.0.1:8000", tenant=tenant, is_primary=False)
-Domain.objects.create(domain="default.localhost", tenant=tenant, is_primary=True)
+# Note: django-tenants uses hostname WITHOUT port
+Domain.objects.create(domain="localhost", tenant=tenant, is_primary=True)
+Domain.objects.create(domain="127.0.0.1", tenant=tenant, is_primary=False)
+Domain.objects.create(domain="default.localhost", tenant=tenant, is_primary=False)
 
 print(f"   ✓ Created tenant: {tenant.name} (schema: {tenant.schema_name})")
-print(f"   ✓ Domains configured: localhost:8000, 127.0.0.1:8000, default.localhost")
+print(f"   ✓ Domains configured: localhost, 127.0.0.1, default.localhost")
 EOF
     
     # Run migrations for the new tenant
