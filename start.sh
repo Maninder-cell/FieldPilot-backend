@@ -102,10 +102,35 @@ print_success "Python dependencies installed"
 # Step 9: Check if .env file exists
 print_status "Checking environment configuration..."
 if [ ! -f ".env" ]; then
-    print_warning ".env file not found. Please create one from .env.example"
-    exit 1
+    print_warning ".env file not found."
+    if [ -f ".env.example" ]; then
+        echo "Would you like to create .env from .env.example? (y/n)"
+        read -r CREATE_ENV
+        if [ "$CREATE_ENV" = "y" ] || [ "$CREATE_ENV" = "Y" ]; then
+            cp .env.example .env
+            print_success ".env file created from .env.example"
+            print_warning "Please edit .env file with your configuration before continuing"
+            exit 0
+        else
+            print_error "Cannot continue without .env file"
+            exit 1
+        fi
+    else
+        print_error ".env file not found. Please create one."
+        exit 1
+    fi
 fi
 print_success "Environment configuration found"
+
+# Step 9.5: Detect which settings file to use
+print_status "Detecting Django settings..."
+if grep -q "DJANGO_SETTINGS_MODULE" .env 2>/dev/null; then
+    SETTINGS_MODULE=$(grep "DJANGO_SETTINGS_MODULE" .env | cut -d'=' -f2 | tr -d ' "'"'"'')
+    print_success "Using settings: $SETTINGS_MODULE"
+else
+    print_warning "DJANGO_SETTINGS_MODULE not set in .env, using default (config.settings_dev)"
+    export DJANGO_SETTINGS_MODULE=config.settings_dev
+fi
 
 # Step 10: Check for port conflicts
 print_status "Checking for port conflicts..."
@@ -233,10 +258,14 @@ print_status "Creating database migrations..."
 python manage.py makemigrations > /dev/null 2>&1 || true
 print_success "Migrations created"
 
-# Step 17: Apply migrations
-print_status "Applying database migrations..."
-python manage.py migrate
-print_success "Database migrations applied"
+# Step 17: Apply migrations (Multi-tenant setup)
+print_status "Applying database migrations for shared schema..."
+python manage.py migrate_schemas --shared
+print_success "Shared schema migrations applied"
+
+print_status "Applying database migrations for tenant schemas..."
+python manage.py migrate_schemas --tenant 2>/dev/null || print_warning "No tenant schemas to migrate yet"
+print_success "Tenant schema migrations applied"
 
 # Step 18: Check if superuser exists
 print_status "Checking for superuser..."
@@ -254,6 +283,40 @@ if [ "$SUPERUSER_EXISTS" = "False" ]; then
     fi
 else
     print_success "Superuser exists"
+fi
+
+# Step 18.5: Setup default tenant if none exists
+print_status "Checking for default tenant..."
+TENANT_EXISTS=$(python manage.py shell -c "from apps.tenants.models import Tenant; print(Tenant.objects.exclude(schema_name='public').exists())" 2>/dev/null || echo "False")
+
+if [ "$TENANT_EXISTS" = "False" ]; then
+    print_warning "No tenant found. Creating default tenant..."
+    python manage.py shell <<EOF
+from apps.tenants.models import Tenant, Domain
+from django.utils.text import slugify
+
+# Create default tenant
+tenant = Tenant.objects.create(
+    name="Default Company",
+    schema_name="default",
+    slug="default"
+)
+
+# Create domains for easy access
+Domain.objects.create(domain="localhost:8000", tenant=tenant, is_primary=False)
+Domain.objects.create(domain="127.0.0.1:8000", tenant=tenant, is_primary=False)
+Domain.objects.create(domain="default.localhost", tenant=tenant, is_primary=True)
+
+print(f"✓ Created tenant: {tenant.name} (schema: {tenant.schema_name})")
+print(f"✓ Access via: http://localhost:8000 or http://127.0.0.1:8000")
+EOF
+    
+    # Run migrations for the new tenant
+    print_status "Running migrations for new tenant..."
+    python manage.py migrate_schemas --tenant
+    print_success "Default tenant created and configured"
+else
+    print_success "Tenant(s) exist"
 fi
 
 # Step 19: Seed subscription plans
@@ -274,6 +337,26 @@ else
     print_error "System check failed"
     exit 1
 fi
+
+# Step 22: Display tenant information
+print_status "Fetching tenant information..."
+python manage.py shell <<'EOF' 2>/dev/null || true
+from apps.tenants.models import Tenant, Domain
+
+tenants = Tenant.objects.exclude(schema_name='public')
+if tenants.exists():
+    print("\n📋 Available Tenants:")
+    for tenant in tenants:
+        domains = tenant.domains.all()
+        print(f"\n   • {tenant.name} (schema: {tenant.schema_name})")
+        if domains:
+            for domain in domains:
+                primary = "⭐" if domain.is_primary else "  "
+                print(f"     {primary} http://{domain.domain}")
+        else:
+            print(f"     ⚠️  No domains configured")
+EOF
+print_success "Tenant information displayed"
 
 # Print success message and access information
 echo ""
@@ -299,11 +382,32 @@ echo "   ├─ Database:    fieldpilot_db"
 echo "   ├─ Username:    fieldpilot_user"
 echo "   └─ Password:    fieldpilot_password"
 echo ""
+echo "🏢 Multi-Tenancy:"
+echo "   ├─ Default Tenant:  http://localhost:8000"
+echo "   ├─ Tenant Access:   http://{tenant}.localhost:8000"
+echo "   └─ Create Tenant:   Via API or Django admin"
+echo ""
 echo "📊 API Endpoints:"
-echo "   ├─ Authentication: 11 endpoints"
-echo "   ├─ Onboarding:     6 endpoints"
-echo "   ├─ Billing:        11 endpoints"
-echo "   └─ Total:          28 endpoints"
+echo "   ├─ Authentication:  /api/v1/auth/"
+echo "   ├─ Tenants:         /api/v1/onboarding/"
+echo "   ├─ Billing:         /api/v1/billing/"
+echo "   ├─ Customers:       /api/v1/customers/"
+echo "   ├─ Facilities:      /api/v1/facilities/"
+echo "   ├─ Buildings:       /api/v1/buildings/"
+echo "   ├─ Equipment:       /api/v1/equipment/"
+echo "   └─ Tasks:           /api/v1/tasks/"
+echo ""
+echo "� Userful Commands:"
+echo "   ├─ Create tenant:       python manage.py shell"
+echo "   ├─ Run migrations:      python manage.py migrate_schemas --tenant"
+echo "   ├─ Create superuser:    python manage.py createsuperuser"
+echo "   ├─ Seed plans:          python manage.py seed_plans"
+echo "   └─ Django shell:        python manage.py shell"
+echo ""
+echo "📖 Documentation:"
+echo "   ├─ Quick Start:         docs/QUICK_START.md"
+echo "   ├─ Customer Invites:    docs/CUSTOMER_INVITATION_FLOW.md"
+echo "   └─ CORS Setup:          docs/CORS_AND_ENVIRONMENT_SETUP.md"
 echo ""
 echo "🚀 Starting Django development server..."
 echo "   Press Ctrl+C to stop the server"
