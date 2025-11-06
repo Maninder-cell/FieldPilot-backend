@@ -20,8 +20,28 @@ from .serializers import (
 )
 from apps.core.responses import success_response, error_response
 from apps.authentication.models import User
+from functools import wraps
 
 logger = logging.getLogger(__name__)
+
+
+def public_schema_only(view_func):
+    """
+    Decorator to restrict view access to public schema only.
+    Used for onboarding endpoints that should only be accessible from localhost.
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        from django.db import connection
+        
+        current_schema = connection.schema_name
+        if current_schema != 'public':
+            return error_response(
+                message="This endpoint is only available from the onboarding portal. Please access via http://localhost:8000",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 
 @extend_schema(
@@ -52,12 +72,13 @@ logger = logging.getLogger(__name__)
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def create_tenant(request):
     """
     Create a new tenant/company and add current user as owner.
     
-    Note: Tenant creation must happen in the public schema.
-    This view automatically switches to public schema.
+    Note: This endpoint is only accessible from the public schema (localhost).
+    Accessing from a tenant subdomain will return 403 Forbidden.
     """
     from django.db import connection
     

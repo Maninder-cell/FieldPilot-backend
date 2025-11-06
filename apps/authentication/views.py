@@ -25,8 +25,28 @@ from .serializers import (
 )
 from apps.core.responses import success_response, error_response
 from apps.core.permissions import IsAdminUser
+from functools import wraps
 
 logger = logging.getLogger(__name__)
+
+
+def public_schema_only(view_func):
+    """
+    Decorator to restrict view access to public schema only.
+    Used for registration and other onboarding endpoints.
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        from django.db import connection
+        
+        current_schema = connection.schema_name
+        if current_schema != 'public':
+            return error_response(
+                message="This endpoint is only available from the onboarding portal. Please access via http://localhost:8000",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 
 class TokenRefreshView(BaseTokenRefreshView):
@@ -132,9 +152,13 @@ def send_otp_email(user, purpose):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@public_schema_only
 def register(request):
     """
-    Register a new user within current tenant.
+    Register a new user.
+    
+    Note: Registration is only available from the public schema (localhost).
+    Users are global and not tied to specific tenants.
     """
     serializer = UserRegistrationSerializer(data=request.data)
     
