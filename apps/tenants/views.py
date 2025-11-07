@@ -153,9 +153,12 @@ def create_tenant(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def current_tenant(request):
     """
     Get current user's tenant.
+    
+    Note: Only accessible from public schema (localhost).
     """
     try:
         membership = request.user.tenant_memberships.filter(is_active=True).first()
@@ -195,12 +198,13 @@ def current_tenant(request):
 )
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def update_tenant(request):
     """
     Update tenant information.
     
-    Note: Tenant updates must happen in the public schema.
-    This view automatically switches to public schema.
+    Note: Only accessible from public schema (localhost).
+    Tenant updates must happen in the public schema.
     """
     from django.db import connection
     
@@ -260,12 +264,12 @@ def update_tenant(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def complete_onboarding_step(request):
     """
     Complete an onboarding step.
     
-    Note: Tenant updates must happen in the public schema.
-    This view automatically switches to public schema.
+    Note: Only accessible from public schema (localhost).
     """
     from django.db import connection
     
@@ -327,9 +331,12 @@ def complete_onboarding_step(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def tenant_members(request):
     """
     Get tenant members.
+    
+    Note: Only accessible from public schema (localhost).
     """
     try:
         membership = request.user.tenant_memberships.filter(is_active=True).first()
@@ -368,12 +375,12 @@ def tenant_members(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def invite_member(request):
     """
     Invite a member to tenant.
     
-    Note: TenantMember operations must happen in the public schema.
-    This view automatically switches to public schema.
+    Note: Only accessible from public schema (localhost).
     """
     from django.db import connection
     
@@ -490,9 +497,12 @@ def invite_member(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def pending_invitations(request):
     """
     Get pending invitations for the tenant.
+    
+    Note: Only accessible from public schema (localhost).
     """
     try:
         membership = request.user.tenant_memberships.filter(is_active=True).first()
@@ -551,9 +561,12 @@ def pending_invitations(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def check_invitation(request):
     """
     Check if user has any pending invitations.
+    
+    Note: Only accessible from public schema (localhost).
     """
     try:
         from apps.tenants.models import TenantInvitation
@@ -599,12 +612,12 @@ def check_invitation(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def accept_invitation(request, invitation_id):
     """
     Accept an invitation to join a tenant.
     
-    Note: Tenant operations must happen in the public schema.
-    This view automatically switches to public schema.
+    Note: Only accessible from public schema (localhost).
     """
     from django.db import connection
     

@@ -224,9 +224,12 @@ def register(request):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@public_schema_only
 def login(request):
     """
     User login with JWT token generation.
+    
+    Note: Login is only available from the public schema (localhost).
     """
     serializer = LoginSerializer(data=request.data, context={'request': request})
     
@@ -283,9 +286,12 @@ def login(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def logout(request):
     """
     User logout (blacklist refresh token).
+    
+    Note: Logout is only available from the public schema (localhost).
     """
     try:
         refresh_token = request.data.get('refresh_token')
@@ -320,9 +326,12 @@ def logout(request):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@public_schema_only
 def verify_email(request):
     """
     Verify email with OTP code.
+    
+    Note: Email verification is only available from the public schema (localhost).
     """
     serializer = EmailVerificationSerializer(data=request.data)
     
@@ -365,9 +374,12 @@ def verify_email(request):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@public_schema_only
 def resend_otp(request):
     """
     Resend OTP for email verification or password reset.
+    
+    Note: OTP resend is only available from the public schema (localhost).
     """
     serializer = ResendOTPSerializer(data=request.data)
     
@@ -422,9 +434,12 @@ def resend_otp(request):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@public_schema_only
 def forgot_password(request):
     """
     Request password reset OTP.
+    
+    Note: Password reset is only available from the public schema (localhost).
     """
     serializer = PasswordResetRequestSerializer(data=request.data)
     
@@ -471,9 +486,12 @@ def forgot_password(request):
 )
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@public_schema_only
 def reset_password(request):
     """
     Reset password with OTP verification.
+    
+    Note: Password reset is only available from the public schema (localhost).
     """
     serializer = PasswordResetConfirmSerializer(data=request.data)
     
@@ -519,9 +537,12 @@ def reset_password(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def change_password(request):
     """
     Change password for authenticated user.
+    
+    Note: Password change is only available from the public schema (localhost).
     """
     serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
     
@@ -566,9 +587,12 @@ def change_password(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def profile(request):
     """
     Get user profile information.
+    
+    Note: Profile access is only available from the public schema (localhost).
     """
     try:
         user = request.user
@@ -601,9 +625,12 @@ def profile(request):
 )
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def update_profile(request):
     """
     Update user profile information.
+    
+    Note: Profile update is only available from the public schema (localhost).
     """
     try:
         user = request.user
@@ -649,9 +676,12 @@ def update_profile(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def me(request):
     """
     Get current user information.
+    
+    Note: User info is only available from the public schema (localhost).
     """
     try:
         serializer = UserSerializer(request.user)

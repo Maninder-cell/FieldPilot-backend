@@ -23,8 +23,28 @@ from .serializers import (
 from .stripe_service import StripeService
 from apps.core.responses import success_response, error_response
 from apps.core.permissions import IsAdminUser
+from functools import wraps
 
 logger = logging.getLogger(__name__)
+
+
+def public_schema_only(view_func):
+    """
+    Decorator to restrict view access to public schema only.
+    Used for billing endpoints that should only be accessible from localhost.
+    """
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        from django.db import connection
+        
+        current_schema = connection.schema_name
+        if current_schema != 'public':
+            return error_response(
+                message="This endpoint is only available from the onboarding portal. Please access via http://localhost:8000",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        return view_func(request, *args, **kwargs)
+    return wrapper
 
 
 def get_tenant(request):
@@ -49,6 +69,7 @@ def get_tenant(request):
 )
 @api_view(['GET'])
 @permission_classes([AllowAny])
+@public_schema_only
 def subscription_plans(request):
     """
     Get all available subscription plans.
@@ -81,6 +102,7 @@ def subscription_plans(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def current_subscription(request):
     """
     Get current tenant's subscription.
@@ -126,6 +148,7 @@ def current_subscription(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def create_subscription(request):
     """
     Create a new subscription for the tenant.
@@ -226,6 +249,7 @@ def create_subscription(request):
 )
 @api_view(['PUT'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def update_subscription(request):
     """
     Update current subscription (upgrade/downgrade).
@@ -313,6 +337,7 @@ def update_subscription(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def cancel_subscription(request):
     """
     Cancel current subscription.
@@ -368,6 +393,7 @@ def cancel_subscription(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def billing_overview(request):
     """
     Get billing overview/dashboard.
@@ -399,6 +425,7 @@ def billing_overview(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def invoices(request):
     """
     Get tenant's invoices.
@@ -444,6 +471,7 @@ def invoices(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def payments(request):
     """
     Get tenant's payments.
@@ -493,6 +521,7 @@ def payments(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def create_setup_intent(request):
     """
     Create setup intent for saving payment method.
@@ -559,6 +588,7 @@ def create_setup_intent(request):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@public_schema_only
 def add_payment_method(request):
     """
     Add payment method to customer.
