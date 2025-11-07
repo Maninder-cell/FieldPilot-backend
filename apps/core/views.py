@@ -8,9 +8,18 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from django.db import connection
 from django.core.cache import cache
+from django.shortcuts import render
 from .responses import success_response, error_response
 
 
+from drf_spectacular.utils import extend_schema
+
+
+@extend_schema(
+    tags=['Health'],
+    summary='Health check',
+    description='System health monitoring endpoint to check database and cache connectivity'
+)
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def health_check(request):
@@ -39,3 +48,15 @@ def health_check(request):
             details={'error': str(e)},
             status_code=503
         )
+
+
+
+def swagger_landing(request):
+    """
+    Landing page for API documentation with links to Public and Tenant schemas
+    """
+    context = {
+        'host': request.get_host(),
+        'scheme': 'https' if request.is_secure() else 'http',
+    }
+    return render(request, 'swagger_landing.html', context)
