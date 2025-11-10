@@ -269,6 +269,34 @@ For support, contact: support@fieldpilot.com
             'name': 'Equipment',
             'description': 'Equipment tracking and management'
         },
+        {
+            'name': 'Tasks',
+            'description': 'Task management, assignment, and status tracking for equipment maintenance'
+        },
+        {
+            'name': 'Teams',
+            'description': 'Technician team management and member operations'
+        },
+        {
+            'name': 'Time Tracking',
+            'description': 'Time tracking for technicians including travel, arrival, departure, and lunch breaks'
+        },
+        {
+            'name': 'Comments',
+            'description': 'Task comments and communication'
+        },
+        {
+            'name': 'Attachments',
+            'description': 'File attachments for tasks (images, documents)'
+        },
+        {
+            'name': 'Materials',
+            'description': 'Material tracking for tasks (needed vs received)'
+        },
+        {
+            'name': 'Reports',
+            'description': 'Work hours reports and analytics'
+        },
     ],
     
     # Contact and license

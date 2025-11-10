@@ -104,7 +104,7 @@ class CreateTaskSerializer(serializers.Serializer):
     """
     equipment_id = serializers.UUIDField(required=True)
     title = serializers.CharField(max_length=255, required=True)
-    description = serializers.TextField(required=True)
+    description = serializers.CharField(required=True)
     priority = serializers.ChoiceField(
         choices=Task.PRIORITY_CHOICES,
         default='medium'

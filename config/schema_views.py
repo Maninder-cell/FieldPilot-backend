@@ -138,6 +138,13 @@ class TenantSchemaView(SpectacularAPIView):
             'Buildings': '🏗️ Building management and operations within facilities',
             'Locations': '📍 Location management with coordinates and address details',
             'Equipment': '⚙️ Equipment tracking, history, and maintenance records',
+            'Tasks': '✅ Task management, assignment, and status tracking for equipment maintenance',
+            'Teams': '👥 Technician team management and member operations',
+            'Time Tracking': '⏱️ Time tracking for technicians including travel, arrival, departure, and lunch breaks',
+            'Comments': '💬 Task comments and communication',
+            'Attachments': '📎 File attachments for tasks (images, documents)',
+            'Materials': '📦 Material tracking for tasks (needed vs received)',
+            'Reports': '📊 Work hours reports and analytics',
         }
         
         # Create tags list from used_tags (don't rely on existing tags from settings)
