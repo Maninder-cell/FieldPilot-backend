@@ -19,7 +19,7 @@ import logging
 from .models import User, UserProfile
 from .serializers import (
     UserRegistrationSerializer, LoginSerializer, PasswordResetRequestSerializer,
-    PasswordResetConfirmSerializer, EmailVerificationSerializer,
+    PasswordResetVerifyOTPSerializer, PasswordResetConfirmSerializer, EmailVerificationSerializer,
     ResendOTPSerializer, ChangePasswordSerializer, UserSerializer,
     UserProfileSerializer, UpdateProfileSerializer
 )
@@ -476,12 +476,76 @@ def forgot_password(request):
 
 @extend_schema(
     tags=['Authentication'],
+    summary='Verify reset OTP',
+    description='Verify OTP code for password reset (Step 2 of 3). Returns a reset token.',
+    request=PasswordResetVerifyOTPSerializer,
+    responses={
+        200: {'description': 'OTP verified successfully, reset token returned'},
+        400: {'description': 'Invalid OTP'},
+    }
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@public_schema_only
+def verify_reset_otp(request):
+    """
+    Verify OTP for password reset (Step 2).
+    
+    Flow:
+    1. Call forgot-password to get OTP
+    2. Call verify-reset-otp to verify OTP (this endpoint) - returns reset_token
+    3. Call reset-password with reset_token to set new password
+    
+    Note: Password reset is only available from the public schema (localhost).
+    """
+    serializer = PasswordResetVerifyOTPSerializer(data=request.data)
+    
+    if not serializer.is_valid():
+        return error_response(
+            message="Invalid OTP",
+            details=serializer.errors,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    
+    try:
+        user = serializer.validated_data['user']
+        
+        # Generate a secure reset token
+        import secrets
+        reset_token = secrets.token_urlsafe(32)
+        
+        # Save reset token with 15 minute expiry
+        user.password_reset_token = reset_token
+        user.password_reset_expires = timezone.now() + timezone.timedelta(minutes=15)
+        user.save()
+        
+        logger.info(f"Password reset OTP verified: {user.email}")
+        
+        return success_response(
+            message="OTP verified successfully. Use the reset token to set your new password.",
+            data={
+                'email': user.email,
+                'reset_token': reset_token,
+                'expires_in': '15 minutes'
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"OTP verification failed: {str(e)}")
+        return error_response(
+            message="OTP verification failed",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Authentication'],
     summary='Reset password',
-    description='Reset password using OTP verification',
+    description='Reset password using reset token (Step 3 of 3). No OTP required.',
     request=PasswordResetConfirmSerializer,
     responses={
         200: {'description': 'Password reset successful'},
-        400: {'description': 'Invalid OTP or passwords'},
+        400: {'description': 'Invalid reset token or passwords'},
     }
 )
 @api_view(['POST'])
@@ -489,7 +553,12 @@ def forgot_password(request):
 @public_schema_only
 def reset_password(request):
     """
-    Reset password with OTP verification.
+    Reset password with reset token (Step 3).
+    
+    Flow:
+    1. Call forgot-password to get OTP
+    2. Call verify-reset-otp to verify OTP and get reset_token
+    3. Call reset-password with reset_token to set new password (this endpoint)
     
     Note: Password reset is only available from the public schema (localhost).
     """
@@ -509,6 +578,11 @@ def reset_password(request):
         # Set new password
         user.set_password(new_password)
         user.password_changed_at = timezone.now()
+        
+        # Clear reset token after use
+        user.password_reset_token = ''
+        user.password_reset_expires = None
+        
         user.save()
         
         logger.info(f"Password reset successful: {user.email}")

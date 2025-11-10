@@ -134,20 +134,15 @@ class PasswordResetRequestSerializer(serializers.Serializer):
             return value.lower()
 
 
-class PasswordResetConfirmSerializer(serializers.Serializer):
+class PasswordResetVerifyOTPSerializer(serializers.Serializer):
     """
-    Serializer for password reset confirmation with OTP.
+    Serializer for verifying OTP during password reset.
     """
     email = serializers.EmailField()
     otp_code = serializers.CharField(max_length=6)
-    new_password = serializers.CharField(validators=[validate_password])
-    new_password_confirm = serializers.CharField()
     
     def validate(self, attrs):
-        """Validate OTP and password confirmation."""
-        if attrs['new_password'] != attrs['new_password_confirm']:
-            raise serializers.ValidationError("Passwords don't match.")
-        
+        """Validate OTP for password reset."""
         email = attrs['email'].lower()
         otp_code = attrs['otp_code']
         
@@ -158,6 +153,42 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             attrs['user'] = user
         except User.DoesNotExist:
             raise serializers.ValidationError("Invalid email or OTP code.")
+        
+        return attrs
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """
+    Serializer for password reset confirmation (after OTP verification).
+    Uses reset token instead of OTP.
+    """
+    email = serializers.EmailField()
+    reset_token = serializers.CharField(max_length=255)
+    new_password = serializers.CharField(validators=[validate_password])
+    new_password_confirm = serializers.CharField()
+    
+    def validate(self, attrs):
+        """Validate reset token and password confirmation."""
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError("Passwords don't match.")
+        
+        email = attrs['email'].lower()
+        reset_token = attrs['reset_token']
+        
+        try:
+            user = User.objects.get(email__iexact=email)
+            
+            # Verify reset token
+            if not user.password_reset_token or user.password_reset_token != reset_token:
+                raise serializers.ValidationError("Invalid or expired reset token.")
+            
+            # Check if token is expired (valid for 15 minutes)
+            if not user.password_reset_expires or user.password_reset_expires < timezone.now():
+                raise serializers.ValidationError("Reset token has expired. Please request a new one.")
+            
+            attrs['user'] = user
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Invalid email or reset token.")
         
         return attrs
 

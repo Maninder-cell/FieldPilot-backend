@@ -18,9 +18,10 @@ urlpatterns = [
     path('verify-email/', views.verify_email, name='verify_email'),
     path('resend-otp/', views.resend_otp, name='resend_otp'),
     
-    # Password management
-    path('forgot-password/', views.forgot_password, name='forgot_password'),
-    path('reset-password/', views.reset_password, name='reset_password'),
+    # Password management (3-step flow)
+    path('forgot-password/', views.forgot_password, name='forgot_password'),  # Step 1: Send OTP
+    path('verify-reset-otp/', views.verify_reset_otp, name='verify_reset_otp'),  # Step 2: Verify OTP
+    path('reset-password/', views.reset_password, name='reset_password'),  # Step 3: Set new password
     path('change-password/', views.change_password, name='change_password'),
     
     # User profile
