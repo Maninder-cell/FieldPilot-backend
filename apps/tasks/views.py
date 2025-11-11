@@ -1744,10 +1744,11 @@ def attachment_delete(request, attachment_id):
         )
     
     try:
-        # Delete file from storage
+        # Delete file from storage without saving the model
         if attachment.file:
-            attachment.file.delete()
+            attachment.file.delete(save=False)
         
+        # Delete the database record
         attachment.delete()
         
         logger.info(f"Attachment deleted: {attachment.id} by {request.user.email}")
