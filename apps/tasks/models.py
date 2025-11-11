@@ -522,9 +522,10 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
             models.Index(fields=['technician', 'departed_at']),
             models.Index(fields=['arrived_at', 'departed_at']),
             models.Index(fields=['travel_started_at']),
+            models.Index(fields=['task', 'technician', 'departed_at']),  # For finding active logs
         ]
-        # One time log per technician per task (for now)
-        unique_together = [['task', 'technician']]
+        # Allow multiple time logs per technician per task (multiple visits)
+        # No unique_together constraint
     
     def __str__(self):
         return f"{self.technician.full_name} - {self.task.task_number}"
@@ -669,6 +670,31 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
     def can_start_lunch(self):
         """Check if technician can start lunch break."""
         return self.is_on_site and not self.is_on_lunch
+    
+    @classmethod
+    def get_active_log(cls, task, technician):
+        """
+        Get the active (not yet departed) time log for a technician on a task.
+        Returns None if no active log exists.
+        """
+        return cls.objects.filter(
+            task=task,
+            technician=technician,
+            departed_at__isnull=True
+        ).order_by('-created_at').first()
+    
+    @classmethod
+    def get_or_create_active_log(cls, task, technician):
+        """
+        Get the active time log or create a new one if none exists.
+        Returns (time_log, created) tuple.
+        """
+        active_log = cls.get_active_log(task, technician)
+        if active_log:
+            return active_log, False
+        else:
+            new_log = cls.objects.create(task=task, technician=technician)
+            return new_log, True
     
     @property
     def can_end_lunch(self):

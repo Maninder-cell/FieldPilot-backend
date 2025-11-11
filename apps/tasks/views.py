@@ -1015,21 +1015,22 @@ def task_travel(request, task_id):
     
     try:
         with transaction.atomic():
-            # Get or create time log
-            time_log, created = TimeLog.objects.get_or_create(
+            # Get active time log or create new one
+            time_log, created = TimeLog.get_or_create_active_log(
                 task=task,
-                technician=request.user,
-                defaults={'travel_started_at': timezone.now()}
+                technician=request.user
             )
             
-            if not created:
-                if time_log.travel_started_at:
-                    return error_response(
-                        message='Travel already started for this task',
-                        status_code=status.HTTP_400_BAD_REQUEST
-                    )
-                time_log.travel_started_at = timezone.now()
-                time_log.save()
+            # Check if travel already started for this visit
+            if time_log.travel_started_at:
+                return error_response(
+                    message='Travel already started for this visit. Complete the current visit before starting a new one.',
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Set travel start time
+            time_log.travel_started_at = timezone.now()
+            time_log.save(update_fields=['travel_started_at', 'updated_at'])
             
             # Add system comment
             TaskComment.create_system_comment(
@@ -1087,12 +1088,11 @@ def task_arrive(request, task_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Get time log
-    try:
-        time_log = TimeLog.objects.get(task=task, technician=request.user)
-    except TimeLog.DoesNotExist:
+    # Get active time log
+    time_log = TimeLog.get_active_log(task=task, technician=request.user)
+    if not time_log:
         return error_response(
-            message='No time log found. Start travel first.',
+            message='No active time log found. Start travel first.',
             status_code=status.HTTP_400_BAD_REQUEST
         )
     
@@ -1169,12 +1169,11 @@ def task_depart(request, task_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Get time log
-    try:
-        time_log = TimeLog.objects.get(task=task, technician=request.user)
-    except TimeLog.DoesNotExist:
+    # Get active time log
+    time_log = TimeLog.get_active_log(task=task, technician=request.user)
+    if not time_log:
         return error_response(
-            message='No time log found',
+            message='No active time log found',
             status_code=status.HTTP_400_BAD_REQUEST
         )
     
@@ -1259,12 +1258,11 @@ def task_lunch_start(request, task_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Get time log
-    try:
-        time_log = TimeLog.objects.get(task=task, technician=request.user)
-    except TimeLog.DoesNotExist:
+    # Get active time log
+    time_log = TimeLog.get_active_log(task=task, technician=request.user)
+    if not time_log:
         return error_response(
-            message='No time log found',
+            message='No active time log found',
             status_code=status.HTTP_400_BAD_REQUEST
         )
     
@@ -1341,12 +1339,11 @@ def task_lunch_end(request, task_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Get time log
-    try:
-        time_log = TimeLog.objects.get(task=task, technician=request.user)
-    except TimeLog.DoesNotExist:
+    # Get active time log
+    time_log = TimeLog.get_active_log(task=task, technician=request.user)
+    if not time_log:
         return error_response(
-            message='No time log found',
+            message='No active time log found',
             status_code=status.HTTP_400_BAD_REQUEST
         )
     
