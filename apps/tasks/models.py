@@ -490,19 +490,19 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
     
     # Calculated Fields (updated on departure)
     total_work_hours = models.DecimalField(
-        max_digits=5,
+        max_digits=8,
         decimal_places=2,
         default=0,
         help_text="Total work hours (arrival to departure minus lunch)"
     )
     normal_hours = models.DecimalField(
-        max_digits=5,
+        max_digits=8,
         decimal_places=2,
         default=0,
         help_text="Normal work hours (up to 8 hours)"
     )
     overtime_hours = models.DecimalField(
-        max_digits=5,
+        max_digits=8,
         decimal_places=2,
         default=0,
         help_text="Overtime hours (beyond 8 hours)"
@@ -553,6 +553,19 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
                 raise ValidationError({
                     'departed_at': 'Departure time must be after arrival time.'
                 })
+            
+            # Warn about unreasonably long work sessions (more than 24 hours)
+            time_diff = self.departed_at - self.arrived_at
+            hours_diff = time_diff.total_seconds() / 3600
+            if hours_diff > 24:
+                # This is a warning, not an error - allow it but log it
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(
+                    f"TimeLog for task {self.task.task_number}: "
+                    f"Work session exceeds 24 hours ({hours_diff:.2f} hours). "
+                    f"Arrived: {self.arrived_at}, Departed: {self.departed_at}"
+                )
         
         # Validate lunch times
         if self.lunch_started_at and self.lunch_ended_at:
@@ -591,11 +604,12 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
         """
         Override save to run validation and calculate work hours.
         """
-        self.full_clean()
-        
-        # Calculate work hours if departed
+        # Calculate work hours BEFORE validation if departed
         if self.arrived_at and self.departed_at:
             self.calculate_work_hours()
+        
+        # Now validate with calculated values
+        self.full_clean()
         
         super().save(*args, **kwargs)
     
@@ -604,6 +618,8 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
         Calculate total work hours, normal hours, and overtime.
         Called automatically on save when both arrived_at and departed_at are set.
         """
+        from decimal import Decimal, ROUND_HALF_UP
+        
         if not self.arrived_at or not self.departed_at:
             return
         
@@ -618,15 +634,21 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
         # Convert to hours
         total_hours = total_time.total_seconds() / 3600
         
+        # Cap at reasonable maximum (720 hours = 30 days * 24 hours)
+        # This prevents database overflow while allowing for edge cases
+        MAX_HOURS = 720
+        if total_hours > MAX_HOURS:
+            total_hours = MAX_HOURS
+        
         # Calculate normal vs overtime (8 hours per day is normal)
         NORMAL_HOURS_PER_DAY = 8
         normal_hours = min(total_hours, NORMAL_HOURS_PER_DAY)
         overtime_hours = max(0, total_hours - NORMAL_HOURS_PER_DAY)
         
-        # Update fields
-        self.total_work_hours = round(total_hours, 2)
-        self.normal_hours = round(normal_hours, 2)
-        self.overtime_hours = round(overtime_hours, 2)
+        # Update fields with proper Decimal precision (2 decimal places)
+        self.total_work_hours = Decimal(str(total_hours)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        self.normal_hours = Decimal(str(normal_hours)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        self.overtime_hours = Decimal(str(overtime_hours)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     
     @property
     def is_on_site(self):
