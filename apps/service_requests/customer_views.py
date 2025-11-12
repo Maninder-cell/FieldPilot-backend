@@ -32,7 +32,48 @@ logger = logging.getLogger(__name__)
         OpenApiParameter('page_size', int, description='Items per page'),
         OpenApiParameter('facility', str, description='Filter by facility ID'),
     ],
-    responses={200: dict}
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'count': {'type': 'integer', 'example': 25},
+                'next': {'type': 'string', 'nullable': True, 'example': 'http://api.example.com/api/v1/service-requests/customer/equipment/?page=2'},
+                'previous': {'type': 'string', 'nullable': True, 'example': None},
+                'results': {
+                    'type': 'array',
+                    'items': {
+                        'type': 'object',
+                        'properties': {
+                            'id': {'type': 'string', 'example': '123e4567-e89b-12d3-a456-426614174000'},
+                            'name': {'type': 'string', 'example': 'HVAC Unit #1'},
+                            'equipment_type': {'type': 'string', 'example': 'HVAC'},
+                            'manufacturer': {'type': 'string', 'example': 'Carrier'},
+                            'model': {'type': 'string', 'example': 'Model-X100'},
+                            'serial_number': {'type': 'string', 'example': 'SN123456'},
+                            'location': {'type': 'string', 'example': 'Building A, Floor 2'},
+                            'status': {'type': 'string', 'example': 'operational'},
+                            'facility': {
+                                'type': 'object',
+                                'properties': {
+                                    'id': {'type': 'string'},
+                                    'name': {'type': 'string'}
+                                }
+                            },
+                            'building': {
+                                'type': 'object',
+                                'properties': {
+                                    'id': {'type': 'string'},
+                                    'name': {'type': 'string'}
+                                }
+                            },
+                            'installation_date': {'type': 'string', 'format': 'date'},
+                            'warranty_expiry': {'type': 'string', 'format': 'date'}
+                        }
+                    }
+                }
+            }
+        }
+    }
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -98,7 +139,48 @@ def customer_equipment_list(request):
     tags=['Customer Portal'],
     summary='Get equipment details',
     description='Get detailed information about a specific equipment',
-    responses={200: dict}
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'success': {'type': 'boolean', 'example': True},
+                'data': {
+                    'type': 'object',
+                    'properties': {
+                        'id': {'type': 'string', 'example': '123e4567-e89b-12d3-a456-426614174000'},
+                        'name': {'type': 'string', 'example': 'HVAC Unit #1'},
+                        'equipment_type': {'type': 'string', 'example': 'HVAC'},
+                        'manufacturer': {'type': 'string', 'example': 'Carrier'},
+                        'model': {'type': 'string', 'example': 'Model-X100'},
+                        'serial_number': {'type': 'string', 'example': 'SN123456'},
+                        'location': {'type': 'string', 'example': 'Building A, Floor 2'},
+                        'status': {'type': 'string', 'example': 'operational'},
+                        'facility': {
+                            'type': 'object',
+                            'properties': {
+                                'id': {'type': 'string'},
+                                'name': {'type': 'string'},
+                                'address': {'type': 'string'}
+                            }
+                        },
+                        'building': {
+                            'type': 'object',
+                            'properties': {
+                                'id': {'type': 'string'},
+                                'name': {'type': 'string'}
+                            }
+                        },
+                        'installation_date': {'type': 'string', 'format': 'date', 'example': '2023-01-15'},
+                        'warranty_expiry': {'type': 'string', 'format': 'date', 'example': '2026-01-15'},
+                        'specifications': {
+                            'type': 'object',
+                            'example': {'capacity': '5 tons', 'voltage': '220V', 'refrigerant': 'R-410A'}
+                        }
+                    }
+                }
+            }
+        }
+    }
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -161,7 +243,53 @@ def customer_equipment_detail(request, equipment_id):
     tags=['Customer Portal'],
     summary='Get equipment service history',
     description='Get service history for a specific equipment',
-    responses={200: dict}
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'success': {'type': 'boolean', 'example': True},
+                'data': {
+                    'type': 'object',
+                    'properties': {
+                        'equipment': {
+                            'type': 'object',
+                            'properties': {
+                                'id': {'type': 'string', 'example': '123e4567-e89b-12d3-a456-426614174000'},
+                                'name': {'type': 'string', 'example': 'HVAC Unit #1'}
+                            }
+                        },
+                        'service_requests': {
+                            'type': 'array',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'id': {'type': 'string'},
+                                    'request_number': {'type': 'string', 'example': 'REQ-2025-0001'},
+                                    'title': {'type': 'string', 'example': 'Annual Maintenance'},
+                                    'request_type': {'type': 'string', 'example': 'maintenance'},
+                                    'status': {'type': 'string', 'example': 'completed'},
+                                    'created_at': {'type': 'string', 'format': 'date-time'},
+                                    'completed_at': {'type': 'string', 'format': 'date-time'}
+                                }
+                            }
+                        },
+                        'completed_tasks': {
+                            'type': 'array',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'id': {'type': 'string'},
+                                    'task_number': {'type': 'string', 'example': 'TASK-2025-000001'},
+                                    'title': {'type': 'string', 'example': 'HVAC Maintenance'},
+                                    'completed_at': {'type': 'string', 'format': 'date-time'}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -239,7 +367,55 @@ def customer_equipment_history(request, equipment_id):
     tags=['Customer Portal'],
     summary='Get upcoming services',
     description='Get upcoming scheduled services for equipment',
-    responses={200: dict}
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'success': {'type': 'boolean', 'example': True},
+                'data': {
+                    'type': 'object',
+                    'properties': {
+                        'equipment': {
+                            'type': 'object',
+                            'properties': {
+                                'id': {'type': 'string', 'example': '123e4567-e89b-12d3-a456-426614174000'},
+                                'name': {'type': 'string', 'example': 'HVAC Unit #1'}
+                            }
+                        },
+                        'pending_requests': {
+                            'type': 'array',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'id': {'type': 'string'},
+                                    'request_number': {'type': 'string', 'example': 'REQ-2025-0050'},
+                                    'title': {'type': 'string', 'example': 'Filter Replacement'},
+                                    'status': {'type': 'string', 'example': 'accepted'},
+                                    'priority': {'type': 'string', 'example': 'medium'},
+                                    'created_at': {'type': 'string', 'format': 'date-time'},
+                                    'estimated_timeline': {'type': 'string', 'example': '2-3 days'}
+                                }
+                            }
+                        },
+                        'scheduled_tasks': {
+                            'type': 'array',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'id': {'type': 'string'},
+                                    'task_number': {'type': 'string', 'example': 'TASK-2025-000050'},
+                                    'title': {'type': 'string', 'example': 'Quarterly Maintenance'},
+                                    'status': {'type': 'string', 'example': 'assigned'},
+                                    'scheduled_start': {'type': 'string', 'format': 'date-time'},
+                                    'scheduled_end': {'type': 'string', 'format': 'date-time'}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -323,7 +499,66 @@ def customer_equipment_upcoming(request, equipment_id):
     tags=['Customer Portal'],
     summary='Get customer dashboard',
     description='Get dashboard metrics and recent activity for customer',
-    responses={200: dict}
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'success': {'type': 'boolean', 'example': True},
+                'data': {
+                    'type': 'object',
+                    'properties': {
+                        'metrics': {
+                            'type': 'object',
+                            'properties': {
+                                'pending_requests': {'type': 'integer', 'example': 3},
+                                'in_progress_requests': {'type': 'integer', 'example': 2},
+                                'completed_requests': {'type': 'integer', 'example': 45},
+                                'total_equipment': {'type': 'integer', 'example': 12},
+                                'equipment_requiring_attention': {'type': 'integer', 'example': 1}
+                            }
+                        },
+                        'recent_activity': {
+                            'type': 'array',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'id': {'type': 'string'},
+                                    'request_number': {'type': 'string', 'example': 'REQ-2025-0050'},
+                                    'title': {'type': 'string', 'example': 'HVAC Maintenance'},
+                                    'status': {'type': 'string', 'example': 'in_progress'},
+                                    'updated_at': {'type': 'string', 'format': 'date-time'}
+                                }
+                            }
+                        },
+                        'equipment_requiring_attention': {
+                            'type': 'array',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'id': {'type': 'string'},
+                                    'name': {'type': 'string', 'example': 'HVAC Unit #3'},
+                                    'status': {'type': 'string', 'example': 'maintenance_required'},
+                                    'location': {'type': 'string', 'example': 'Building B, Floor 1'}
+                                }
+                            }
+                        },
+                        'upcoming_services': {
+                            'type': 'array',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'id': {'type': 'string'},
+                                    'task_number': {'type': 'string', 'example': 'TASK-2025-000050'},
+                                    'equipment_name': {'type': 'string', 'example': 'HVAC Unit #1'},
+                                    'scheduled_start': {'type': 'string', 'format': 'date-time'}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
