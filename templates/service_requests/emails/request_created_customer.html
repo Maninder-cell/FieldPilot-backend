@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Service Request Received</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #3B82F6;">Service Request Received</h2>
+        
+        <p>Dear {{ customer_name }},</p>
+        
+        <p>Thank you for submitting your service request. We have received your request and our team will review it shortly.</p>
+        
+        <div style="background-color: #F3F4F6; padding: 15px; border-radius: 5px; margin: 20px 0;">
+            <h3 style="margin-top: 0;">Request Details:</h3>
+            <p><strong>Request Number:</strong> {{ request.request_number }}</p>
+            <p><strong>Title:</strong> {{ request.title }}</p>
+            <p><strong>Equipment:</strong> {{ request.equipment.name }}</p>
+            <p><strong>Priority:</strong> {{ request.get_priority_display }}</p>
+            <p><strong>Status:</strong> {{ request.get_status_display }}</p>
+        </div>
+        
+        <p>You can track the status of your request at any time through your customer portal.</p>
+        
+        <p>We will notify you once your request has been reviewed.</p>
+        
+        <p>Best regards,<br>
+        FieldPilot Support Team</p>
+    </div>
+</body>
+</html>

@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/v1/', include('apps.facilities.urls')),
     path('api/v1/', include('apps.equipment.urls')),
     path('api/v1/tasks/', include('apps.tasks.urls')),
+    path('api/v1/service-requests/', include('apps.service_requests.urls')),
     path('health/', include('apps.core.urls')),
 ]
 
