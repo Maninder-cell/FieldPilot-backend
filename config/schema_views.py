@@ -145,6 +145,10 @@ class TenantSchemaView(SpectacularAPIView):
             'Attachments': '📎 File attachments for tasks (images, documents)',
             'Materials': '📦 Material tracking for tasks (needed vs received)',
             'Reports': '📊 Work hours reports and analytics',
+            'Service Requests': '🎫 Customer service request submission and issue reporting',
+            'Service Requests - Admin': '🔧 Admin review, acceptance, rejection, and task conversion',
+            'Service Requests - Reports': '📈 Service request reports and analytics',
+            'Customer Portal': '🏠 Customer equipment visibility and dashboard',
         }
         
         # Create tags list from used_tags (don't rely on existing tags from settings)
