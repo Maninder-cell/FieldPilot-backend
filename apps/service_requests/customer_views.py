@@ -90,7 +90,7 @@ def customer_equipment_list(request):
         )
     
     # Get customer's equipment
-    queryset = Equipment.objects.filter(customer=request.user)
+    queryset = Equipment.objects.filter(customer__user=request.user)
     
     # Apply filters
     facility_filter = request.query_params.get('facility')
@@ -107,6 +107,9 @@ def customer_equipment_list(request):
     # Serialize equipment data (exclude internal fields)
     equipment_data = []
     for equipment in (page if page else queryset):
+        # Compute location from building
+        location = equipment.building.name if equipment.building else None
+        
         equipment_data.append({
             'id': str(equipment.id),
             'name': equipment.name,
@@ -114,8 +117,8 @@ def customer_equipment_list(request):
             'manufacturer': equipment.manufacturer,
             'model': equipment.model,
             'serial_number': equipment.serial_number,
-            'location': equipment.location,
-            'status': equipment.status,
+            'location': location,
+            'status': equipment.operational_status,
             'facility': {
                 'id': str(equipment.facility.id),
                 'name': equipment.facility.name,
@@ -125,7 +128,7 @@ def customer_equipment_list(request):
                 'name': equipment.building.name,
             } if equipment.building else None,
             'installation_date': equipment.installation_date,
-            'warranty_expiry': equipment.warranty_expiry,
+            'warranty_expiry': equipment.warranty_expiration,
             # Exclude: purchase_cost, maintenance_cost, notes (internal)
         })
     
@@ -205,13 +208,16 @@ def customer_equipment_detail(request, equipment_id):
         )
     
     # Check ownership
-    if equipment.customer != request.user:
+    if not equipment.customer or equipment.customer.user != request.user:
         return error_response(
             message='You can only view your own equipment',
             status_code=status.HTTP_403_FORBIDDEN
         )
     
     # Serialize equipment data (exclude internal fields)
+    # Compute location from building
+    location = equipment.building.name if equipment.building else None
+    
     equipment_data = {
         'id': str(equipment.id),
         'name': equipment.name,
@@ -219,8 +225,8 @@ def customer_equipment_detail(request, equipment_id):
         'manufacturer': equipment.manufacturer,
         'model': equipment.model,
         'serial_number': equipment.serial_number,
-        'location': equipment.location,
-        'status': equipment.status,
+        'location': location,
+        'status': equipment.operational_status,
         'facility': {
             'id': str(equipment.facility.id),
             'name': equipment.facility.name,
@@ -231,7 +237,7 @@ def customer_equipment_detail(request, equipment_id):
             'name': equipment.building.name,
         } if equipment.building else None,
         'installation_date': equipment.installation_date,
-        'warranty_expiry': equipment.warranty_expiry,
+        'warranty_expiry': equipment.warranty_expiration,
         'specifications': equipment.specifications,
         # Exclude: purchase_cost, maintenance_cost, notes (internal)
     }
@@ -314,7 +320,7 @@ def customer_equipment_history(request, equipment_id):
         )
     
     # Check ownership
-    if equipment.customer != request.user:
+    if not equipment.customer or equipment.customer.user != request.user:
         return error_response(
             message='You can only view history for your own equipment',
             status_code=status.HTTP_403_FORBIDDEN
@@ -440,7 +446,7 @@ def customer_equipment_upcoming(request, equipment_id):
         )
     
     # Check ownership
-    if equipment.customer != request.user:
+    if not equipment.customer or equipment.customer.user != request.user:
         return error_response(
             message='You can only view upcoming services for your own equipment',
             status_code=status.HTTP_403_FORBIDDEN
@@ -597,13 +603,13 @@ def customer_dashboard(request):
     
     # Get equipment requiring attention
     equipment_with_issues = Equipment.objects.filter(
-        customer=request.user,
-        status__in=['maintenance_required', 'out_of_service']
+        customer__user=request.user,
+        operational_status__in=['maintenance', 'broken']
     )
     
     # Get upcoming scheduled services
     upcoming_tasks = Task.objects.filter(
-        equipment__customer=request.user,
+        equipment__customer__user=request.user,
         status__in=['pending', 'assigned'],
         scheduled_start__gte=timezone.now()
     ).order_by('scheduled_start')[:5]
@@ -613,7 +619,7 @@ def customer_dashboard(request):
             'pending_requests': requests_pending,
             'in_progress_requests': requests_in_progress,
             'completed_requests': requests_completed,
-            'total_equipment': Equipment.objects.filter(customer=request.user).count(),
+            'total_equipment': Equipment.objects.filter(customer__user=request.user).count(),
             'equipment_requiring_attention': equipment_with_issues.count(),
         },
         'recent_activity': [
@@ -630,8 +636,8 @@ def customer_dashboard(request):
             {
                 'id': str(eq.id),
                 'name': eq.name,
-                'status': eq.status,
-                'location': eq.location,
+                'status': eq.operational_status,
+                'location': eq.building.name if eq.building else None,
             }
             for eq in equipment_with_issues[:5]
         ],
