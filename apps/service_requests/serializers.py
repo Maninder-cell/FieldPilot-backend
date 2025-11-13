@@ -337,9 +337,16 @@ class CreateServiceRequestSerializer(serializers.Serializer):
             raise serializers.ValidationError('Equipment not found.')
         
         # Check if equipment belongs to customer
-        customer = self.context.get('customer')
-        if customer and equipment.customer != customer:
-            raise serializers.ValidationError('You can only create requests for your own equipment.')
+        # customer in context is a User object, equipment.customer is a Customer object
+        customer_user = self.context.get('customer')
+        if customer_user:
+            # Check if equipment has a customer assigned
+            if not equipment.customer:
+                raise serializers.ValidationError('This equipment is not assigned to any customer.')
+            
+            # Check if the equipment's customer is linked to the current user
+            if equipment.customer.user != customer_user:
+                raise serializers.ValidationError('You can only create requests for your own equipment.')
         
         return value
 
