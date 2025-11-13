@@ -1009,7 +1009,62 @@ def submit_feedback(request, request_id):
         OpenApiParameter('customer', str, description='Filter by customer ID'),
         OpenApiParameter('equipment', str, description='Filter by equipment ID'),
     ],
-    responses={200: dict}
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'success': {'type': 'boolean', 'example': True},
+                'data': {
+                    'type': 'object',
+                    'properties': {
+                        'overview': {
+                            'type': 'object',
+                            'properties': {
+                                'total_requests': {'type': 'integer', 'example': 150},
+                                'status_breakdown': {
+                                    'type': 'object',
+                                    'example': {'pending': 10, 'under_review': 5, 'accepted': 15, 'in_progress': 20, 'completed': 95, 'rejected': 5}
+                                },
+                                'priority_breakdown': {
+                                    'type': 'object',
+                                    'example': {'low': 30, 'medium': 60, 'high': 40, 'urgent': 20}
+                                },
+                                'avg_response_time_hours': {'type': 'number', 'example': 4.5},
+                                'avg_resolution_time_hours': {'type': 'number', 'example': 24.8},
+                                'conversion_rate_percent': {'type': 'number', 'example': 85.5},
+                                'avg_customer_rating': {'type': 'number', 'example': 4.2}
+                            }
+                        },
+                        'customer_metrics': {
+                            'type': 'object',
+                            'nullable': True,
+                            'example': {'customer_id': 'uuid', 'total_requests': 25, 'avg_rating': 4.5}
+                        },
+                        'equipment_metrics': {
+                            'type': 'object',
+                            'nullable': True,
+                            'example': {'equipment_id': 'uuid', 'total_requests': 15, 'issue_frequency': 0.3}
+                        },
+                        'time_series': {
+                            'type': 'array',
+                            'nullable': True,
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'date': {'type': 'string', 'format': 'date'},
+                                    'count': {'type': 'integer'}
+                                }
+                            },
+                            'example': [
+                                {'date': '2025-01-01', 'count': 5},
+                                {'date': '2025-01-02', 'count': 8}
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -1085,7 +1140,77 @@ def service_request_reports(request):
     tags=['Service Requests - Reports'],
     summary='Get admin dashboard analytics',
     description='Get analytics for admin dashboard',
-    responses={200: dict}
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'success': {'type': 'boolean', 'example': True},
+                'data': {
+                    'type': 'object',
+                    'properties': {
+                        'pending_requests': {'type': 'integer', 'example': 15},
+                        'overdue_requests': {
+                            'type': 'array',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'id': {'type': 'string'},
+                                    'request_number': {'type': 'string', 'example': 'REQ-2025-0001'},
+                                    'title': {'type': 'string', 'example': 'Equipment Maintenance'},
+                                    'customer_name': {'type': 'string', 'example': 'John Doe'},
+                                    'hours_overdue': {'type': 'number', 'example': 36.5},
+                                    'created_at': {'type': 'string', 'format': 'date-time'}
+                                }
+                            },
+                            'example': [
+                                {
+                                    'id': 'uuid',
+                                    'request_number': 'REQ-2025-0001',
+                                    'title': 'HVAC Repair',
+                                    'customer_name': 'John Doe',
+                                    'hours_overdue': 36.5,
+                                    'created_at': '2025-11-10T10:00:00Z'
+                                }
+                            ]
+                        },
+                        'customer_satisfaction': {
+                            'type': 'object',
+                            'properties': {
+                                'avg_rating': {'type': 'number', 'example': 4.2},
+                                'total_ratings': {'type': 'integer', 'example': 120},
+                                'rating_distribution': {
+                                    'type': 'object',
+                                    'example': {'1': 2, '2': 5, '3': 15, '4': 48, '5': 50}
+                                }
+                            }
+                        },
+                        'technician_performance': {
+                            'type': 'array',
+                            'items': {
+                                'type': 'object',
+                                'properties': {
+                                    'technician_id': {'type': 'string'},
+                                    'technician_name': {'type': 'string'},
+                                    'completed_tasks': {'type': 'integer'},
+                                    'avg_rating': {'type': 'number'},
+                                    'avg_completion_time_hours': {'type': 'number'}
+                                }
+                            },
+                            'example': [
+                                {
+                                    'technician_id': 'uuid',
+                                    'technician_name': 'Mike Johnson',
+                                    'completed_tasks': 45,
+                                    'avg_rating': 4.5,
+                                    'avg_completion_time_hours': 18.5
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+    }
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
