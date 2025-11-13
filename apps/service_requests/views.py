@@ -697,6 +697,7 @@ def convert_to_task(request, request_id):
                     TaskAssignment.objects.create(
                         task=task,
                         assignee=assignee,
+                        assigned_by=request.user,
                     )
                 except User.DoesNotExist:
                     pass
