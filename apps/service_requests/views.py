@@ -1126,6 +1126,19 @@ def admin_dashboard_analytics(request):
     tags=['Service Requests - Admin'],
     summary='Request clarification from customer',
     description='Request additional information from customer',
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'message': {
+                    'type': 'string',
+                    'description': 'Clarification message to customer',
+                    'example': 'Could you please provide more details about when the issue started?'
+                }
+            },
+            'required': ['message']
+        }
+    },
     responses={200: RequestCommentSerializer}
 )
 @api_view(['POST'])
@@ -1182,6 +1195,19 @@ def request_clarification(request, request_id):
     tags=['Service Requests'],
     summary='Respond to clarification request',
     description='Customer responds to clarification request',
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'message': {
+                    'type': 'string',
+                    'description': 'Response message with additional details',
+                    'example': 'The issue started yesterday morning around 9 AM when we turned on the equipment.'
+                }
+            },
+            'required': ['message']
+        }
+    },
     responses={200: RequestCommentSerializer}
 )
 @api_view(['POST'])
