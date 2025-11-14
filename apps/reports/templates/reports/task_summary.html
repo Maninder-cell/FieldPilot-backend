@@ -1,0 +1,63 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+<div class="summary-box">
+    <h2>Summary</h2>
+    <table>
+        <tr>
+            <th>Metric</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Total Tasks</td>
+            <td>{{ report.data.summary.total_tasks }}</td>
+        </tr>
+        <tr>
+            <td>Completed Tasks</td>
+            <td>{{ report.data.summary.completed_tasks }}</td>
+        </tr>
+        <tr>
+            <td>Completion Rate</td>
+            <td>{{ report.data.summary.completion_rate_percent }}%</td>
+        </tr>
+        <tr>
+            <td>Overdue Tasks</td>
+            <td>{{ report.data.summary.overdue_tasks }}</td>
+        </tr>
+        {% if report.data.summary.avg_completion_time_hours %}
+        <tr>
+            <td>Avg Completion Time</td>
+            <td>{{ report.data.summary.avg_completion_time_hours }} hours</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+
+<h2>Tasks by Status</h2>
+<table>
+    <tr>
+        <th>Status</th>
+        <th>Count</th>
+    </tr>
+    {% for status, count in report.data.by_status.items %}
+    <tr>
+        <td>{{ status|title }}</td>
+        <td>{{ count }}</td>
+    </tr>
+    {% endfor %}
+</table>
+
+<h2>Tasks by Priority</h2>
+<table>
+    <tr>
+        <th>Priority</th>
+        <th>Count</th>
+    </tr>
+    {% for priority, count in report.data.by_priority.items %}
+    <tr>
+        <td>{{ priority|title }}</td>
+        <td>{{ count }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endblock %}

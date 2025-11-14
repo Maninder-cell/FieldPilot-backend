@@ -65,6 +65,7 @@ TENANT_APPS = [
     'apps.inventory',
     'apps.notifications',
     'apps.analytics',
+    'apps.reports',
 ]
 
 INSTALLED_APPS = list(SHARED_APPS) + [app for app in TENANT_APPS if app not in SHARED_APPS]
@@ -326,10 +327,15 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'noreply@fieldpilot.com'
 
-# Cache Configuration (Dummy cache for development)
+# Cache Configuration (Local memory cache for development)
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake',
+        'TIMEOUT': 3600,  # 1 hour default
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000
+        }
     }
 }
 
