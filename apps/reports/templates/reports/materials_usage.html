@@ -1,0 +1,32 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+<div class="summary-box">
+    <h2>Materials Usage Summary</h2>
+    <table>
+        <tr><th>Metric</th><th>Value</th></tr>
+        <tr><td>Total Materials Used</td><td>{{ report.data.summary.total_materials|default:"0" }}</td></tr>
+        <tr><td>Total Cost</td><td>${{ report.data.summary.total_cost|floatformat:2|default:"0.00" }}</td></tr>
+    </table>
+</div>
+
+{% if report.data.materials %}
+<h2>Materials Breakdown</h2>
+<table>
+    <tr>
+        <th>Material</th>
+        <th>Quantity Used</th>
+        <th>Unit Cost</th>
+        <th>Total Cost</th>
+    </tr>
+    {% for material in report.data.materials %}
+    <tr>
+        <td>{{ material.name }}</td>
+        <td>{{ material.quantity }}</td>
+        <td>${{ material.unit_cost|floatformat:2 }}</td>
+        <td>${{ material.total_cost|floatformat:2 }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

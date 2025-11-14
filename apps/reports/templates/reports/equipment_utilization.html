@@ -1,0 +1,28 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+<div class="summary-box">
+    <h2>Utilization Summary</h2>
+    <p>Average Utilization: {{ report.data.summary.avg_utilization|default:"0" }}%</p>
+</div>
+
+{% if report.data.equipment %}
+<h2>Equipment Utilization</h2>
+<table>
+    <tr>
+        <th>Equipment</th>
+        <th>Utilization %</th>
+        <th>Total Hours</th>
+        <th>Available Hours</th>
+    </tr>
+    {% for item in report.data.equipment %}
+    <tr>
+        <td>{{ item.name }}</td>
+        <td>{{ item.utilization_percent|floatformat:1 }}%</td>
+        <td>{{ item.total_hours|floatformat:1 }}</td>
+        <td>{{ item.available_hours|floatformat:1 }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

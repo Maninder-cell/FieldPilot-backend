@@ -38,19 +38,13 @@ class PDFExporter:
         try:
             # Import WeasyPrint here to avoid import errors if not installed
             from weasyprint import HTML, CSS
-            from weasyprint.text.fonts import FontConfiguration
             
             # Render HTML template
             html_string = render_to_string(self.template_name, self.context)
             
-            # Configure fonts
-            font_config = FontConfiguration()
-            
-            # Create HTML object
-            html = HTML(string=html_string, base_url=settings.STATIC_URL)
-            
-            # Generate PDF
-            pdf_bytes = html.write_pdf(font_config=font_config)
+            # Create HTML object and generate PDF
+            html_doc = HTML(string=html_string)
+            pdf_bytes = html_doc.write_pdf()
             
             logger.info(f"PDF generated successfully from template: {self.template_name}")
             return pdf_bytes

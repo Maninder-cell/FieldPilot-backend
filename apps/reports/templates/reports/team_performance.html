@@ -1,0 +1,33 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+<div class="summary-box">
+    <h2>Team Performance Summary</h2>
+    <table>
+        <tr><th>Metric</th><th>Value</th></tr>
+        <tr><td>Total Tasks</td><td>{{ report.data.summary.total_tasks|default:"0" }}</td></tr>
+        <tr><td>Completed Tasks</td><td>{{ report.data.summary.completed_tasks|default:"0" }}</td></tr>
+        <tr><td>Team Efficiency</td><td>{{ report.data.summary.efficiency|floatformat:1 }}%</td></tr>
+    </table>
+</div>
+
+{% if report.data.teams %}
+<h2>Team Breakdown</h2>
+<table>
+    <tr>
+        <th>Team</th>
+        <th>Members</th>
+        <th>Tasks Completed</th>
+        <th>Performance Score</th>
+    </tr>
+    {% for team in report.data.teams %}
+    <tr>
+        <td>{{ team.name }}</td>
+        <td>{{ team.member_count }}</td>
+        <td>{{ team.tasks_completed }}</td>
+        <td>{{ team.performance_score|floatformat:1 }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

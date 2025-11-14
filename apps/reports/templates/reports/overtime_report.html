@@ -1,0 +1,30 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+<div class="summary-box">
+    <h2>Overtime Summary</h2>
+    <table>
+        <tr><th>Metric</th><th>Value</th></tr>
+        <tr><td>Total Overtime Hours</td><td>{{ report.data.summary.total_overtime_hours|floatformat:1 }}</td></tr>
+        <tr><td>Total Overtime Cost</td><td>${{ report.data.summary.total_overtime_cost|floatformat:2 }}</td></tr>
+    </table>
+</div>
+
+{% if report.data.by_technician %}
+<h2>Overtime by Technician</h2>
+<table>
+    <tr>
+        <th>Technician</th>
+        <th>Overtime Hours</th>
+        <th>Overtime Cost</th>
+    </tr>
+    {% for item in report.data.by_technician %}
+    <tr>
+        <td>{{ item.technician.name }}</td>
+        <td>{{ item.overtime_hours|floatformat:1 }}</td>
+        <td>${{ item.overtime_cost|floatformat:2 }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

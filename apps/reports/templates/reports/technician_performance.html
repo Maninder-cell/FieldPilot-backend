@@ -1,0 +1,23 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+{% if report.data.technicians %}
+<h2>Technician Performance</h2>
+<table>
+    <tr>
+        <th>Technician</th>
+        <th>Tasks Completed</th>
+        <th>Avg Completion Time</th>
+        <th>On-Time Rate</th>
+    </tr>
+    {% for tech in report.data.technicians %}
+    <tr>
+        <td>{{ tech.name }}</td>
+        <td>{{ tech.tasks_completed|default:"0" }}</td>
+        <td>{{ tech.avg_completion_time|default:"N/A" }}</td>
+        <td>{{ tech.on_time_rate|floatformat:1 }}%</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

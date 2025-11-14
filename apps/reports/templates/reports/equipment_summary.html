@@ -1,0 +1,45 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+<div class="summary-box">
+    <h2>Summary</h2>
+    <table>
+        <tr>
+            <th>Metric</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Total Equipment</td>
+            <td>{{ report.data.summary.total_equipment|default:"0" }}</td>
+        </tr>
+        {% if report.data.summary.by_status %}
+        {% for status, count in report.data.summary.by_status.items %}
+        <tr>
+            <td>{{ status|title }}</td>
+            <td>{{ count }}</td>
+        </tr>
+        {% endfor %}
+        {% endif %}
+    </table>
+</div>
+
+{% if report.data.equipment %}
+<h2>Equipment List</h2>
+<table>
+    <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Location</th>
+    </tr>
+    {% for item in report.data.equipment %}
+    <tr>
+        <td>{{ item.name }}</td>
+        <td>{{ item.equipment_type|default:"N/A" }}</td>
+        <td>{{ item.status|title }}</td>
+        <td>{{ item.location|default:"N/A" }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

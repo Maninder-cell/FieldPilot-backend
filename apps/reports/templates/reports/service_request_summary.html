@@ -1,0 +1,27 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+<div class="summary-box">
+    <h2>Service Request Summary</h2>
+    <table>
+        <tr><th>Metric</th><th>Value</th></tr>
+        <tr><td>Total Requests</td><td>{{ report.data.summary.total_requests|default:"0" }}</td></tr>
+        <tr><td>Completed</td><td>{{ report.data.summary.completed|default:"0" }}</td></tr>
+        <tr><td>Pending</td><td>{{ report.data.summary.pending|default:"0" }}</td></tr>
+        <tr><td>Avg Response Time</td><td>{{ report.data.summary.avg_response_time|default:"N/A" }}</td></tr>
+    </table>
+</div>
+
+{% if report.data.by_status %}
+<h2>Requests by Status</h2>
+<table>
+    <tr><th>Status</th><th>Count</th></tr>
+    {% for status, count in report.data.by_status.items %}
+    <tr>
+        <td>{{ status|title }}</td>
+        <td>{{ count }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

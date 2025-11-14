@@ -1,0 +1,32 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+{% if report.data.technician %}
+<div class="summary-box">
+    <h2>Technician: {{ report.data.technician.name }}</h2>
+    <p>Date: {{ report.data.date|default:"N/A" }}</p>
+</div>
+{% endif %}
+
+{% if report.data.tasks %}
+<h2>Assigned Tasks</h2>
+<table>
+    <tr>
+        <th>Task</th>
+        <th>Priority</th>
+        <th>Status</th>
+        <th>Due Date</th>
+        <th>Location</th>
+    </tr>
+    {% for task in report.data.tasks %}
+    <tr>
+        <td>{{ task.title }}</td>
+        <td>{{ task.priority|title }}</td>
+        <td>{{ task.status|title }}</td>
+        <td>{{ task.due_date|default:"N/A" }}</td>
+        <td>{{ task.location|default:"N/A" }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

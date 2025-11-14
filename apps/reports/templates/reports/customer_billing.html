@@ -1,0 +1,33 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+<div class="summary-box">
+    <h2>Billing Summary</h2>
+    <table>
+        <tr><th>Metric</th><th>Value</th></tr>
+        <tr><td>Total Billable Amount</td><td>${{ report.data.summary.total_billable|floatformat:2|default:"0.00" }}</td></tr>
+        <tr><td>Labor Cost</td><td>${{ report.data.summary.labor_cost|floatformat:2|default:"0.00" }}</td></tr>
+        <tr><td>Materials Cost</td><td>${{ report.data.summary.materials_cost|floatformat:2|default:"0.00" }}</td></tr>
+    </table>
+</div>
+
+{% if report.data.customers %}
+<h2>Customer Billing Details</h2>
+<table>
+    <tr>
+        <th>Customer</th>
+        <th>Labor Cost</th>
+        <th>Materials Cost</th>
+        <th>Total</th>
+    </tr>
+    {% for customer in report.data.customers %}
+    <tr>
+        <td>{{ customer.name }}</td>
+        <td>${{ customer.labor_cost|floatformat:2 }}</td>
+        <td>${{ customer.materials_cost|floatformat:2 }}</td>
+        <td>${{ customer.total|floatformat:2 }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

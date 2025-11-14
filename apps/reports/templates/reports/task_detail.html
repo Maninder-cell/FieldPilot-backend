@@ -1,0 +1,44 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+{% if report.data.tasks %}
+<h2>Task Details</h2>
+{% for task in report.data.tasks %}
+<div class="summary-box">
+    <h3>{{ task.title }}</h3>
+    <table>
+        <tr>
+            <th>Field</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Status</td>
+            <td>{{ task.status|title }}</td>
+        </tr>
+        <tr>
+            <td>Priority</td>
+            <td>{{ task.priority|title }}</td>
+        </tr>
+        {% if task.assigned_to %}
+        <tr>
+            <td>Assigned To</td>
+            <td>{{ task.assigned_to.name }}</td>
+        </tr>
+        {% endif %}
+        {% if task.due_date %}
+        <tr>
+            <td>Due Date</td>
+            <td>{{ task.due_date }}</td>
+        </tr>
+        {% endif %}
+        {% if task.description %}
+        <tr>
+            <td>Description</td>
+            <td>{{ task.description }}</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

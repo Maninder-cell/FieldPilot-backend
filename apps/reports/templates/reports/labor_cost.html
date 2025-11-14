@@ -1,0 +1,69 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+<div class="summary-box">
+    <h2>Summary</h2>
+    <table>
+        <tr>
+            <th>Metric</th>
+            <th>Value</th>
+        </tr>
+        <tr>
+            <td>Total Normal Hours</td>
+            <td>{{ report.data.summary.total_normal_hours|default:"0" }}</td>
+        </tr>
+        <tr>
+            <td>Total Overtime Hours</td>
+            <td>{{ report.data.summary.total_overtime_hours|default:"0" }}</td>
+        </tr>
+        <tr>
+            <td>Total Hours</td>
+            <td>{{ report.data.summary.total_hours|default:"0" }}</td>
+        </tr>
+        <tr>
+            <td>Total Labor Cost</td>
+            <td>${{ report.data.summary.total_cost|default:"0" }}</td>
+        </tr>
+    </table>
+</div>
+
+{% if report.data.by_technician %}
+<h2>Labor Cost by Technician</h2>
+<table>
+    <tr>
+        <th>Technician</th>
+        <th>Normal Hours</th>
+        <th>Overtime Hours</th>
+        <th>Total Hours</th>
+        <th>Total Cost</th>
+    </tr>
+    {% for item in report.data.by_technician %}
+    <tr>
+        <td>{{ item.technician.name }}</td>
+        <td>{{ item.normal_hours|floatformat:2 }}</td>
+        <td>{{ item.overtime_hours|floatformat:2 }}</td>
+        <td>{{ item.total_hours|floatformat:2 }}</td>
+        <td>${{ item.total_cost|floatformat:2 }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+
+{% if report.data.by_task %}
+<h2>Labor Cost by Task</h2>
+<table>
+    <tr>
+        <th>Task</th>
+        <th>Total Hours</th>
+        <th>Total Cost</th>
+    </tr>
+    {% for item in report.data.by_task %}
+    <tr>
+        <td>{{ item.task.title }}</td>
+        <td>{{ item.total_hours|floatformat:2 }}</td>
+        <td>${{ item.total_cost|floatformat:2 }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

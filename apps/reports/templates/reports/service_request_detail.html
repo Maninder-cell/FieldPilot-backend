@@ -1,0 +1,20 @@
+{% extends "reports/base_report.html" %}
+
+{% block content %}
+{% if report.data.requests %}
+<h2>Service Request Details</h2>
+{% for request in report.data.requests %}
+<div class="summary-box">
+    <h3>{{ request.title }}</h3>
+    <table>
+        <tr><th>Field</th><th>Value</th></tr>
+        <tr><td>Status</td><td>{{ request.status|title }}</td></tr>
+        <tr><td>Priority</td><td>{{ request.priority|title }}</td></tr>
+        <tr><td>Requested By</td><td>{{ request.requested_by.name|default:"N/A" }}</td></tr>
+        <tr><td>Created Date</td><td>{{ request.created_at }}</td></tr>
+        {% if request.description %}<tr><td>Description</td><td>{{ request.description }}</td></tr>{% endif %}
+    </table>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}
