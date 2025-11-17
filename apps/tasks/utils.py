@@ -1,7 +1,7 @@
 """
 Tasks Utilities - Business Logic Validators and Calculators
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from django.core.exceptions import ValidationError

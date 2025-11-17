@@ -2,7 +2,7 @@
 
 ## Overview
 
-FieldPilot now uses **django-tenants** for true schema-per-tenant multi-tenancy with PostgreSQL. Each tenant gets its own isolated PostgreSQL schema, ensuring complete data separation.
+FieldRino now uses **django-tenants** for true schema-per-tenant multi-tenancy with PostgreSQL. Each tenant gets its own isolated PostgreSQL schema, ensuring complete data separation.
 
 ## What Changed
 
@@ -41,7 +41,7 @@ PostgreSQL Database
 
 ## How It Works
 
-1. **Request comes in** with a domain (e.g., `acme.fieldpilot.com`)
+1. **Request comes in** with a domain (e.g., `acme.fieldrino.com`)
 2. **TenantMainMiddleware** looks up the tenant by domain
 3. **PostgreSQL search_path** is set to the tenant's schema
 4. **All queries** execute in that tenant's isolated schema
@@ -63,7 +63,7 @@ tenant = Tenant.objects.create(
 
 # Create domain for routing
 domain = Domain.objects.create(
-    domain='acme.fieldpilot.com',
+    domain='acme.fieldrino.com',
     tenant=tenant,
     is_primary=True
 )

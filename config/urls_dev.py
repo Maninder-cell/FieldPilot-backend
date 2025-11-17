@@ -1,7 +1,7 @@
 """
-FieldPilot Development URL Configuration
+FieldRino Development URL Configuration
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from django.contrib import admin

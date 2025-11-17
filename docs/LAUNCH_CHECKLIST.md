@@ -1,4 +1,4 @@
-# FieldPilot - Launch Checklist
+# FieldRino - Launch Checklist
 
 ## Pre-Development Checklist
 
@@ -496,18 +496,18 @@
 
 ## Emergency Contacts
 
-- **Technical Lead**: tech@fieldpilot.com
-- **Product Manager**: product@fieldpilot.com
-- **DevOps**: devops@fieldpilot.com
-- **Support**: support@fieldpilot.com
+- **Technical Lead**: tech@fieldrino.com
+- **Product Manager**: product@fieldrino.com
+- **DevOps**: devops@fieldrino.com
+- **Support**: support@fieldrino.com
 - **Emergency**: +1-XXX-XXX-XXXX
 
 ## Resources
 
 - **Documentation**: [docs/](../docs/)
 - **Project Board**: [GitHub Projects]
-- **Slack**: #fieldpilot-dev
-- **Status Page**: status.fieldpilot.com
+- **Slack**: #fieldrino-dev
+- **Status Page**: status.fieldrino.com
 
 ---
 

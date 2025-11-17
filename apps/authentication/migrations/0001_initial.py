@@ -119,7 +119,7 @@ class Migration(migrations.Migration):
             options={
                 "verbose_name": "User",
                 "verbose_name_plural": "Users",
-                "default_related_name": "fieldpilot_users",
+                "default_related_name": "fieldrino_users",
             },
         ),
         migrations.CreateModel(

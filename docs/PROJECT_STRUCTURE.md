@@ -1,13 +1,13 @@
-# FieldPilot - Project Structure
+# FieldRino - Project Structure
 
 ## Overview
 
-This document provides a comprehensive overview of the FieldPilot project structure, explaining the purpose of each directory and file.
+This document provides a comprehensive overview of the FieldRino project structure, explaining the purpose of each directory and file.
 
 ## Root Directory Structure
 
 ```
-fieldpilot/
+fieldrino/
 ├── backend/                 # Django backend application
 ├── frontend/                # Next.js frontend application
 ├── docs/                    # Project documentation
@@ -489,7 +489,7 @@ SECRET_KEY=your-secret-key
 ALLOWED_HOSTS=localhost,127.0.0.1
 
 # Database
-DATABASE_URL=postgresql://user:pass@localhost:5432/fieldpilot_db
+DATABASE_URL=postgresql://user:pass@localhost:5432/fieldrino_db
 
 # Redis
 REDIS_URL=redis://localhost:6379/0
@@ -497,7 +497,7 @@ REDIS_URL=redis://localhost:6379/0
 # AWS
 AWS_ACCESS_KEY_ID=your-key
 AWS_SECRET_ACCESS_KEY=your-secret
-AWS_STORAGE_BUCKET_NAME=fieldpilot-dev
+AWS_STORAGE_BUCKET_NAME=fieldrino-dev
 
 # Stripe
 STRIPE_SECRET_KEY=sk_test_...

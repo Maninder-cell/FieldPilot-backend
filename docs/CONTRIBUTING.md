@@ -1,28 +1,28 @@
-# Contributing to FieldPilot
+# Contributing to FieldRino
 
-Thank you for your interest in contributing to FieldPilot! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to FieldRino! This document provides guidelines and instructions for contributing to the project.
 
 ## ⚠️ Important: Proprietary Software Notice
 
-**FieldPilot is proprietary software.** All source code and associated files are the intellectual property of FieldPilot and protected by copyright law.
+**FieldRino is proprietary software.** All source code and associated files are the intellectual property of FieldRino and protected by copyright law.
 
 ### What This Means for Contributors
 
 - **Internal Team Only**: Contributions are accepted only from authorized team members
 - **No Public Contributions**: This is NOT an open-source project
 - **Confidentiality**: All code, documentation, and project information is confidential
-- **Copyright**: All contributions become the property of FieldPilot
+- **Copyright**: All contributions become the property of FieldRino
 - **No Redistribution**: You may NOT copy, distribute, or share any part of this codebase
 
 ### Licensing
 
 By contributing to this project, you agree that:
-1. Your contributions will be owned by FieldPilot
+1. Your contributions will be owned by FieldRino
 2. You will not share, copy, or distribute any code or documentation
 3. You understand this is proprietary software with all rights reserved
 4. You have read and agree to the terms in the LICENSE file
 
-For licensing inquiries, contact: legal@fieldpilot.com
+For licensing inquiries, contact: legal@fieldrino.com
 
 ---
 
@@ -70,7 +70,7 @@ Before contributing, ensure you have:
 
 ### Finding Issues to Work On
 
-1. Check the [GitHub Issues](https://github.com/your-org/fieldpilot/issues)
+1. Check the [GitHub Issues](https://github.com/your-org/fieldrino/issues)
 2. Look for issues labeled `good first issue` or `help wanted`
 3. Comment on the issue to express interest
 4. Wait for assignment before starting work
@@ -80,11 +80,11 @@ Before contributing, ensure you have:
 ```bash
 # Fork the repository
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/fieldpilot.git
-cd fieldpilot
+git clone https://github.com/YOUR_USERNAME/fieldrino.git
+cd fieldrino
 
 # Add upstream remote
-git remote add upstream https://github.com/your-org/fieldpilot.git
+git remote add upstream https://github.com/your-org/fieldrino.git
 
 # Create a new branch
 git checkout -b feature/your-feature-name
@@ -593,7 +593,7 @@ If you have questions:
 1. Check existing documentation
 2. Ask in team Slack channel
 3. Contact your team lead
-4. Email: dev@fieldpilot.com
+4. Email: dev@fieldrino.com
 
 ## Confidentiality Reminder
 
@@ -613,4 +613,4 @@ Internal team contributors will be recognized in:
 
 **Remember: This is proprietary software. Treat all code and documentation as confidential.**
 
-Thank you for being part of the FieldPilot team! 🚀
+Thank you for being part of the FieldRino team! 🚀

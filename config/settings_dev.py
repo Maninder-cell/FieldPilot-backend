@@ -1,7 +1,7 @@
 """
-FieldPilot Development Settings (SQLite)
+FieldRino Development Settings (SQLite)
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 
@@ -105,7 +105,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database - PostgreSQL with django-tenants backend
 import dj_database_url
 
-DATABASE_URL = config('DATABASE_URL', default='postgresql://fieldpilot_user:fieldpilot_password@localhost:5432/fieldpilot_db')
+DATABASE_URL = config('DATABASE_URL', default='postgresql://fieldrino_user:fieldrino_password@localhost:5432/fieldrino_db')
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -181,9 +181,9 @@ REST_FRAMEWORK = {
 
 # drf-spectacular settings for Swagger/OpenAPI
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'FieldPilot API',
+    'TITLE': 'FieldRino API',
     'DESCRIPTION': '''
-# FieldPilot API Documentation
+# FieldRino API Documentation
 
 AI-Powered Multi-Tenant Facility & Equipment Management SaaS Platform
 
@@ -214,7 +214,7 @@ Get your token by calling the `/api/v1/auth/login/` endpoint.
 
 ## Support
 
-For support, contact: support@fieldpilot.com
+For support, contact: support@fieldrino.com
     ''',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
@@ -260,13 +260,13 @@ For support, contact: support@fieldpilot.com
     
     # Contact and license
     'CONTACT': {
-        'name': 'FieldPilot Support',
-        'email': 'support@fieldpilot.com',
-        'url': 'https://fieldpilot.com/support',
+        'name': 'FieldRino Support',
+        'email': 'support@fieldrino.com',
+        'url': 'https://fieldrino.com/support',
     },
     'LICENSE': {
         'name': 'Proprietary',
-        'url': 'https://fieldpilot.com/license',
+        'url': 'https://fieldrino.com/license',
     },
     
     # Schema generation settings
@@ -331,7 +331,7 @@ EMAIL_USE_TLS = False
 EMAIL_USE_SSL = False
 EMAIL_HOST_USER = ''
 EMAIL_HOST_PASSWORD = ''
-DEFAULT_FROM_EMAIL = 'noreply@fieldpilot.com'
+DEFAULT_FROM_EMAIL = 'noreply@fieldrino.com'
 
 # Cache Configuration (Local memory cache for development)
 CACHES = {

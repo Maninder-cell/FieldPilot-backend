@@ -1,7 +1,7 @@
 """
 Celery Configuration
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 import os
@@ -11,7 +11,7 @@ from celery.schedules import crontab
 # Set default Django settings
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings_dev')
 
-app = Celery('fieldpilot')
+app = Celery('fieldrino')
 
 # Load config from Django settings
 app.config_from_object('django.conf:settings', namespace='CELERY')

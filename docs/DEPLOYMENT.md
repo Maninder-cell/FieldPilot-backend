@@ -1,8 +1,8 @@
-# FieldPilot - Deployment Guide
+# FieldRino - Deployment Guide
 
 ## Production Deployment on AWS
 
-This guide covers deploying FieldPilot to AWS using ECS Fargate, RDS, and other managed services.
+This guide covers deploying FieldRino to AWS using ECS Fargate, RDS, and other managed services.
 
 ## Architecture Overview
 
@@ -42,21 +42,21 @@ aws ec2 attach-internet-gateway --vpc-id vpc-xxx --internet-gateway-id igw-xxx
 ```bash
 # Create DB subnet group
 aws rds create-db-subnet-group \
-  --db-subnet-group-name fieldpilot-db-subnet \
-  --db-subnet-group-description "FieldPilot DB Subnet" \
+  --db-subnet-group-name fieldrino-db-subnet \
+  --db-subnet-group-description "FieldRino DB Subnet" \
   --subnet-ids subnet-xxx subnet-yyy
 
 # Create RDS instance
 aws rds create-db-instance \
-  --db-instance-identifier fieldpilot-prod \
+  --db-instance-identifier fieldrino-prod \
   --db-instance-class db.t3.medium \
   --engine postgres \
   --engine-version 15.4 \
-  --master-username fieldpilot \
+  --master-username fieldrino \
   --master-user-password <secure-password> \
   --allocated-storage 100 \
   --storage-type gp3 \
-  --db-subnet-group-name fieldpilot-db-subnet \
+  --db-subnet-group-name fieldrino-db-subnet \
   --vpc-security-group-ids sg-xxx \
   --backup-retention-period 30 \
   --multi-az \
@@ -69,12 +69,12 @@ aws rds create-db-instance \
 ```bash
 # Create Redis cluster
 aws elasticache create-cache-cluster \
-  --cache-cluster-id fieldpilot-redis \
+  --cache-cluster-id fieldrino-redis \
   --cache-node-type cache.t3.medium \
   --engine redis \
   --engine-version 7.0 \
   --num-cache-nodes 1 \
-  --cache-subnet-group-name fieldpilot-cache-subnet \
+  --cache-subnet-group-name fieldrino-cache-subnet \
   --security-group-ids sg-xxx
 ```
 
@@ -82,21 +82,21 @@ aws elasticache create-cache-cluster \
 
 ```bash
 # Create S3 bucket for file storage
-aws s3 mb s3://fieldpilot-prod-files
+aws s3 mb s3://fieldrino-prod-files
 
 # Enable versioning
 aws s3api put-bucket-versioning \
-  --bucket fieldpilot-prod-files \
+  --bucket fieldrino-prod-files \
   --versioning-configuration Status=Enabled
 
 # Set CORS policy
 aws s3api put-bucket-cors \
-  --bucket fieldpilot-prod-files \
+  --bucket fieldrino-prod-files \
   --cors-configuration file://cors-config.json
 
 # Enable encryption
 aws s3api put-bucket-encryption \
-  --bucket fieldpilot-prod-files \
+  --bucket fieldrino-prod-files \
   --server-side-encryption-configuration '{
     "Rules": [{
       "ApplyServerSideEncryptionByDefault": {
@@ -110,8 +110,8 @@ aws s3api put-bucket-encryption \
 
 ```bash
 # Create ECR repositories
-aws ecr create-repository --repository-name fieldpilot/backend
-aws ecr create-repository --repository-name fieldpilot/frontend
+aws ecr create-repository --repository-name fieldrino/backend
+aws ecr create-repository --repository-name fieldrino/frontend
 
 # Get login credentials
 aws ecr get-login-password --region us-east-1 | \
@@ -126,14 +126,14 @@ aws ecr get-login-password --region us-east-1 | \
 cd backend
 
 # Build image
-docker build -t fieldpilot/backend:latest -f Dockerfile.prod .
+docker build -t fieldrino/backend:latest -f Dockerfile.prod .
 
 # Tag for ECR
-docker tag fieldpilot/backend:latest \
-  <account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldpilot/backend:latest
+docker tag fieldrino/backend:latest \
+  <account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldrino/backend:latest
 
 # Push to ECR
-docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldpilot/backend:latest
+docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldrino/backend:latest
 ```
 
 ### Build and Push Frontend
@@ -142,14 +142,14 @@ docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldpilot/backend:late
 cd frontend
 
 # Build image
-docker build -t fieldpilot/frontend:latest -f Dockerfile.prod .
+docker build -t fieldrino/frontend:latest -f Dockerfile.prod .
 
 # Tag for ECR
-docker tag fieldpilot/frontend:latest \
-  <account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldpilot/frontend:latest
+docker tag fieldrino/frontend:latest \
+  <account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldrino/frontend:latest
 
 # Push to ECR
-docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldpilot/frontend:latest
+docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldrino/frontend:latest
 ```
 
 ## ECS Setup
@@ -157,7 +157,7 @@ docker push <account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldpilot/frontend:lat
 ### 1. Create ECS Cluster
 
 ```bash
-aws ecs create-cluster --cluster-name fieldpilot-prod
+aws ecs create-cluster --cluster-name fieldrino-prod
 ```
 
 ### 2. Task Definitions
@@ -166,7 +166,7 @@ aws ecs create-cluster --cluster-name fieldpilot-prod
 
 ```json
 {
-  "family": "fieldpilot-backend",
+  "family": "fieldrino-backend",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "1024",
@@ -176,7 +176,7 @@ aws ecs create-cluster --cluster-name fieldpilot-prod
   "containerDefinitions": [
     {
       "name": "backend",
-      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldpilot/backend:latest",
+      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldrino/backend:latest",
       "portMappings": [
         {
           "containerPort": 8000,
@@ -194,7 +194,7 @@ aws ecs create-cluster --cluster-name fieldpilot-prod
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/fieldpilot-backend",
+          "awslogs-group": "/ecs/fieldrino-backend",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
@@ -214,7 +214,7 @@ aws ecs create-cluster --cluster-name fieldpilot-prod
 
 ```json
 {
-  "family": "fieldpilot-frontend",
+  "family": "fieldrino-frontend",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
@@ -223,7 +223,7 @@ aws ecs create-cluster --cluster-name fieldpilot-prod
   "containerDefinitions": [
     {
       "name": "frontend",
-      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldpilot/frontend:latest",
+      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldrino/frontend:latest",
       "portMappings": [
         {
           "containerPort": 3000,
@@ -232,12 +232,12 @@ aws ecs create-cluster --cluster-name fieldpilot-prod
       ],
       "environment": [
         {"name": "NODE_ENV", "value": "production"},
-        {"name": "NEXT_PUBLIC_API_URL", "value": "https://api.fieldpilot.com/api/v1"}
+        {"name": "NEXT_PUBLIC_API_URL", "value": "https://api.fieldrino.com/api/v1"}
       ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/fieldpilot-frontend",
+          "awslogs-group": "/ecs/fieldrino-frontend",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
@@ -256,9 +256,9 @@ aws ecs register-task-definition --cli-input-json file://frontend-task-def.json
 
 # Create backend service
 aws ecs create-service \
-  --cluster fieldpilot-prod \
+  --cluster fieldrino-prod \
   --service-name backend \
-  --task-definition fieldpilot-backend \
+  --task-definition fieldrino-backend \
   --desired-count 2 \
   --launch-type FARGATE \
   --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx,subnet-yyy],securityGroups=[sg-xxx],assignPublicIp=DISABLED}" \
@@ -266,9 +266,9 @@ aws ecs create-service \
 
 # Create frontend service
 aws ecs create-service \
-  --cluster fieldpilot-prod \
+  --cluster fieldrino-prod \
   --service-name frontend \
-  --task-definition fieldpilot-frontend \
+  --task-definition fieldrino-frontend \
   --desired-count 2 \
   --launch-type FARGATE \
   --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx,subnet-yyy],securityGroups=[sg-xxx],assignPublicIp=DISABLED}" \
@@ -282,14 +282,14 @@ aws ecs create-service \
 ```bash
 # Create ALB
 aws elbv2 create-load-balancer \
-  --name fieldpilot-alb \
+  --name fieldrino-alb \
   --subnets subnet-xxx subnet-yyy \
   --security-groups sg-xxx \
   --scheme internet-facing
 
 # Create target groups
 aws elbv2 create-target-group \
-  --name fieldpilot-backend-tg \
+  --name fieldrino-backend-tg \
   --protocol HTTP \
   --port 8000 \
   --vpc-id vpc-xxx \
@@ -297,7 +297,7 @@ aws elbv2 create-target-group \
   --health-check-path /health/
 
 aws elbv2 create-target-group \
-  --name fieldpilot-frontend-tg \
+  --name fieldrino-frontend-tg \
   --protocol HTTP \
   --port 3000 \
   --vpc-id vpc-xxx \
@@ -323,10 +323,10 @@ aws cloudfront create-distribution --distribution-config file://cloudfront-confi
 **cloudfront-config.json**:
 ```json
 {
-  "CallerReference": "fieldpilot-prod-2025",
+  "CallerReference": "fieldrino-prod-2025",
   "Aliases": {
     "Quantity": 2,
-    "Items": ["fieldpilot.com", "*.fieldpilot.com"]
+    "Items": ["fieldrino.com", "*.fieldrino.com"]
   },
   "DefaultRootObject": "index.html",
   "Origins": {
@@ -394,8 +394,8 @@ aws cloudfront create-distribution --distribution-config file://cloudfront-confi
 ```bash
 # Run migrations on production
 aws ecs run-task \
-  --cluster fieldpilot-prod \
-  --task-definition fieldpilot-backend \
+  --cluster fieldrino-prod \
+  --task-definition fieldrino-backend \
   --launch-type FARGATE \
   --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx],assignPublicIp=ENABLED}" \
   --overrides '{
@@ -407,8 +407,8 @@ aws ecs run-task \
 
 # Migrate tenant schemas
 aws ecs run-task \
-  --cluster fieldpilot-prod \
-  --task-definition fieldpilot-backend \
+  --cluster fieldrino-prod \
+  --task-definition fieldrino-backend \
   --launch-type FARGATE \
   --network-configuration "awsvpcConfiguration={subnets=[subnet-xxx],securityGroups=[sg-xxx],assignPublicIp=ENABLED}" \
   --overrides '{
@@ -425,7 +425,7 @@ aws ecs run-task \
 
 ```json
 {
-  "family": "fieldpilot-celery-worker",
+  "family": "fieldrino-celery-worker",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "512",
@@ -434,7 +434,7 @@ aws ecs run-task \
   "containerDefinitions": [
     {
       "name": "celery-worker",
-      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldpilot/backend:latest",
+      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldrino/backend:latest",
       "command": ["celery", "-A", "config", "worker", "-l", "info"],
       "environment": [
         {"name": "DJANGO_SETTINGS_MODULE", "value": "config.settings.production"}
@@ -447,7 +447,7 @@ aws ecs run-task \
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/fieldpilot-celery-worker",
+          "awslogs-group": "/ecs/fieldrino-celery-worker",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
@@ -461,7 +461,7 @@ aws ecs run-task \
 
 ```json
 {
-  "family": "fieldpilot-celery-beat",
+  "family": "fieldrino-celery-beat",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
   "cpu": "256",
@@ -470,7 +470,7 @@ aws ecs run-task \
   "containerDefinitions": [
     {
       "name": "celery-beat",
-      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldpilot/backend:latest",
+      "image": "<account-id>.dkr.ecr.us-east-1.amazonaws.com/fieldrino/backend:latest",
       "command": ["celery", "-A", "config", "beat", "-l", "info"],
       "environment": [
         {"name": "DJANGO_SETTINGS_MODULE", "value": "config.settings.production"}
@@ -482,7 +482,7 @@ aws ecs run-task \
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/fieldpilot-celery-beat",
+          "awslogs-group": "/ecs/fieldrino-celery-beat",
           "awslogs-region": "us-east-1",
           "awslogs-stream-prefix": "ecs"
         }
@@ -499,7 +499,7 @@ aws ecs run-task \
 ```bash
 # High CPU alarm
 aws cloudwatch put-metric-alarm \
-  --alarm-name fieldpilot-backend-high-cpu \
+  --alarm-name fieldrino-backend-high-cpu \
   --alarm-description "Alert when CPU exceeds 80%" \
   --metric-name CPUUtilization \
   --namespace AWS/ECS \
@@ -511,7 +511,7 @@ aws cloudwatch put-metric-alarm \
 
 # High memory alarm
 aws cloudwatch put-metric-alarm \
-  --alarm-name fieldpilot-backend-high-memory \
+  --alarm-name fieldrino-backend-high-memory \
   --alarm-description "Alert when memory exceeds 80%" \
   --metric-name MemoryUtilization \
   --namespace AWS/ECS \
@@ -544,7 +544,7 @@ sentry_sdk.init(
 # Register scalable target
 aws application-autoscaling register-scalable-target \
   --service-namespace ecs \
-  --resource-id service/fieldpilot-prod/backend \
+  --resource-id service/fieldrino-prod/backend \
   --scalable-dimension ecs:service:DesiredCount \
   --min-capacity 2 \
   --max-capacity 10
@@ -552,7 +552,7 @@ aws application-autoscaling register-scalable-target \
 # Create scaling policy
 aws application-autoscaling put-scaling-policy \
   --service-namespace ecs \
-  --resource-id service/fieldpilot-prod/backend \
+  --resource-id service/fieldrino-prod/backend \
   --scalable-dimension ecs:service:DesiredCount \
   --policy-name cpu-scaling \
   --policy-type TargetTrackingScaling \
@@ -597,7 +597,7 @@ jobs:
       - name: Build and push backend image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: fieldpilot/backend
+          ECR_REPOSITORY: fieldrino/backend
           IMAGE_TAG: ${{ github.sha }}
         run: |
           cd backend
@@ -609,7 +609,7 @@ jobs:
       - name: Update ECS service
         run: |
           aws ecs update-service \
-            --cluster fieldpilot-prod \
+            --cluster fieldrino-prod \
             --service backend \
             --force-new-deployment
 
@@ -632,7 +632,7 @@ jobs:
       - name: Build and push frontend image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: fieldpilot/frontend
+          ECR_REPOSITORY: fieldrino/frontend
           IMAGE_TAG: ${{ github.sha }}
         run: |
           cd frontend
@@ -644,7 +644,7 @@ jobs:
       - name: Update ECS service
         run: |
           aws ecs update-service \
-            --cluster fieldpilot-prod \
+            --cluster fieldrino-prod \
             --service frontend \
             --force-new-deployment
 ```
@@ -671,13 +671,13 @@ jobs:
 # Automated RDS backups (already configured)
 # Manual snapshot
 aws rds create-db-snapshot \
-  --db-instance-identifier fieldpilot-prod \
-  --db-snapshot-identifier fieldpilot-manual-$(date +%Y%m%d)
+  --db-instance-identifier fieldrino-prod \
+  --db-snapshot-identifier fieldrino-manual-$(date +%Y%m%d)
 
 # S3 versioning (already enabled)
 # Cross-region replication
 aws s3api put-bucket-replication \
-  --bucket fieldpilot-prod-files \
+  --bucket fieldrino-prod-files \
   --replication-configuration file://replication-config.json
 ```
 
@@ -686,9 +686,9 @@ aws s3api put-bucket-replication \
 ```bash
 # Rollback to previous task definition
 aws ecs update-service \
-  --cluster fieldpilot-prod \
+  --cluster fieldrino-prod \
   --service backend \
-  --task-definition fieldpilot-backend:PREVIOUS_REVISION
+  --task-definition fieldrino-backend:PREVIOUS_REVISION
 
 # Rollback database migration
 # Connect to RDS and run:

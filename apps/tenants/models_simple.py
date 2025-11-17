@@ -1,7 +1,7 @@
 """
 Simplified Tenant Models (without django-tenants)
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from django.db import models

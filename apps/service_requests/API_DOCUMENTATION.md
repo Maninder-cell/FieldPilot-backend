@@ -55,7 +55,7 @@ Authorization: Bearer <your_jwt_token>
 ## Base URL
 
 ```
-https://api.fieldpilot.com/api/v1/service-requests/
+https://api.fieldrino.com/api/v1/service-requests/
 ```
 
 ---
@@ -89,7 +89,7 @@ https://api.fieldpilot.com/api/v1/service-requests/
 ```json
 {
   "count": 100,
-  "next": "https://api.fieldpilot.com/api/v1/service-requests/?page=2",
+  "next": "https://api.fieldrino.com/api/v1/service-requests/?page=2",
   "previous": null,
   "results": [ ... ]
 }
@@ -639,7 +639,7 @@ Get upcoming scheduled services for equipment.
 ### Example 1: Customer Creates Service Request
 
 ```bash
-curl -X POST https://api.fieldpilot.com/api/v1/service-requests/ \
+curl -X POST https://api.fieldrino.com/api/v1/service-requests/ \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -656,7 +656,7 @@ curl -X POST https://api.fieldpilot.com/api/v1/service-requests/ \
 ### Example 2: Customer Reports Critical Issue
 
 ```bash
-curl -X POST https://api.fieldpilot.com/api/v1/service-requests/ \
+curl -X POST https://api.fieldrino.com/api/v1/service-requests/ \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -675,7 +675,7 @@ curl -X POST https://api.fieldpilot.com/api/v1/service-requests/ \
 ### Example 3: Admin Accepts Request
 
 ```bash
-curl -X POST https://api.fieldpilot.com/api/v1/service-requests/{request_id}/accept/ \
+curl -X POST https://api.fieldrino.com/api/v1/service-requests/{request_id}/accept/ \
   -H "Authorization: Bearer <admin_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -690,7 +690,7 @@ curl -X POST https://api.fieldpilot.com/api/v1/service-requests/{request_id}/acc
 ### Example 4: Admin Converts to Task
 
 ```bash
-curl -X POST https://api.fieldpilot.com/api/v1/service-requests/{request_id}/convert-to-task/ \
+curl -X POST https://api.fieldrino.com/api/v1/service-requests/{request_id}/convert-to-task/ \
   -H "Authorization: Bearer <admin_token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -709,7 +709,7 @@ curl -X POST https://api.fieldpilot.com/api/v1/service-requests/{request_id}/con
 ### Example 5: Customer Submits Feedback
 
 ```bash
-curl -X POST https://api.fieldpilot.com/api/v1/service-requests/{request_id}/feedback/ \
+curl -X POST https://api.fieldrino.com/api/v1/service-requests/{request_id}/feedback/ \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
@@ -723,7 +723,7 @@ curl -X POST https://api.fieldpilot.com/api/v1/service-requests/{request_id}/fee
 ### Example 6: Get Reports with Filters
 
 ```bash
-curl -X GET "https://api.fieldpilot.com/api/v1/service-requests/reports/?start_date=2025-01-01&end_date=2025-12-31&customer=uuid" \
+curl -X GET "https://api.fieldrino.com/api/v1/service-requests/reports/?start_date=2025-01-01&end_date=2025-12-31&customer=uuid" \
   -H "Authorization: Bearer <admin_token>"
 ```
 
@@ -772,7 +772,7 @@ Webhook events will be available for:
 
 ## Support
 
-For API support, contact: api-support@fieldpilot.com
+For API support, contact: api-support@fieldrino.com
 
 ---
 

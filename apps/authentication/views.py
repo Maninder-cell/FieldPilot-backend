@@ -1,7 +1,7 @@
 """
 Authentication Views
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from rest_framework import status
@@ -103,8 +103,8 @@ def send_otp_email(user, purpose):
     """Send OTP email to user."""
     try:
         subject_map = {
-            'email_verification': 'Verify Your Email - FieldPilot',
-            'password_reset': 'Password Reset Code - FieldPilot'
+            'email_verification': 'Verify Your Email - FieldRino',
+            'password_reset': 'Password Reset Code - FieldRino'
         }
         
         message_map = {
@@ -113,7 +113,7 @@ def send_otp_email(user, purpose):
         }
         
         send_mail(
-            subject=subject_map.get(purpose, 'OTP Code - FieldPilot'),
+            subject=subject_map.get(purpose, 'OTP Code - FieldRino'),
             message=message_map.get(purpose, f'Your OTP code is: {user.otp_code}'),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[user.email],

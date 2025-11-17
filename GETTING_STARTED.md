@@ -1,6 +1,6 @@
-# Getting Started with FieldPilot
+# Getting Started with FieldRino
 
-Welcome to FieldPilot! This guide will help you get started with the project, whether you're a developer, product manager, or stakeholder.
+Welcome to FieldRino! This guide will help you get started with the project, whether you're a developer, product manager, or stakeholder.
 
 ## 📋 Quick Navigation
 
@@ -37,8 +37,8 @@ Welcome to FieldPilot! This guide will help you get started with the project, wh
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-org/fieldpilot.git
-cd fieldpilot
+git clone https://github.com/your-org/fieldrino.git
+cd fieldrino
 
 # 2. Copy environment files
 cp backend/.env.example backend/.env
@@ -88,9 +88,9 @@ docker-compose exec backend python manage.py createsuperuser
 
 ## 📊 Product Overview
 
-### What is FieldPilot?
+### What is FieldRino?
 
-FieldPilot is an AI-powered, multi-tenant SaaS platform for facility and equipment management. It helps organizations:
+FieldRino is an AI-powered, multi-tenant SaaS platform for facility and equipment management. It helps organizations:
 
 - Track equipment lifecycle and maintenance
 - Manage maintenance tasks and schedules
@@ -278,16 +278,16 @@ FieldPilot is an AI-powered, multi-tenant SaaS platform for facility and equipme
 
 ### Communication
 
-- **Email**: dev@fieldpilot.com
-- **Slack**: #fieldpilot-dev
+- **Email**: dev@fieldrino.com
+- **Slack**: #fieldrino-dev
 - **GitHub Issues**: Report bugs and request features
 - **GitHub Discussions**: Ask questions
 
 ### Support
 
-- **Technical Issues**: tech@fieldpilot.com
-- **Product Questions**: product@fieldpilot.com
-- **Security Issues**: security@fieldpilot.com
+- **Technical Issues**: tech@fieldrino.com
+- **Product Questions**: product@fieldrino.com
+- **Security Issues**: security@fieldrino.com
 
 ## 🎓 Learning Resources
 
@@ -365,6 +365,6 @@ Choose your path:
 
 ---
 
-**Welcome to the FieldPilot team! Let's build something amazing together! 🚀**
+**Welcome to the FieldRino team! Let's build something amazing together! 🚀**
 
-Questions? Email us at hello@fieldpilot.com
+Questions? Email us at hello@fieldrino.com

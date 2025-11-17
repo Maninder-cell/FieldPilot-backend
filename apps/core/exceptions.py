@@ -1,7 +1,7 @@
 """
 Custom Exception Handlers
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from rest_framework.views import exception_handler
@@ -72,10 +72,10 @@ def get_error_message(exc, response):
     return str(exc)
 
 
-class FieldPilotException(Exception):
-    """Base exception for FieldPilot application."""
+class FieldRinoException(Exception):
+    """Base exception for FieldRino application."""
     default_message = "An error occurred"
-    default_code = "FIELDPILOT_ERROR"
+    default_code = "FIELDRINO_ERROR"
     
     def __init__(self, message=None, code=None):
         self.message = message or self.default_message
@@ -83,19 +83,19 @@ class FieldPilotException(Exception):
         super().__init__(self.message)
 
 
-class TenantNotFoundError(FieldPilotException):
+class TenantNotFoundError(FieldRinoException):
     """Raised when tenant is not found."""
     default_message = "Tenant not found"
     default_code = "TENANT_NOT_FOUND"
 
 
-class SubscriptionRequiredError(FieldPilotException):
+class SubscriptionRequiredError(FieldRinoException):
     """Raised when subscription is required but not active."""
     default_message = "Active subscription required"
     default_code = "SUBSCRIPTION_REQUIRED"
 
 
-class UsageLimitExceededError(FieldPilotException):
+class UsageLimitExceededError(FieldRinoException):
     """Raised when usage limit is exceeded."""
     default_message = "Usage limit exceeded"
     default_code = "USAGE_LIMIT_EXCEEDED"

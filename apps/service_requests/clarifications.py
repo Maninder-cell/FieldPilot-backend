@@ -4,7 +4,7 @@ Service Requests Clarification System
 Task 10.2: Clarification request feature
 Allows admins to request additional information from customers.
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from django.utils import timezone

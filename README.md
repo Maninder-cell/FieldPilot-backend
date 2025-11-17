@@ -1,8 +1,8 @@
-# FieldPilot - AI-Powered Facility & Equipment Management SaaS
+# FieldRino - AI-Powered Facility & Equipment Management SaaS
 
 <div align="center">
 
-![FieldPilot Logo](https://via.placeholder.com/200x200?text=FieldPilot)
+![FieldRino Logo](https://via.placeholder.com/200x200?text=FieldRino)
 
 **Next-generation facility management platform with AI-powered predictive maintenance**
 
@@ -20,9 +20,9 @@
 
 ## 🚀 Overview
 
-FieldPilot is a comprehensive, multi-tenant SaaS platform designed to revolutionize facility and equipment management. Built with Django REST Framework and Next.js, it offers AI-powered predictive maintenance, real-time analytics, and seamless mobile-first experiences for organizations of all sizes.
+FieldRino is a comprehensive, multi-tenant SaaS platform designed to revolutionize facility and equipment management. Built with Django REST Framework and Next.js, it offers AI-powered predictive maintenance, real-time analytics, and seamless mobile-first experiences for organizations of all sizes.
 
-### Why FieldPilot?
+### Why FieldRino?
 
 - **🤖 AI-Powered**: Predict equipment failures 30-90 days in advance
 - **📱 Mobile-First**: PWA technology for offline-capable field operations
@@ -163,7 +163,7 @@ Comprehensive documentation is available in the `/docs` folder:
 
 ## 🤝 Contributing
 
-**Internal Team Only**: This is proprietary software. Contributions are accepted only from authorized FieldPilot team members.
+**Internal Team Only**: This is proprietary software. Contributions are accepted only from authorized FieldRino team members.
 
 Please see our [Contributing Guide](docs/CONTRIBUTING.md) for internal development guidelines.
 
@@ -197,7 +197,7 @@ See [SECURITY.md](docs/SECURITY.md) for detailed security information.
 
 **Proprietary Software - All Rights Reserved**
 
-Copyright © 2025 FieldPilot. All rights reserved.
+Copyright © 2025 FieldRino. All rights reserved.
 
 This is proprietary and confidential software. Unauthorized copying, modification, distribution, or use of this software is strictly prohibited.
 
@@ -206,16 +206,16 @@ This is proprietary and confidential software. Unauthorized copying, modificatio
 - Use this software for commercial purposes
 - Remove or alter copyright notices
 
-For licensing inquiries: **licensing@fieldpilot.com**
+For licensing inquiries: **licensing@fieldrino.com**
 
 See [LICENSE](LICENSE) file for complete terms.
 
 ## 🌟 Support
 
-- **Documentation**: [docs.fieldpilot.com](https://docs.fieldpilot.com)
-- **Email**: support@fieldpilot.com
-- **Community**: [community.fieldpilot.com](https://community.fieldpilot.com)
-- **Status Page**: [status.fieldpilot.com](https://status.fieldpilot.com)
+- **Documentation**: [docs.fieldrino.com](https://docs.fieldrino.com)
+- **Email**: support@fieldrino.com
+- **Community**: [community.fieldrino.com](https://community.fieldrino.com)
+- **Status Page**: [status.fieldrino.com](https://status.fieldrino.com)
 
 ## 👥 Team
 
@@ -234,17 +234,17 @@ See [LICENSE](LICENSE) file for complete terms.
 
 ## 📞 Contact
 
-- **Website**: [fieldpilot.com](https://fieldpilot.com)
-- **Email**: hello@fieldpilot.com
-- **Twitter**: [@fieldpilot](https://twitter.com/fieldpilot)
-- **LinkedIn**: [FieldPilot](https://linkedin.com/company/fieldpilot)
+- **Website**: [fieldrino.com](https://fieldrino.com)
+- **Email**: hello@fieldrino.com
+- **Twitter**: [@fieldrino](https://twitter.com/fieldrino)
+- **LinkedIn**: [FieldRino](https://linkedin.com/company/fieldrino)
 
 ---
 
 <div align="center">
 
-**Built with ❤️ by the FieldPilot Team**
+**Built with ❤️ by the FieldRino Team**
 
-[Website](https://fieldpilot.com) • [Documentation](https://docs.fieldpilot.com) • [Blog](https://blog.fieldpilot.com)
+[Website](https://fieldrino.com) • [Documentation](https://docs.fieldrino.com) • [Blog](https://blog.fieldrino.com)
 
 </div>

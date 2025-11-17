@@ -1,8 +1,8 @@
-# FieldPilot - MVP Sprint Plan (Month 1)
+# FieldRino - MVP Sprint Plan (Month 1)
 
 ## Overview
 
-This document outlines the 4-week sprint plan to build and launch the FieldPilot MVP. The goal is to have a functional multi-tenant SaaS platform ready for beta testing with 10 pilot customers.
+This document outlines the 4-week sprint plan to build and launch the FieldRino MVP. The goal is to have a functional multi-tenant SaaS platform ready for beta testing with 10 pilot customers.
 
 ## MVP Scope
 
@@ -498,8 +498,8 @@ npm run test:coverage
 
 ## Contact & Escalation
 
-- **Product Manager**: pm@fieldpilot.com
-- **Tech Lead**: tech@fieldpilot.com
+- **Product Manager**: pm@fieldrino.com
+- **Tech Lead**: tech@fieldrino.com
 - **Emergency**: +1-XXX-XXX-XXXX
 
 ---

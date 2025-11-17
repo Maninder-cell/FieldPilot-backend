@@ -1,7 +1,7 @@
 """
 Stripe Integration Service
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 
 NOTE: Stripe is ONLY used for payment processing.

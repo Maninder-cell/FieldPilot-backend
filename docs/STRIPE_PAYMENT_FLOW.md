@@ -2,7 +2,7 @@
 
 ## Overview
 
-FieldPilot uses a **hybrid approach**:
+FieldRino uses a **hybrid approach**:
 - **Backend manages subscriptions** (Django)
 - **Stripe processes payments** (Optional)
 

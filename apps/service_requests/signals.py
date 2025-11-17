@@ -4,7 +4,7 @@ Service Requests Signals
 Task 9.2: Task status integration
 Automatically update service request status when linked task status changes.
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from django.db.models.signals import post_save

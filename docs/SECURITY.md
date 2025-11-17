@@ -1,8 +1,8 @@
-# FieldPilot - Security Documentation
+# FieldRino - Security Documentation
 
 ## Security Overview
 
-FieldPilot implements enterprise-grade security measures to protect tenant data, ensure compliance, and prevent unauthorized access.
+FieldRino implements enterprise-grade security measures to protect tenant data, ensure compliance, and prevent unauthorized access.
 
 ## Authentication & Authorization
 
@@ -170,8 +170,8 @@ REST_FRAMEWORK = {
 
 ```python
 CORS_ALLOWED_ORIGINS = [
-    "https://fieldpilot.com",
-    "https://*.fieldpilot.com",
+    "https://fieldrino.com",
+    "https://*.fieldrino.com",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -276,7 +276,7 @@ def scan_file(file):
       "Effect": "Deny",
       "Principal": "*",
       "Action": "s3:GetObject",
-      "Resource": "arn:aws:s3:::fieldpilot-files/*",
+      "Resource": "arn:aws:s3:::fieldrino-files/*",
       "Condition": {
         "StringNotEquals": {
           "aws:PrincipalAccount": "ACCOUNT_ID"
@@ -291,7 +291,7 @@ def get_signed_url(file_key):
     s3_client = boto3.client('s3')
     url = s3_client.generate_presigned_url(
         'get_object',
-        Params={'Bucket': 'fieldpilot-files', 'Key': file_key},
+        Params={'Bucket': 'fieldrino-files', 'Key': file_key},
         ExpiresIn=3600  # 1 hour
     )
     return url
@@ -470,12 +470,12 @@ DATABASES = {
 
 ```bash
 # Encrypted backups
-pg_dump fieldpilot_db | \
+pg_dump fieldrino_db | \
   openssl enc -aes-256-cbc -salt -out backup.sql.enc
 
 # Restore encrypted backup
 openssl enc -d -aes-256-cbc -in backup.sql.enc | \
-  psql fieldpilot_db
+  psql fieldrino_db
 ```
 
 ### Access Control
@@ -483,13 +483,13 @@ openssl enc -d -aes-256-cbc -in backup.sql.enc | \
 ```sql
 -- Principle of least privilege
 CREATE ROLE app_user WITH LOGIN PASSWORD 'secure_password';
-GRANT CONNECT ON DATABASE fieldpilot_db TO app_user;
+GRANT CONNECT ON DATABASE fieldrino_db TO app_user;
 GRANT USAGE ON SCHEMA tenant_* TO app_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA tenant_* TO app_user;
 
 -- Read-only user for analytics
 CREATE ROLE analytics_user WITH LOGIN PASSWORD 'secure_password';
-GRANT CONNECT ON DATABASE fieldpilot_db TO analytics_user;
+GRANT CONNECT ON DATABASE fieldrino_db TO analytics_user;
 GRANT SELECT ON ALL TABLES IN SCHEMA tenant_* TO analytics_user;
 ```
 
@@ -507,7 +507,7 @@ def get_secret(secret_name):
     return json.loads(response['SecretString'])
 
 # Usage
-db_credentials = get_secret('fieldpilot/prod/database')
+db_credentials = get_secret('fieldrino/prod/database')
 DATABASE_URL = db_credentials['connection_string']
 ```
 
@@ -582,16 +582,16 @@ if request_rate > threshold:
 
 ## Security Contacts
 
-- **Security Issues**: security@fieldpilot.com
-- **Bug Bounty**: bugbounty@fieldpilot.com
-- **Privacy Concerns**: privacy@fieldpilot.com
+- **Security Issues**: security@fieldrino.com
+- **Bug Bounty**: bugbounty@fieldrino.com
+- **Privacy Concerns**: privacy@fieldrino.com
 
 ## Security Disclosure Policy
 
 If you discover a security vulnerability:
 
 1. **Do not** publicly disclose the issue
-2. Email security@fieldpilot.com with details
+2. Email security@fieldrino.com with details
 3. Allow 90 days for remediation
 4. We will acknowledge receipt within 24 hours
 5. We will provide updates on remediation progress

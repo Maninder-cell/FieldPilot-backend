@@ -1,7 +1,7 @@
 """
 Core Views
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from rest_framework.decorators import api_view, permission_classes

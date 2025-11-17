@@ -1,8 +1,8 @@
-# FieldPilot - Development Guide
+# FieldRino - Development Guide
 
 ## Getting Started
 
-This guide will help you set up the FieldPilot development environment and understand the development workflow.
+This guide will help you set up the FieldRino development environment and understand the development workflow.
 
 ## Prerequisites
 
@@ -32,8 +32,8 @@ This guide will help you set up the FieldPilot development environment and under
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/fieldpilot.git
-cd fieldpilot
+git clone https://github.com/your-org/fieldrino.git
+cd fieldrino
 
 # Copy environment files
 cp backend/.env.example backend/.env
@@ -76,7 +76,7 @@ cp .env.example .env
 nano .env
 
 # Create database
-createdb fieldpilot_db
+createdb fieldrino_db
 
 # Run migrations
 python manage.py migrate_schemas --shared
@@ -150,7 +150,7 @@ SECRET_KEY=your-secret-key-here
 ALLOWED_HOSTS=localhost,127.0.0.1
 
 # Database
-DATABASE_URL=postgresql://user:password@localhost:5432/fieldpilot_db
+DATABASE_URL=postgresql://user:password@localhost:5432/fieldrino_db
 
 # Redis
 REDIS_URL=redis://localhost:6379/0
@@ -162,7 +162,7 @@ CELERY_RESULT_BACKEND=redis://localhost:6379/0
 # AWS S3 (for file storage)
 AWS_ACCESS_KEY_ID=your-access-key
 AWS_SECRET_ACCESS_KEY=your-secret-key
-AWS_STORAGE_BUCKET_NAME=fieldpilot-dev
+AWS_STORAGE_BUCKET_NAME=fieldrino-dev
 AWS_S3_REGION_NAME=us-east-1
 
 # Stripe
@@ -514,13 +514,13 @@ Domain.objects.create(
 
 ```bash
 # Backup
-pg_dump -Fc fieldpilot_db > backup_$(date +%Y%m%d).dump
+pg_dump -Fc fieldrino_db > backup_$(date +%Y%m%d).dump
 
 # Restore
-pg_restore -d fieldpilot_db backup_20251029.dump
+pg_restore -d fieldrino_db backup_20251029.dump
 
 # Backup specific schema
-pg_dump -n tenant_acme_corp fieldpilot_db > tenant_backup.sql
+pg_dump -n tenant_acme_corp fieldrino_db > tenant_backup.sql
 ```
 
 ## Debugging

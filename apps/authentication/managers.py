@@ -1,7 +1,7 @@
 """
 User Managers
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from django.contrib.auth.models import BaseUserManager
@@ -10,7 +10,7 @@ from django.utils import timezone
 
 class UserManager(BaseUserManager):
     """
-    Custom user manager for FieldPilot User model.
+    Custom user manager for FieldRino User model.
     """
     
     def create_user(self, email, password=None, **extra_fields):

@@ -1,7 +1,7 @@
 """
-FieldPilot Django Settings
+FieldRino Django Settings
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 
@@ -106,7 +106,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database - PostgreSQL with django-tenants backend
 import dj_database_url
 
-DATABASE_URL = config('DATABASE_URL', default='postgresql://fieldpilot_user:fieldpilot_password@localhost:5432/fieldpilot_db')
+DATABASE_URL = config('DATABASE_URL', default='postgresql://fieldrino_user:fieldrino_password@localhost:5432/fieldrino_db')
 
 DATABASES = {
     'default': dj_database_url.config(
@@ -180,9 +180,9 @@ REST_FRAMEWORK = {
 
 # DRF Spectacular (Swagger/OpenAPI) Configuration
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'FieldPilot API',
+    'TITLE': 'FieldRino API',
     'DESCRIPTION': '''
-# FieldPilot API Documentation
+# FieldRino API Documentation
 
 AI-Powered Multi-Tenant Facility & Equipment Management SaaS Platform
 
@@ -208,11 +208,11 @@ Get your token by calling the `/api/v1/auth/login/` endpoint.
 
 This API uses subdomain-based multi-tenancy. Each tenant has their own subdomain:
 - Development: `http://{tenant}.localhost:8000`
-- Production: `https://{tenant}.fieldpilot.com`
+- Production: `https://{tenant}.fieldrino.com`
 
 ## Support
 
-For support, contact: support@fieldpilot.com
+For support, contact: support@fieldrino.com
     ''',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
@@ -302,13 +302,13 @@ For support, contact: support@fieldpilot.com
     
     # Contact and license
     'CONTACT': {
-        'name': 'FieldPilot Support',
-        'email': 'support@fieldpilot.com',
-        'url': 'https://fieldpilot.com/support',
+        'name': 'FieldRino Support',
+        'email': 'support@fieldrino.com',
+        'url': 'https://fieldrino.com/support',
     },
     'LICENSE': {
         'name': 'Proprietary',
-        'url': 'https://fieldpilot.com/license',
+        'url': 'https://fieldrino.com/license',
     },
     
     # Schema generation settings
@@ -356,7 +356,7 @@ SIMPLE_JWT = {
 
 # CORS Configuration
 # In production, use environment variable to set allowed origins
-# Example: CORS_ALLOWED_ORIGINS=https://app.fieldpilot.com,https://admin.fieldpilot.com
+# Example: CORS_ALLOWED_ORIGINS=https://app.fieldrino.com,https://admin.fieldrino.com
 if DEBUG:
     # Development: Allow all localhost subdomains
     CORS_ALLOW_ALL_ORIGINS = True
@@ -373,8 +373,8 @@ else:
     CORS_ALLOW_CREDENTIALS = True
     
     # Allow tenant subdomains using regex pattern
-    # Example: *.fieldpilot.com
-    cors_domain = config('CORS_ALLOWED_DOMAIN', default='fieldpilot.com')
+    # Example: *.fieldrino.com
+    cors_domain = config('CORS_ALLOWED_DOMAIN', default='fieldrino.com')
     CORS_ALLOWED_ORIGIN_REGEXES = [
         rf"^https://.*\.{cors_domain}$",  # Allow any subdomain
         rf"^https://{cors_domain}$",       # Allow main domain
@@ -387,7 +387,7 @@ EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
 EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
 EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
 EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
-DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@fieldpilot.com')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='noreply@fieldrino.com')
 
 # Celery Configuration
 CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://localhost:6379/0')

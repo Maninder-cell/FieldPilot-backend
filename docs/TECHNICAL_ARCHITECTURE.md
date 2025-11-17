@@ -1,8 +1,8 @@
-# FieldPilot - Technical Architecture
+# FieldRino - Technical Architecture
 
 ## System Architecture Overview
 
-FieldPilot follows a modern microservices-inspired architecture with a clear separation between frontend, backend, and infrastructure layers. The system is designed for horizontal scalability, multi-tenancy, and high availability.
+FieldRino follows a modern microservices-inspired architecture with a clear separation between frontend, backend, and infrastructure layers. The system is designed for horizontal scalability, multi-tenancy, and high availability.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -64,7 +64,7 @@ We use **django-tenants** for schema-based multi-tenancy, providing complete dat
 #### Database Structure
 
 ```
-PostgreSQL Database: fieldpilot_db
+PostgreSQL Database: fieldrino_db
 │
 ├── public schema (shared)
 │   ├── tenants_tenant (tenant registry)
@@ -90,7 +90,7 @@ PostgreSQL Database: fieldpilot_db
 #### Tenant Resolution Flow
 
 ```python
-# 1. Request arrives with domain: acme.fieldpilot.com
+# 1. Request arrives with domain: acme.fieldrino.com
 # 2. Middleware extracts subdomain: "acme"
 # 3. Query public.tenants_domain to find tenant
 # 4. Set PostgreSQL search_path to tenant schema

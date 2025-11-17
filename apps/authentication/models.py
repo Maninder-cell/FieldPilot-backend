@@ -1,7 +1,7 @@
 """
 Authentication Models
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 import uuid
@@ -13,7 +13,7 @@ from .managers import UserManager
 
 class User(AbstractBaseUser, PermissionsMixin):
     """
-    Custom User model for FieldPilot.
+    Custom User model for FieldRino.
     Each user belongs to a specific tenant.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -93,7 +93,7 @@ class User(AbstractBaseUser, PermissionsMixin):
             models.Index(fields=['employee_id']),
         ]
         # Fix reverse accessor conflicts
-        default_related_name = 'fieldpilot_users'
+        default_related_name = 'fieldrino_users'
     
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.email})"

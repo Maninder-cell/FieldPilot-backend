@@ -1,7 +1,7 @@
 """
 Service Request Reports and Analytics
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from django.db.models import Count, Avg, Q, F, ExpressionWrapper, DurationField

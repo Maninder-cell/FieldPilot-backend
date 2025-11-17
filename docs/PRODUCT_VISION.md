@@ -1,10 +1,10 @@
-# FieldPilot - AI-Powered Multi-Tenant Facility & Equipment Management SaaS
+# FieldRino - AI-Powered Multi-Tenant Facility & Equipment Management SaaS
 
-A next-generation cloud-based facility management platform built with Django REST Framework and Next.js. FieldPilot is a multi-tenant SaaS solution designed for organizations of all sizes to manage facilities, equipment, maintenance operations, and technician teams with AI-powered insights and predictive maintenance capabilities.
+A next-generation cloud-based facility management platform built with Django REST Framework and Next.js. FieldRino is a multi-tenant SaaS solution designed for organizations of all sizes to manage facilities, equipment, maintenance operations, and technician teams with AI-powered insights and predictive maintenance capabilities.
 
 ## Overview
 
-FieldPilot is a subscription-based, enterprise-grade facility management platform that revolutionizes equipment maintenance operations through intelligent automation, real-time analytics, and seamless mobile-first experiences. Built on a scalable multi-tenant architecture, each organization operates in complete data isolation with customizable workflows, white-label capabilities, and enterprise integrations.
+FieldRino is a subscription-based, enterprise-grade facility management platform that revolutionizes equipment maintenance operations through intelligent automation, real-time analytics, and seamless mobile-first experiences. Built on a scalable multi-tenant architecture, each organization operates in complete data isolation with customizable workflows, white-label capabilities, and enterprise integrations.
 
 ## Technology Stack
 
@@ -39,7 +39,7 @@ FieldPilot is a subscription-based, enterprise-grade facility management platfor
 
 #### Tenant Isolation
 - **Schema-based isolation**: Each organization gets dedicated database schema
-- **Custom domains**: White-label support with custom domain mapping (client.fieldpilot.com or client.com)
+- **Custom domains**: White-label support with custom domain mapping (client.fieldrino.com or client.com)
 - **Data sovereignty**: Tenant data completely isolated with row-level security
 - **Tenant-specific customization**: Branding, workflows, and configurations per tenant
 
@@ -280,7 +280,7 @@ FieldPilot is a subscription-based, enterprise-grade facility management platfor
 
 ## Competitive Advantages
 
-### What Makes FieldPilot Revolutionary
+### What Makes FieldRino Revolutionary
 
 1. **AI-Powered Predictive Maintenance**: Unlike competitors, we use ML to predict failures before they happen, reducing downtime by up to 40%
 

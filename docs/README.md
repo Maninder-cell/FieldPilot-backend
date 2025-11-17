@@ -1,6 +1,6 @@
-# FieldPilot Documentation
+# FieldRino Documentation
 
-Welcome to the FieldPilot documentation! This folder contains all essential documentation for building, deploying, and maintaining the FieldPilot SaaS platform.
+Welcome to the FieldRino documentation! This folder contains all essential documentation for building, deploying, and maintaining the FieldRino SaaS platform.
 
 ## 📚 Documentation Index
 
@@ -229,10 +229,10 @@ Security documentation covering:
 
 ## 📞 Contact
 
-- **Technical Questions**: tech@fieldpilot.com
-- **Product Questions**: product@fieldpilot.com
-- **Security Issues**: security@fieldpilot.com
-- **General Inquiries**: hello@fieldpilot.com
+- **Technical Questions**: tech@fieldrino.com
+- **Product Questions**: product@fieldrino.com
+- **Security Issues**: security@fieldrino.com
+- **General Inquiries**: hello@fieldrino.com
 
 ## 📝 Contributing
 
@@ -246,7 +246,7 @@ When updating documentation:
 
 ## 📄 License
 
-Copyright © 2025 FieldPilot. All rights reserved.
+Copyright © 2025 FieldRino. All rights reserved.
 
 ---
 

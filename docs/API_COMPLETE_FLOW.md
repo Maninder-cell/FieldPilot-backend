@@ -1,4 +1,4 @@
-# FieldPilot API - Complete User Journey
+# FieldRino API - Complete User Journey
 
 ## 🎯 Overview
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# FieldPilot Backend - Simple Start Script
+# FieldRino Backend - Simple Start Script
 # Continues on errors, reuses existing containers
 
 # Colors for output
@@ -17,7 +17,7 @@ print_warning() { echo -e "${YELLOW}[!]${NC} $1"; }
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║         FieldPilot Backend - Quick Start                  ║"
+echo "║         FieldRino Backend - Quick Start                  ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -107,7 +107,7 @@ print_success "Docker services started"
 print_status "Waiting for PostgreSQL..."
 MAX_TRIES=30
 TRIES=0
-until docker exec fieldpilot_postgres pg_isready -U fieldpilot_user > /dev/null 2>&1 || [ $TRIES -eq $MAX_TRIES ]; do
+until docker exec fieldrino_postgres pg_isready -U fieldrino_user > /dev/null 2>&1 || [ $TRIES -eq $MAX_TRIES ]; do
     TRIES=$((TRIES+1))
     echo -n "."
     sleep 1
@@ -206,7 +206,7 @@ echo "╔═══════════════════════�
 echo "║                  ✅ READY TO START!                        ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
-print_success "FieldPilot Backend is ready!"
+print_success "FieldRino Backend is ready!"
 echo ""
 echo "📚 API Documentation:"
 echo "   • Swagger UI:  http://localhost:8000/api/docs/"
@@ -214,14 +214,14 @@ echo "   • ReDoc:       http://localhost:8000/api/redoc/"
 echo ""
 echo "🔧 Management:"
 echo "   • Admin Panel: http://localhost:8000/admin/"
-echo "   • pgAdmin:     http://localhost:5050 (admin@fieldpilot.com / admin)"
+echo "   • pgAdmin:     http://localhost:5050 (admin@fieldrino.com / admin)"
 echo "   • MailHog:     http://localhost:8025 (email testing)"
 echo ""
 echo "🗄️  Database:"
 echo "   • PostgreSQL:  localhost:5432"
-echo "   • Database:    fieldpilot_db"
-echo "   • User:        fieldpilot_user"
-echo "   • Password:    fieldpilot_password"
+echo "   • Database:    fieldrino_db"
+echo "   • User:        fieldrino_user"
+echo "   • Password:    fieldrino_password"
 echo ""
 echo "🚀 Starting Django development server..."
 echo "   Press Ctrl+C to stop"

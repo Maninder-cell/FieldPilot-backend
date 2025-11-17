@@ -1,7 +1,7 @@
 """
 Reports Celery Tasks
 
-Copyright (c) 2025 FieldPilot. All rights reserved.
+Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from celery import shared_task
@@ -291,7 +291,7 @@ def send_scheduled_report_email(self, schedule_id, recipients, filename, file_by
         Report Type: {schedule.report_type}
         Generated: {timezone.now().strftime('%Y-%m-%d %H:%M:%S')}
         
-        This is an automated email from FieldPilot.
+        This is an automated email from FieldRino.
         """
         
         email = EmailMessage(

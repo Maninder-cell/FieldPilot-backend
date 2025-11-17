@@ -1,13 +1,13 @@
-# FieldPilot - Database Schema Design
+# FieldRino - Database Schema Design
 
 ## Schema Overview
 
-FieldPilot uses a **schema-based multi-tenancy** approach with PostgreSQL. Each tenant gets a dedicated schema for complete data isolation, while shared data (tenant registry, subscription plans) lives in the public schema.
+FieldRino uses a **schema-based multi-tenancy** approach with PostgreSQL. Each tenant gets a dedicated schema for complete data isolation, while shared data (tenant registry, subscription plans) lives in the public schema.
 
 ## Multi-Tenancy Structure
 
 ```
-fieldpilot_db (Database)
+fieldrino_db (Database)
 │
 ├── public (Shared Schema)
 │   ├── tenants
@@ -853,14 +853,14 @@ CREATE TABLE audit_logs_archive (LIKE audit_logs INCLUDING ALL);
 python manage.py create_tenant \
   --schema_name=tenant_newclient \
   --name="New Client Inc" \
-  --domain=newclient.fieldpilot.com
+  --domain=newclient.fieldrino.com
 
 # Run migrations on all tenant schemas
 python manage.py migrate_schemas --shared
 python manage.py migrate_schemas --tenant
 
 # Backup before migrations
-pg_dump -Fc fieldpilot_db > backup_$(date +%Y%m%d).dump
+pg_dump -Fc fieldrino_db > backup_$(date +%Y%m%d).dump
 ```
 
 ## Performance Considerations
@@ -872,7 +872,7 @@ pg_dump -Fc fieldpilot_db > backup_$(date +%Y%m%d).dump
 DATABASES = {
     'default': {
         'ENGINE': 'django_tenants.postgresql_backend',
-        'NAME': 'fieldpilot_db',
+        'NAME': 'fieldrino_db',
         'CONN_MAX_AGE': 600,  # Connection pooling
         'OPTIONS': {
             'connect_timeout': 10,
@@ -904,8 +904,8 @@ equipment_list = Equipment.objects.only(
 
 ```bash
 # Daily automated backups
-pg_dump -Fc -h localhost -U postgres fieldpilot_db > \
-  /backups/fieldpilot_$(date +%Y%m%d_%H%M%S).dump
+pg_dump -Fc -h localhost -U postgres fieldrino_db > \
+  /backups/fieldrino_$(date +%Y%m%d_%H%M%S).dump
 
 # Point-in-time recovery setup
 # Enable WAL archiving in postgresql.conf
@@ -914,5 +914,5 @@ archive_mode = on
 archive_command = 'cp %p /archive/%f'
 
 # Restore from backup
-pg_restore -d fieldpilot_db backup_20251029.dump
+pg_restore -d fieldrino_db backup_20251029.dump
 ```

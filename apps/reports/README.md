@@ -1,6 +1,6 @@
 # Reports Module
 
-Comprehensive reporting system for FieldPilot facility management platform.
+Comprehensive reporting system for FieldRino facility management platform.
 
 ## Overview
 
@@ -422,4 +422,4 @@ GET /api/v1/reports/audit/?status=failed
 For issues or questions:
 - Check audit logs for error details
 - Review Django logs
-- Contact: support@fieldpilot.com
+- Contact: support@fieldrino.com
