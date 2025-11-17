@@ -130,9 +130,26 @@ class User(AbstractBaseUser, PermissionsMixin):
                 'customer': 'CUS',
             }.get(self.role, 'USR')
             
-            # Get count of users with same role
-            count = User.objects.filter(role=self.role).count() + 1
-            self.employee_id = f"{role_prefix}{count:04d}"
+            # Find the highest existing employee ID for this role prefix
+            existing_ids = User.objects.filter(
+                employee_id__startswith=role_prefix
+            ).values_list('employee_id', flat=True)
+            
+            if existing_ids:
+                # Extract numbers from existing IDs and find max
+                numbers = []
+                for emp_id in existing_ids:
+                    try:
+                        num = int(emp_id.replace(role_prefix, ''))
+                        numbers.append(num)
+                    except (ValueError, AttributeError):
+                        continue
+                
+                next_num = max(numbers) + 1 if numbers else 1
+            else:
+                next_num = 1
+            
+            self.employee_id = f"{role_prefix}{next_num:04d}"
     
     def set_otp(self, purpose, length=6):
         """Generate and set OTP for specific purpose."""
@@ -168,6 +185,8 @@ class User(AbstractBaseUser, PermissionsMixin):
         return False
     
     def save(self, *args, **kwargs):
+        from django.db import IntegrityError
+        
         # Generate employee ID if not set
         if not self.employee_id:
             self.generate_employee_id()
@@ -176,7 +195,19 @@ class User(AbstractBaseUser, PermissionsMixin):
         if self.role == 'admin':
             self.is_staff = True
         
-        super().save(*args, **kwargs)
+        # Retry logic for unique constraint violations on employee_id
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                super().save(*args, **kwargs)
+                break
+            except IntegrityError as e:
+                if 'employee_id' in str(e) and attempt < max_retries - 1:
+                    # Regenerate employee_id and retry
+                    self.employee_id = None
+                    self.generate_employee_id()
+                else:
+                    raise
 
 
 class UserProfile(models.Model):
