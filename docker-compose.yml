@@ -38,18 +38,18 @@ services:
     networks:
       - fieldrino_network
 
-  # pgAdmin (optional - for database management)
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: fieldrino_pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@fieldrino.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-      PGADMIN_LISTEN_PORT: 80
+  # CloudBeaver (modern web-based database management)
+  cloudbeaver:
+    image: dbeaver/cloudbeaver:latest
+    container_name: fieldrino_cloudbeaver
     ports:
-      - "5050:80"
+      - "8978:8978"
     volumes:
-      - pgadmin_data:/var/lib/pgadmin
+      - cloudbeaver_data:/opt/cloudbeaver/workspace
+    environment:
+      CB_SERVER_NAME: FieldRino Database
+      CB_ADMIN_NAME: admin
+      CB_ADMIN_PASSWORD: admin
     depends_on:
       - postgres
     networks:
@@ -70,7 +70,7 @@ volumes:
     driver: local
   redis_data:
     driver: local
-  pgadmin_data:
+  cloudbeaver_data:
     driver: local
 
 networks:
