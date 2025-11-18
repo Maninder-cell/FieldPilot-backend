@@ -1,0 +1,158 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Service Request Accepted - {{ request.request_number }}{% endblock %}
+
+{% block content %}
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <!-- Success Icon -->
+    <tr>
+        <td style="padding: 0 0 20px 0; text-align: center;">
+            <div style="display: inline-block; width: 60px; height: 60px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 50%; line-height: 60px; font-size: 30px;">
+                ✓
+            </div>
+        </td>
+    </tr>
+    
+    <!-- Greeting -->
+    <tr>
+        <td style="padding: 0 0 20px 0; text-align: center;">
+            <h2 style="margin: 0; font-size: 26px; font-weight: 600; color: #111827;">
+                Great News! Request Accepted
+            </h2>
+        </td>
+    </tr>
+    
+    <!-- Message -->
+    <tr>
+        <td style="padding: 0 0 30px 0; font-size: 16px; line-height: 24px; color: #374151;">
+            <p style="margin: 0 0 15px 0;">Dear {{ customer_name }},</p>
+            <p style="margin: 0 0 15px 0;">
+                Your service request has been <strong style="color: #059669;">accepted</strong> and will be scheduled soon. Our team is preparing to address your needs.
+            </p>
+        </td>
+    </tr>
+    
+    <!-- Request Details Box -->
+    <tr>
+        <td style="padding: 0 0 30px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td style="background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-radius: 12px; padding: 25px;">
+                        <h3 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 600; color: #065f46; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Request Details
+                        </h3>
+                        
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                                <td style="padding: 8px 0;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: #065f46; width: 45%;">Request Number</td>
+                                            <td style="font-size: 14px; color: #064e3b; font-weight: 600; text-align: right;">
+                                                {{ request.request_number }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: #065f46; width: 45%;">Title</td>
+                                            <td style="font-size: 14px; color: #064e3b; font-weight: 600; text-align: right;">
+                                                {{ request.title }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            {% if estimated_timeline %}
+                            <tr>
+                                <td style="padding: 8px 0;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: #065f46; width: 45%;">Estimated Timeline</td>
+                                            <td style="font-size: 14px; color: #064e3b; font-weight: 600; text-align: right;">
+                                                {{ estimated_timeline }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% if assigned_technician %}
+                            <tr>
+                                <td style="padding: 8px 0;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: #065f46; width: 45%;">Assigned To</td>
+                                            <td style="font-size: 14px; color: #064e3b; font-weight: 600; text-align: right;">
+                                                {{ assigned_technician }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            {% endif %}
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    
+    <!-- Response Message -->
+    {% if response_message %}
+    <tr>
+        <td style="padding: 0 0 30px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td style="background-color: #f9fafb; border-left: 4px solid #10b981; border-radius: 6px; padding: 20px;">
+                        <p style="margin: 0 0 5px 0; font-size: 14px; font-weight: 600; color: #111827;">
+                            Message from our team:
+                        </p>
+                        <p style="margin: 0; font-size: 14px; line-height: 20px; color: #374151;">
+                            {{ response_message }}
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    {% endif %}
+    
+    <!-- Next Steps -->
+    <tr>
+        <td style="padding: 0 0 30px 0; font-size: 16px; line-height: 24px; color: #374151;">
+            <p style="margin: 0 0 15px 0;">
+                <strong>What happens next?</strong>
+            </p>
+            <ul style="margin: 0; padding-left: 20px; color: #6b7280;">
+                <li style="margin-bottom: 8px;">We'll schedule the work and assign a technician</li>
+                <li style="margin-bottom: 8px;">You'll receive a notification with the scheduled date and time</li>
+                <li style="margin-bottom: 8px;">Track progress in real-time through your customer portal</li>
+            </ul>
+        </td>
+    </tr>
+    
+    <!-- CTA Button -->
+    <tr>
+        <td style="padding: 0 0 30px 0; text-align: center;">
+            <a href="{{ portal_url|default:'#' }}" style="display: inline-block; padding: 14px 32px; background-color: #10b981; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
+                Track Your Request
+            </a>
+        </td>
+    </tr>
+    
+    <!-- Support -->
+    <tr>
+        <td style="padding: 20px; background-color: #ecfdf5; border-radius: 8px; text-align: center;">
+            <p style="margin: 0; font-size: 14px; color: #065f46;">
+                Questions about your service request?<br>
+                <a href="mailto:support@fieldrino.com" style="color: #059669; text-decoration: none; font-weight: 600;">Contact Support</a>
+            </p>
+        </td>
+    </tr>
+</table>
+{% endblock %}

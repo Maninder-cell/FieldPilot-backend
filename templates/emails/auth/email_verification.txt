@@ -1,0 +1,23 @@
+Welcome to FieldRino!
+
+Hi {{ first_name|default:"there" }},
+
+Thank you for signing up! To complete your registration and verify your email address, please use the verification code below:
+
+YOUR VERIFICATION CODE: {{ otp_code }}
+
+Enter this code in the verification page to activate your account.
+
+This code will expire in 10 minutes.
+
+SECURITY NOTICE:
+If you didn't create an account with FieldRino, please ignore this email or contact our support team if you have concerns.
+
+Need help? Contact us at support@fieldrino.com
+
+---
+FieldRino
+Professional Facility & Equipment Management
+© {% now "Y" %} FieldRino. All rights reserved.
+
+This email was sent to {{ email|default:"you" }} because you have an account with FieldRino.

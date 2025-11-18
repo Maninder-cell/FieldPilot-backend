@@ -100,26 +100,10 @@ def get_tokens_for_user(user):
 
 
 def send_otp_email(user, purpose):
-    """Send OTP email to user."""
+    """Send OTP email to user using professional templates."""
+    from apps.core.email_utils import send_otp_email as send_template_otp
     try:
-        subject_map = {
-            'email_verification': 'Verify Your Email - FieldRino',
-            'password_reset': 'Password Reset Code - FieldRino'
-        }
-        
-        message_map = {
-            'email_verification': f'Your email verification code is: {user.otp_code}. This code expires in 10 minutes.',
-            'password_reset': f'Your password reset code is: {user.otp_code}. This code expires in 10 minutes.'
-        }
-        
-        send_mail(
-            subject=subject_map.get(purpose, 'OTP Code - FieldRino'),
-            message=message_map.get(purpose, f'Your OTP code is: {user.otp_code}'),
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[user.email],
-            fail_silently=False,
-        )
-        return True
+        return send_template_otp(user, purpose)
     except Exception as e:
         logger.error(f"Failed to send OTP email: {str(e)}")
         return False

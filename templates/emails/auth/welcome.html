@@ -1,0 +1,104 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Welcome to FieldRino{% endblock %}
+
+{% block content %}
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <!-- Greeting -->
+    <tr>
+        <td style="padding: 0 0 20px 0;">
+            <h2 style="margin: 0; font-size: 28px; font-weight: 600; color: #111827;">
+                Welcome to FieldRino! 🎉
+            </h2>
+        </td>
+    </tr>
+    
+    <!-- Message -->
+    <tr>
+        <td style="padding: 0 0 30px 0; font-size: 16px; line-height: 24px; color: #374151;">
+            <p style="margin: 0 0 15px 0;">Hi {{ first_name }},</p>
+            <p style="margin: 0 0 15px 0;">
+                Congratulations! Your email has been verified and your FieldRino account is now active.
+            </p>
+            <p style="margin: 0 0 15px 0;">
+                You're now ready to streamline your facility and equipment management with our powerful platform.
+            </p>
+        </td>
+    </tr>
+    
+    <!-- Features Box -->
+    <tr>
+        <td style="padding: 0 0 30px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td style="background-color: #f9fafb; border-radius: 12px; padding: 30px;">
+                        <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #111827;">
+                            What's Next?
+                        </h3>
+                        
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                                <td style="padding: 0 0 15px 0;">
+                                    <p style="margin: 0; font-size: 15px; line-height: 22px; color: #374151;">
+                                        <strong style="color: #2563eb;">1. Complete Your Profile</strong><br>
+                                        <span style="color: #6b7280;">Add your company details and customize your workspace</span>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 0 0 15px 0;">
+                                    <p style="margin: 0; font-size: 15px; line-height: 22px; color: #374151;">
+                                        <strong style="color: #2563eb;">2. Invite Your Team</strong><br>
+                                        <span style="color: #6b7280;">Collaborate with team members and assign roles</span>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 0 0 0 0;">
+                                    <p style="margin: 0; font-size: 15px; line-height: 22px; color: #374151;">
+                                        <strong style="color: #2563eb;">3. Start Managing</strong><br>
+                                        <span style="color: #6b7280;">Add facilities, equipment, and create your first task</span>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    
+    <!-- CTA Button -->
+    <tr>
+        <td style="padding: 0 0 30px 0; text-align: center;">
+            <a href="{{ dashboard_url|default:'#' }}" style="display: inline-block; padding: 16px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                Go to Dashboard
+            </a>
+        </td>
+    </tr>
+    
+    <!-- Resources -->
+    <tr>
+        <td style="padding: 20px; background-color: #eff6ff; border-radius: 8px;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #1e40af;">
+                📚 Helpful Resources
+            </p>
+            <p style="margin: 0; font-size: 14px; line-height: 20px; color: #1e40af;">
+                • <a href="#" style="color: #2563eb; text-decoration: none;">Getting Started Guide</a><br>
+                • <a href="#" style="color: #2563eb; text-decoration: none;">Video Tutorials</a><br>
+                • <a href="#" style="color: #2563eb; text-decoration: none;">API Documentation</a>
+            </p>
+        </td>
+    </tr>
+    
+    <!-- Support -->
+    <tr>
+        <td style="padding: 30px 0 0 0; text-align: center;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">
+                Questions? We're here to help!<br>
+                Contact us at <a href="mailto:support@fieldrino.com" style="color: #2563eb; text-decoration: none;">support@fieldrino.com</a>
+            </p>
+        </td>
+    </tr>
+</table>
+{% endblock %}

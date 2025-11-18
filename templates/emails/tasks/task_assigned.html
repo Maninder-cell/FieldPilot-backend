@@ -1,0 +1,147 @@
+{% extends "emails/base.html" %}
+
+{% block title %}New Task Assigned - {{ task.title }}{% endblock %}
+
+{% block content %}
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <!-- Greeting -->
+    <tr>
+        <td style="padding: 0 0 20px 0;">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; color: #111827;">
+                New Task Assigned 📋
+            </h2>
+        </td>
+    </tr>
+    
+    <!-- Message -->
+    <tr>
+        <td style="padding: 0 0 30px 0; font-size: 16px; line-height: 24px; color: #374151;">
+            <p style="margin: 0 0 15px 0;">Hi {{ technician_name }},</p>
+            <p style="margin: 0 0 15px 0;">
+                A new task has been assigned to you. Please review the details below and take appropriate action.
+            </p>
+        </td>
+    </tr>
+    
+    <!-- Task Details Box -->
+    <tr>
+        <td style="padding: 0 0 30px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); border-radius: 12px; padding: 25px;">
+                        <h3 style="margin: 0 0 20px 0; font-size: 18px; font-weight: 600; color: #ffffff;">
+                            {{ task.title }}
+                        </h3>
+                        
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                                <td style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.2);">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: rgba(255,255,255,0.8); width: 40%;">Task ID</td>
+                                            <td style="font-size: 14px; color: #ffffff; font-weight: 600; text-align: right;">
+                                                {{ task.task_number }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.2);">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: rgba(255,255,255,0.8); width: 40%;">Equipment</td>
+                                            <td style="font-size: 14px; color: #ffffff; font-weight: 600; text-align: right;">
+                                                {{ task.equipment.name }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.2);">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: rgba(255,255,255,0.8); width: 40%;">Priority</td>
+                                            <td style="font-size: 14px; text-align: right;">
+                                                <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background-color: rgba(255,255,255,0.2); color: #ffffff;">
+                                                    {{ task.get_priority_display|upper }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            {% if task.due_date %}
+                            <tr>
+                                <td style="padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.2);">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: rgba(255,255,255,0.8); width: 40%;">Due Date</td>
+                                            <td style="font-size: 14px; color: #ffffff; font-weight: 600; text-align: right;">
+                                                {{ task.due_date|date:"M d, Y" }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            <tr>
+                                <td style="padding: 8px 0;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: rgba(255,255,255,0.8); width: 40%;">Assigned By</td>
+                                            <td style="font-size: 14px; color: #ffffff; font-weight: 600; text-align: right;">
+                                                {{ assigned_by }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    
+    <!-- Description -->
+    {% if task.description %}
+    <tr>
+        <td style="padding: 0 0 30px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td style="background-color: #f9fafb; border-radius: 8px; padding: 20px;">
+                        <p style="margin: 0 0 10px 0; font-size: 14px; font-weight: 600; color: #111827;">
+                            Task Description:
+                        </p>
+                        <p style="margin: 0; font-size: 14px; line-height: 20px; color: #374151;">
+                            {{ task.description }}
+                        </p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    {% endif %}
+    
+    <!-- CTA Button -->
+    <tr>
+        <td style="padding: 0 0 30px 0; text-align: center;">
+            <a href="{{ task_url|default:'#' }}" style="display: inline-block; padding: 14px 32px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
+                View Task Details
+            </a>
+        </td>
+    </tr>
+    
+    <!-- Action Required -->
+    <tr>
+        <td style="padding: 20px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px;">
+            <p style="margin: 0; font-size: 14px; line-height: 20px; color: #92400e;">
+                <strong style="color: #78350f;">⚡ Action Required:</strong><br>
+                Please acknowledge this task and update its status as you make progress.
+            </p>
+        </td>
+    </tr>
+</table>
+{% endblock %}

@@ -1,0 +1,122 @@
+{% extends "emails/base.html" %}
+
+{% block title %}You're Invited to Join {{ company_name }} on FieldRino{% endblock %}
+
+{% block content %}
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <!-- Greeting -->
+    <tr>
+        <td style="padding: 0 0 20px 0;">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; color: #111827;">
+                You're Invited! 🎊
+            </h2>
+        </td>
+    </tr>
+    
+    <!-- Message -->
+    <tr>
+        <td style="padding: 0 0 30px 0; font-size: 16px; line-height: 24px; color: #374151;">
+            <p style="margin: 0 0 15px 0;">Hi {{ invitee_name|default:"there" }},</p>
+            <p style="margin: 0 0 15px 0;">
+                <strong>{{ inviter_name }}</strong> has invited you to join <strong>{{ company_name }}</strong> on FieldRino.
+            </p>
+        </td>
+    </tr>
+    
+    <!-- Invitation Details Box -->
+    <tr>
+        <td style="padding: 0 0 30px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 30px;">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                                <td style="padding: 0 0 15px 0; text-align: center;">
+                                    <p style="margin: 0; font-size: 18px; font-weight: 600; color: #ffffff;">
+                                        {{ company_name }}
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 0 0 15px 0; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="padding: 5px 0; color: rgba(255,255,255,0.8); font-size: 14px;">
+                                                <strong style="color: #ffffff;">Role:</strong>
+                                            </td>
+                                            <td style="padding: 5px 0; color: #ffffff; font-size: 14px; text-align: right;">
+                                                {{ role|title }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 5px 0; color: rgba(255,255,255,0.8); font-size: 14px;">
+                                                <strong style="color: #ffffff;">Invited by:</strong>
+                                            </td>
+                                            <td style="padding: 5px 0; color: #ffffff; font-size: 14px; text-align: right;">
+                                                {{ inviter_name }}
+                                            </td>
+                                        </tr>
+                                        {% if department %}
+                                        <tr>
+                                            <td style="padding: 5px 0; color: rgba(255,255,255,0.8); font-size: 14px;">
+                                                <strong style="color: #ffffff;">Department:</strong>
+                                            </td>
+                                            <td style="padding: 5px 0; color: #ffffff; font-size: 14px; text-align: right;">
+                                                {{ department }}
+                                            </td>
+                                        </tr>
+                                        {% endif %}
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    
+    <!-- CTA Button -->
+    <tr>
+        <td style="padding: 0 0 30px 0; text-align: center;">
+            <a href="{{ invitation_url }}" style="display: inline-block; padding: 16px 40px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                Accept Invitation
+            </a>
+        </td>
+    </tr>
+    
+    <!-- Invitation Code -->
+    {% if invitation_code %}
+    <tr>
+        <td style="padding: 0 0 20px 0; text-align: center;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">
+                Or use this invitation code:
+            </p>
+            <p style="margin: 0; font-size: 20px; font-weight: 600; color: #111827; font-family: 'Courier New', monospace; letter-spacing: 2px;">
+                {{ invitation_code }}
+            </p>
+        </td>
+    </tr>
+    {% endif %}
+    
+    <!-- Expiry Notice -->
+    <tr>
+        <td style="padding: 20px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px;">
+            <p style="margin: 0; font-size: 14px; line-height: 20px; color: #92400e;">
+                <strong style="color: #78350f;">⏰ Time Sensitive:</strong><br>
+                This invitation will expire in {{ expiry_days|default:"7" }} days. Accept it soon to join the team!
+            </p>
+        </td>
+    </tr>
+    
+    <!-- Support -->
+    <tr>
+        <td style="padding: 30px 0 0 0; text-align: center;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">
+                Questions about this invitation?<br>
+                Contact us at <a href="mailto:support@fieldrino.com" style="color: #2563eb; text-decoration: none;">support@fieldrino.com</a>
+            </p>
+        </td>
+    </tr>
+</table>
+{% endblock %}

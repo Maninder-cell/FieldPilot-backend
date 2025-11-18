@@ -1,0 +1,145 @@
+{% extends "emails/base.html" %}
+
+{% block title %}Service Request Received - {{ request.request_number }}{% endblock %}
+
+{% block content %}
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <!-- Greeting -->
+    <tr>
+        <td style="padding: 0 0 20px 0;">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; color: #111827;">
+                Service Request Received ✓
+            </h2>
+        </td>
+    </tr>
+    
+    <!-- Message -->
+    <tr>
+        <td style="padding: 0 0 30px 0; font-size: 16px; line-height: 24px; color: #374151;">
+            <p style="margin: 0 0 15px 0;">Dear {{ customer_name }},</p>
+            <p style="margin: 0 0 15px 0;">
+                Thank you for submitting your service request. We have received it and our team will review it shortly.
+            </p>
+        </td>
+    </tr>
+    
+    <!-- Request Details Box -->
+    <tr>
+        <td style="padding: 0 0 30px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td style="background-color: #f9fafb; border: 2px solid #e5e7eb; border-radius: 12px; padding: 25px;">
+                        <h3 style="margin: 0 0 20px 0; font-size: 16px; font-weight: 600; color: #111827; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Request Details
+                        </h3>
+                        
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                                <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: #6b7280; width: 40%;">Request Number</td>
+                                            <td style="font-size: 14px; color: #111827; font-weight: 600; text-align: right;">
+                                                {{ request.request_number }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: #6b7280; width: 40%;">Title</td>
+                                            <td style="font-size: 14px; color: #111827; font-weight: 600; text-align: right;">
+                                                {{ request.title }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: #6b7280; width: 40%;">Equipment</td>
+                                            <td style="font-size: 14px; color: #111827; font-weight: 600; text-align: right;">
+                                                {{ request.equipment.name }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0; border-bottom: 1px solid #e5e7eb;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: #6b7280; width: 40%;">Priority</td>
+                                            <td style="font-size: 14px; text-align: right;">
+                                                <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; 
+                                                {% if request.priority == 'critical' %}background-color: #fee2e2; color: #991b1b;
+                                                {% elif request.priority == 'high' %}background-color: #fed7aa; color: #9a3412;
+                                                {% elif request.priority == 'medium' %}background-color: #fef3c7; color: #92400e;
+                                                {% else %}background-color: #dbeafe; color: #1e40af;{% endif %}">
+                                                    {{ request.get_priority_display|upper }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 10px 0;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="font-size: 14px; color: #6b7280; width: 40%;">Status</td>
+                                            <td style="font-size: 14px; text-align: right;">
+                                                <span style="display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background-color: #dbeafe; color: #1e40af;">
+                                                    {{ request.get_status_display|upper }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    
+    <!-- Next Steps -->
+    <tr>
+        <td style="padding: 0 0 30px 0; font-size: 16px; line-height: 24px; color: #374151;">
+            <p style="margin: 0 0 15px 0;">
+                <strong>What happens next?</strong>
+            </p>
+            <ul style="margin: 0; padding-left: 20px; color: #6b7280;">
+                <li style="margin-bottom: 8px;">Our team will review your request within 24 hours</li>
+                <li style="margin-bottom: 8px;">You'll receive an update once it's been accepted</li>
+                <li style="margin-bottom: 8px;">Track your request status anytime in your customer portal</li>
+            </ul>
+        </td>
+    </tr>
+    
+    <!-- CTA Button -->
+    <tr>
+        <td style="padding: 0 0 30px 0; text-align: center;">
+            <a href="{{ portal_url|default:'#' }}" style="display: inline-block; padding: 14px 32px; background-color: #2563eb; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px;">
+                View Request Status
+            </a>
+        </td>
+    </tr>
+    
+    <!-- Support -->
+    <tr>
+        <td style="padding: 20px; background-color: #eff6ff; border-radius: 8px; text-align: center;">
+            <p style="margin: 0; font-size: 14px; color: #1e40af;">
+                Need immediate assistance? Contact us at<br>
+                <a href="mailto:support@fieldrino.com" style="color: #2563eb; text-decoration: none; font-weight: 600;">support@fieldrino.com</a>
+            </p>
+        </td>
+    </tr>
+</table>
+{% endblock %}
