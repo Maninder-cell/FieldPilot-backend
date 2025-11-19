@@ -173,16 +173,25 @@ class Subscription(models.Model):
     
     def update_usage_counts(self):
         """Update current usage counts."""
+        from django.db import transaction
+        
         try:
             # For multi-tenant setup with PostgreSQL
             if hasattr(self.tenant, 'schema_name'):
                 from django_tenants.utils import schema_context
                 with schema_context(self.tenant.schema_name):
                     from apps.authentication.models import User
-                    from apps.equipment.models import Equipment
                     
-                    self.current_users_count = User.objects.filter(is_active=True).count()
-                    self.current_equipment_count = Equipment.objects.count()
+                    # Use savepoint to avoid aborting parent transaction on error
+                    with transaction.atomic():
+                        self.current_users_count = User.objects.filter(is_active=True).count()
+                        
+                        # Try to count equipment, but don't fail if table doesn't exist
+                        try:
+                            from apps.equipment.models import Equipment
+                            self.current_equipment_count = Equipment.objects.count()
+                        except Exception:
+                            self.current_equipment_count = 0
             else:
                 # For single-tenant setup (SQLite development)
                 from apps.tenants.models import TenantMember

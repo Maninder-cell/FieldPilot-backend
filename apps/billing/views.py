@@ -196,7 +196,7 @@ def create_subscription(request):
                 stripe_subscription_id=None  # Optional - only if using Stripe
             )
             
-            # If payment method provided, link to Stripe for future charging
+            # If payment method provided, charge immediately for first period
             if payment_method_id:
                 try:
                     from apps.billing.stripe_service import STRIPE_ENABLED
@@ -204,13 +204,11 @@ def create_subscription(request):
                         import stripe
                         
                         # Get customer_id from the payment method (already attached by confirmCardSetup)
-                        # This avoids creating duplicate customers
                         payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
                         customer_id = payment_method.customer
                         
                         if not customer_id:
                             # Payment method not attached (shouldn't happen with confirmCardSetup)
-                            # Create customer and attach
                             user = request.user
                             customer = StripeService.create_customer(tenant, user)
                             customer_id = customer.id
@@ -227,13 +225,66 @@ def create_subscription(request):
                         )
                         subscription.save()
                         logger.info(f"Stripe payment method set as default for subscription {subscription.id}")
+                        
+                        # Calculate amount based on billing cycle
+                        if billing_cycle == 'yearly':
+                            amount = plan.price_yearly
+                        else:
+                            amount = plan.price_monthly
+                        
+                        # Charge customer immediately for first period
+                        charge = StripeService.charge_customer(
+                            customer_id,
+                            amount,
+                            f"Initial subscription - {plan.name} ({billing_cycle})",
+                            payment_method_id=payment_method_id
+                        )
+                        
+                        logger.info(f"Initial payment successful: {charge.id} - ${amount}")
+                        
+                        # Create invoice record
+                        invoice = Invoice.objects.create(
+                            tenant=tenant,
+                            subscription=subscription,
+                            subtotal=amount,
+                            total=amount,
+                            status='paid',
+                            period_start=subscription.current_period_start,
+                            period_end=subscription.current_period_end,
+                            due_date=subscription.current_period_end,
+                            paid_at=timezone.now()
+                        )
+                        invoice.generate_invoice_number()
+                        logger.info(f"Invoice created: {invoice.invoice_number}")
+                        
+                        # Create payment record
+                        Payment.objects.create(
+                            tenant=tenant,
+                            invoice=invoice,
+                            amount=amount,
+                            status='succeeded',
+                            payment_method='card',
+                            stripe_charge_id=charge.id,
+                            processed_at=timezone.now()
+                        )
+                        logger.info(f"Payment record created for charge: {charge.id}")
+                        
                     else:
                         logger.warning("Payment method provided but Stripe not enabled")
                 except Exception as e:
-                    logger.warning(f"Stripe setup failed, but subscription created: {str(e)}")
+                    # Rollback subscription if payment fails
+                    subscription.delete()
+                    logger.error(f"Payment failed: {str(e)}", exc_info=True)
+                    return error_response(
+                        message=f"Payment failed: {str(e)}",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
             
-            # Update usage counts
-            subscription.update_usage_counts()
+            # Update usage counts (ignore errors if tables don't exist yet)
+            try:
+                subscription.update_usage_counts()
+            except Exception as e:
+                logger.warning(f"Could not update usage counts: {str(e)}")
             
             logger.info(f"Subscription created for tenant {tenant.name}: {subscription.id}")
             
@@ -552,21 +603,19 @@ def create_setup_intent(request):
             )
         
         tenant = get_tenant(request)
+        user = request.user
         customer_id = None
         
-        # Check if tenant has a subscription with customer ID
-        if hasattr(tenant, 'subscription') and tenant.subscription.stripe_customer_id:
+        # Check if tenant already has a Stripe customer
+        if hasattr(tenant, 'subscription') and tenant.subscription and tenant.subscription.stripe_customer_id:
+            # Reuse existing customer
             customer_id = tenant.subscription.stripe_customer_id
+            logger.info(f"Reusing existing Stripe customer: {customer_id}")
         else:
-            # Create a new Stripe customer for the tenant
-            user = request.user
+            # Create a new Stripe customer
             customer = StripeService.create_customer(tenant, user)
             customer_id = customer.id
-            
-            # If subscription exists, update it with customer ID
-            if hasattr(tenant, 'subscription'):
-                tenant.subscription.stripe_customer_id = customer_id
-                tenant.subscription.save()
+            logger.info(f"Created new Stripe customer: {customer_id}")
         
         setup_intent = StripeService.create_setup_intent(customer_id)
         

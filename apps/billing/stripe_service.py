@@ -342,7 +342,7 @@ class StripeService:
             raise
     
     @staticmethod
-    def charge_customer(customer_id, amount, description):
+    def charge_customer(customer_id, amount, description, payment_method_id=None):
         """
         Charge a customer's saved payment method.
         Used for recurring subscription payments.
@@ -351,9 +351,10 @@ class StripeService:
             customer_id: Stripe customer ID
             amount: Amount to charge (Decimal)
             description: Charge description
+            payment_method_id: Optional payment method ID. If not provided, uses customer's default.
             
         Returns:
-            Stripe Charge object
+            Stripe PaymentIntent object
         """
         if not STRIPE_ENABLED:
             raise ValueError("Stripe payment processing is not enabled.")
@@ -364,18 +365,29 @@ class StripeService:
             # Convert amount to cents (Stripe uses smallest currency unit)
             amount_cents = int(float(amount) * 100)
             
-            # Create payment intent with saved payment method
+            # Get payment method if not provided
+            if not payment_method_id:
+                # Get customer's default payment method
+                customer = stripe.Customer.retrieve(customer_id)
+                payment_method_id = customer.invoice_settings.default_payment_method
+                
+                if not payment_method_id:
+                    raise ValueError(f"No default payment method found for customer {customer_id}")
+                
+                logger.info(f"Using default payment method: {payment_method_id}")
+            
+            # Create payment intent with payment method
             payment_intent = stripe.PaymentIntent.create(
                 amount=amount_cents,
                 currency='usd',
                 customer=customer_id,
+                payment_method=payment_method_id,
                 description=description,
-                off_session=True,  # Customer not present
-                confirm=True,  # Automatically confirm and charge
-                payment_method_types=['card']
+                off_session=True,
+                confirm=True,
             )
             
-            logger.info(f"Payment successful: {payment_intent.id}")
+            logger.info(f"Payment successful: {payment_intent.id} - Status: {payment_intent.status}")
             return payment_intent
             
         except stripe.error.CardError as e:
