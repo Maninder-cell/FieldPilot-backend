@@ -201,15 +201,29 @@ def create_subscription(request):
                 try:
                     from apps.billing.stripe_service import STRIPE_ENABLED
                     if STRIPE_ENABLED:
-                        # Create or get Stripe customer
-                        user = request.user
-                        customer = StripeService.create_customer(tenant, user)
-                        subscription.stripe_customer_id = customer.id
+                        import stripe
+                        
+                        # Get customer_id from the payment method (already attached by confirmCardSetup)
+                        # This avoids creating duplicate customers
+                        payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
+                        customer_id = payment_method.customer
+                        
+                        if not customer_id:
+                            # Payment method not attached (shouldn't happen with confirmCardSetup)
+                            # Create customer and attach
+                            user = request.user
+                            customer = StripeService.create_customer(tenant, user)
+                            customer_id = customer.id
+                            logger.warning(f"Payment method not attached, created new customer: {customer_id}")
+                        else:
+                            logger.info(f"Using customer from payment method: {customer_id}")
+                        
+                        # Update subscription with customer ID
+                        subscription.stripe_customer_id = customer_id
                         
                         # Set payment method as default (already attached via confirmCardSetup)
-                        # DO NOT call attach_payment_method() - it will fail with "already attached"
                         StripeService.attach_payment_method(
-                            customer.id, payment_method_id, set_as_default=True
+                            customer_id, payment_method_id, set_as_default=True
                         )
                         subscription.save()
                         logger.info(f"Stripe payment method set as default for subscription {subscription.id}")
