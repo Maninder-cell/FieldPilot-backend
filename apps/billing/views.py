@@ -206,12 +206,13 @@ def create_subscription(request):
                         customer = StripeService.create_customer(tenant, user)
                         subscription.stripe_customer_id = customer.id
                         
-                        # Attach payment method to customer
+                        # Set payment method as default (already attached via confirmCardSetup)
+                        # DO NOT call attach_payment_method() - it will fail with "already attached"
                         StripeService.attach_payment_method(
                             customer.id, payment_method_id, set_as_default=True
                         )
                         subscription.save()
-                        logger.info(f"Stripe payment method linked to subscription {subscription.id}")
+                        logger.info(f"Stripe payment method set as default for subscription {subscription.id}")
                     else:
                         logger.warning("Payment method provided but Stripe not enabled")
                 except Exception as e:

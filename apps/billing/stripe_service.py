@@ -71,6 +71,9 @@ class StripeService:
     def create_subscription(tenant, plan, billing_cycle, payment_method_id=None):
         """
         Create a Stripe subscription.
+        
+        NOTE: Payment method should already be attached via confirmCardSetup() on frontend.
+        We just need to set it as default and create the subscription.
         """
         try:
             # Get or create Stripe customer
@@ -100,6 +103,15 @@ class StripeService:
             if not price_id:
                 raise ValueError(f"No Stripe price ID configured for plan {plan.name}")
             
+            # If payment method provided, set it as default
+            # (it's already attached via confirmCardSetup on frontend)
+            if payment_method_id:
+                stripe.Customer.modify(
+                    customer_id,
+                    invoice_settings={'default_payment_method': payment_method_id}
+                )
+                logger.info(f"Payment method set as default: {payment_method_id}")
+            
             # Create subscription parameters
             subscription_params = {
                 'customer': customer_id,
@@ -109,17 +121,20 @@ class StripeService:
                     'plan_id': str(plan.id),
                     'billing_cycle': billing_cycle
                 },
+                'collection_method': 'charge_automatically',  # Automatically charge
                 'expand': ['latest_invoice.payment_intent']
             }
             
-            # Add payment method if provided
+            # Add payment method if provided (for immediate charge)
             if payment_method_id:
                 subscription_params['default_payment_method'] = payment_method_id
             
-            # Create Stripe subscription
+            # Create Stripe subscription (will trigger immediate charge)
             stripe_subscription = stripe.Subscription.create(**subscription_params)
             
             logger.info(f"Stripe subscription created: {stripe_subscription.id}")
+            logger.info(f"Subscription status: {stripe_subscription.status}")
+            
             return stripe_subscription
             
         except stripe.error.StripeError as e:
@@ -210,27 +225,32 @@ class StripeService:
     @staticmethod
     def attach_payment_method(customer_id, payment_method_id, set_as_default=False):
         """
-        Attach payment method to customer.
+        Set payment method as default for customer.
+        
+        NOTE: When using stripe.confirmCardSetup() on frontend, the payment method
+        is AUTOMATICALLY attached to the customer. We should NOT call attach() again
+        or it will fail with "payment method already attached" error.
+        
+        This method only sets the payment method as default if requested.
         """
         try:
-            # Attach payment method
-            stripe.PaymentMethod.attach(
-                payment_method_id,
-                customer=customer_id
-            )
+            # DO NOT attach - already attached by confirmCardSetup()
+            # stripe.PaymentMethod.attach() will fail with "already attached" error
             
-            # Set as default if requested
+            # Only set as default if requested
             if set_as_default:
                 stripe.Customer.modify(
                     customer_id,
                     invoice_settings={'default_payment_method': payment_method_id}
                 )
+                logger.info(f"Payment method set as default: {payment_method_id}")
+            else:
+                logger.info(f"Payment method already attached (via confirmCardSetup): {payment_method_id}")
             
-            logger.info(f"Payment method attached: {payment_method_id}")
             return True
             
         except stripe.error.StripeError as e:
-            logger.error(f"Failed to attach payment method: {str(e)}")
+            logger.error(f"Failed to set payment method as default: {str(e)}")
             raise
     
     @staticmethod
