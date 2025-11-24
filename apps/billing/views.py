@@ -48,15 +48,22 @@ def public_schema_only(view_func):
 
 
 def get_tenant(request):
-    """Helper function to get tenant from request, handling both multi-tenant and single-tenant setups."""
-    if hasattr(request, 'tenant'):
-        return request.tenant
-    # For development/testing without multi-tenancy
-    from apps.tenants.models import Tenant
-    tenant = Tenant.objects.first()
-    if not tenant:
-        raise ValueError("No tenant found. Please create a tenant first using the onboarding API.")
-    return tenant
+    """
+    Helper function to get tenant from request user.
+    Returns the tenant associated with the authenticated user.
+    """
+    # Get user's active tenant membership
+    from django.db import connection
+    
+    # Switch to public schema to access tenant memberships
+    connection.set_schema_to_public()
+    
+    membership = request.user.tenant_memberships.filter(is_active=True).first()
+    
+    if not membership:
+        raise ValueError("No active tenant found for this user. Please create a company first using the onboarding API.")
+    
+    return membership.tenant
 
 
 @extend_schema(
