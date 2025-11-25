@@ -53,3 +53,5 @@ logs/
 *.db
 
 .kiro
+
+celerybeat-schedule
