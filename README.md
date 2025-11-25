@@ -107,19 +107,19 @@ FieldRino is a comprehensive, multi-tenant SaaS platform designed to revolutioni
 - Docker & Docker Compose (recommended)
 - Node.js 20+ (for frontend)
 
-### Start Backend (Recommended)
+### Start Backend
 
+**Option 1: Full Docker (Recommended)**
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd FieldRino-backend
-
-# Quick start with Docker
 ./start.sh
-
-# Or manually with Docker
-./docker-manage.sh start
 ```
+All services run in Docker. Best for first-time setup.
+
+**Option 2: Local Development**
+```bash
+./start-local.sh
+```
+Django runs locally, services in Docker. Best for active development.
 
 This will start:
 - Django API (http://localhost:8000)
@@ -132,7 +132,7 @@ This will start:
 
 ### Documentation
 
-See `SETUP_SUMMARY.md` for complete setup guide.
+See `START_SCRIPTS_GUIDE.md` for detailed comparison of start scripts.
 
 ## 📚 Documentation
 
