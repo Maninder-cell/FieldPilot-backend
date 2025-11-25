@@ -148,8 +148,14 @@ Authorization: Bearer <access_token>
 2. Frontend creates setup intent (saves payment method)
 3. User enters credit card details via Stripe.js
 4. Frontend creates subscription with payment method
-5. Subscription activated with automatic renewals
+5. Subscription created in 'trialing' status (if trial active)
+6. NO CHARGE during trial - payment processed after 14 days
 ```
+
+**⚠️ IMPORTANT: Free Trial Payment Behavior**
+- **During Trial**: Card is saved but NOT charged
+- **After Trial**: First payment is automatically charged on day 14
+- **No Trial**: If trial expired, payment is charged immediately
 
 **API Calls:**
 
@@ -228,7 +234,7 @@ Content-Type: application/json
   "payment_method_id": "pm_1234567890abcdef"  # From Stripe.js
 }
 
-# Response:
+# Response (During Trial):
 {
   "success": true,
   "data": {
@@ -239,17 +245,24 @@ Content-Type: application/json
       "price_monthly": "79.00",
       "price_yearly": "790.00"
     },
-    "status": "active",
+    "status": "trialing",  # ← Trial status
     "billing_cycle": "monthly",
-    "current_period_start": "2025-10-31T...",
-    "current_period_end": "2025-11-30T...",
+    "trial_start": "2025-11-25T10:00:00Z",
+    "trial_end": "2025-12-09T10:00:00Z",  # ← 14 days from now
+    "current_period_start": "2025-12-09T10:00:00Z",  # ← Billing starts after trial
+    "current_period_end": "2026-01-09T10:00:00Z",
+    "is_trial": true,
     "stripe_customer_id": "cus_1234567890",
-    "days_until_renewal": 29,
+    "days_until_renewal": 14,
     "current_users_count": 1,
     "current_equipment_count": 0
   },
   "message": "Subscription created successfully"
 }
+
+# Note: Card is saved but NO CHARGE is made during trial.
+# First payment of $79.00 will be charged on 2025-12-09 (trial_end date).
+# A daily Celery task automatically processes trial conversions and charges the card.
 ```
 
 #### Step 4: Complete Onboarding
@@ -471,11 +484,16 @@ Authorization: Bearer <access_token>
 | **Professional** | $79 | $790 (save $158) | 25 | 250 | 25GB | Advanced features + API access |
 | **Enterprise** | $199 | $1,990 (save $398) | Unlimited | Unlimited | Unlimited | All features + priority support |
 
+**Free Trial & Payment Timing:**
+- **14-day free trial** for all new tenants
+- Card is saved but **NOT charged during trial**
+- First payment charged automatically after trial ends (day 14)
+- Then recurring payments every 30 days (monthly) or 365 days (yearly)
+
 **Automatic Renewals:**
-- Monthly plans renew every 30 days
-- Yearly plans renew every 365 days
-- Celery tasks charge saved cards automatically
+- Daily Celery task processes trial conversions and renewals
 - Failed payments retry for 3 days before cancellation
+- Email notifications sent for payment success/failure
 
 **Plans are automatically seeded when you run `./start.sh` or `python manage.py seed_plans`**
 

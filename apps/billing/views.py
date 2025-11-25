@@ -184,26 +184,53 @@ def create_subscription(request):
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Calculate subscription periods
+            # Check if tenant has active trial
             now = timezone.now()
-            if billing_cycle == 'yearly':
-                period_end = now + timezone.timedelta(days=365)
+            is_in_trial = tenant.is_trial_active
+            
+            # Calculate subscription periods
+            if is_in_trial:
+                # Trial period: subscription starts now but billing starts after trial
+                trial_start = now
+                trial_end = tenant.trial_ends_at
+                current_period_start = trial_end  # Billing starts after trial
+                
+                if billing_cycle == 'yearly':
+                    current_period_end = trial_end + timezone.timedelta(days=365)
+                else:
+                    current_period_end = trial_end + timezone.timedelta(days=30)
+                
+                subscription_status = 'trialing'
+                logger.info(f"Creating subscription in trial mode. Trial ends: {trial_end}")
             else:
-                period_end = now + timezone.timedelta(days=30)
+                # No trial: subscription and billing start immediately
+                trial_start = None
+                trial_end = None
+                current_period_start = now
+                
+                if billing_cycle == 'yearly':
+                    current_period_end = now + timezone.timedelta(days=365)
+                else:
+                    current_period_end = now + timezone.timedelta(days=30)
+                
+                subscription_status = 'active'
+                logger.info("Creating subscription without trial (trial already expired or not set)")
             
             # Create local subscription (backend manages this)
             subscription = Subscription.objects.create(
                 tenant=tenant,
                 plan=plan,
-                status='active',  # Start as active
+                status=subscription_status,
                 billing_cycle=billing_cycle,
-                current_period_start=now,
-                current_period_end=period_end,
+                current_period_start=current_period_start,
+                current_period_end=current_period_end,
+                trial_start=trial_start,
+                trial_end=trial_end,
                 stripe_customer_id=None,  # Optional - only if using Stripe
                 stripe_subscription_id=None  # Optional - only if using Stripe
             )
             
-            # If payment method provided, charge immediately for first period
+            # If payment method provided, save it but DON'T charge during trial
             if payment_method_id:
                 try:
                     from apps.billing.stripe_service import STRIPE_ENABLED
@@ -231,59 +258,63 @@ def create_subscription(request):
                             customer_id, payment_method_id, set_as_default=True
                         )
                         subscription.save()
-                        logger.info(f"Stripe payment method set as default for subscription {subscription.id}")
+                        logger.info(f"Stripe payment method saved for subscription {subscription.id}")
                         
-                        # Calculate amount based on billing cycle
-                        if billing_cycle == 'yearly':
-                            amount = plan.price_yearly
+                        # Only charge immediately if NOT in trial
+                        if not is_in_trial:
+                            # Calculate amount based on billing cycle
+                            if billing_cycle == 'yearly':
+                                amount = plan.price_yearly
+                            else:
+                                amount = plan.price_monthly
+                            
+                            # Charge customer immediately for first period
+                            charge = StripeService.charge_customer(
+                                customer_id,
+                                amount,
+                                f"Initial subscription - {plan.name} ({billing_cycle})",
+                                payment_method_id=payment_method_id
+                            )
+                            
+                            logger.info(f"Initial payment successful: {charge.id} - ${amount}")
+                            
+                            # Create invoice record
+                            invoice = Invoice.objects.create(
+                                tenant=tenant,
+                                subscription=subscription,
+                                subtotal=amount,
+                                total=amount,
+                                status='paid',
+                                period_start=subscription.current_period_start,
+                                period_end=subscription.current_period_end,
+                                due_date=subscription.current_period_end,
+                                paid_at=timezone.now()
+                            )
+                            invoice.generate_invoice_number()
+                            logger.info(f"Invoice created: {invoice.invoice_number}")
+                            
+                            # Create payment record
+                            Payment.objects.create(
+                                tenant=tenant,
+                                invoice=invoice,
+                                amount=amount,
+                                status='succeeded',
+                                payment_method='card',
+                                stripe_charge_id=charge.id,
+                                processed_at=timezone.now()
+                            )
+                            logger.info(f"Payment record created for charge: {charge.id}")
                         else:
-                            amount = plan.price_monthly
-                        
-                        # Charge customer immediately for first period
-                        charge = StripeService.charge_customer(
-                            customer_id,
-                            amount,
-                            f"Initial subscription - {plan.name} ({billing_cycle})",
-                            payment_method_id=payment_method_id
-                        )
-                        
-                        logger.info(f"Initial payment successful: {charge.id} - ${amount}")
-                        
-                        # Create invoice record
-                        invoice = Invoice.objects.create(
-                            tenant=tenant,
-                            subscription=subscription,
-                            subtotal=amount,
-                            total=amount,
-                            status='paid',
-                            period_start=subscription.current_period_start,
-                            period_end=subscription.current_period_end,
-                            due_date=subscription.current_period_end,
-                            paid_at=timezone.now()
-                        )
-                        invoice.generate_invoice_number()
-                        logger.info(f"Invoice created: {invoice.invoice_number}")
-                        
-                        # Create payment record
-                        Payment.objects.create(
-                            tenant=tenant,
-                            invoice=invoice,
-                            amount=amount,
-                            status='succeeded',
-                            payment_method='card',
-                            stripe_charge_id=charge.id,
-                            processed_at=timezone.now()
-                        )
-                        logger.info(f"Payment record created for charge: {charge.id}")
+                            logger.info(f"Trial active - payment will be charged after trial ends on {trial_end}")
                         
                     else:
                         logger.warning("Payment method provided but Stripe not enabled")
                 except Exception as e:
-                    # Rollback subscription if payment fails
+                    # Rollback subscription if payment setup fails
                     subscription.delete()
-                    logger.error(f"Payment failed: {str(e)}", exc_info=True)
+                    logger.error(f"Payment setup failed: {str(e)}", exc_info=True)
                     return error_response(
-                        message=f"Payment failed: {str(e)}",
+                        message=f"Payment setup failed: {str(e)}",
                         status_code=status.HTTP_400_BAD_REQUEST
                     )
             

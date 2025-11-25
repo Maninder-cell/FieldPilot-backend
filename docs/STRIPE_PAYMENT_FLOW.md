@@ -97,16 +97,19 @@ Content-Type: application/json
   "payment_method_id": "pm_xxx"  # Optional - from setup intent
 }
 
-Response:
+Response (During Trial):
 {
   "success": true,
   "data": {
     "id": "uuid",
     "plan": {...},
-    "status": "active",
-    "current_period_start": "2025-10-31T...",
-    "current_period_end": "2025-11-30T...",
-    "billing_cycle": "monthly"
+    "status": "trialing",  # ← Trial status
+    "trial_start": "2025-11-25T10:00:00Z",
+    "trial_end": "2025-12-09T10:00:00Z",  # ← 14 days
+    "current_period_start": "2025-12-09T10:00:00Z",  # ← Billing starts after trial
+    "current_period_end": "2026-01-09T10:00:00Z",
+    "billing_cycle": "monthly",
+    "is_trial": true
   }
 }
 ```
@@ -114,23 +117,27 @@ Response:
 **What happens:**
 - Subscription created in Django database
 - If payment_method_id provided, linked to Stripe customer
-- Billing period calculated (30 days for monthly, 365 for yearly)
-- Status set to "active"
+- **During trial**: Status set to "trialing", NO CHARGE made
+- **After trial**: Status set to "active", charged immediately
+- Billing period calculated from trial end date (if trial active)
+- First payment charged automatically when trial ends (day 14)
 
 ### Phase 3: Recurring Charges (Automated)
 
 **Celery Beat Schedule** (runs automatically):
 
 ```python
-# Daily at 2:00 AM - Process renewals
+# Daily at 2:00 AM - Process renewals and trial conversions
 process_subscription_renewals()
   ↓
-  1. Find subscriptions ending today
-  2. Calculate renewal amount
-  3. Charge Stripe customer (saved card)
-  4. Create invoice
-  5. Create payment record
-  6. Extend subscription period
+  1. Find subscriptions where trial ends today
+  2. Charge first payment after trial
+  3. Convert status from 'trialing' to 'active'
+  4. Find subscriptions ending today (renewals)
+  5. Calculate renewal amount
+  6. Charge Stripe customer (saved card)
+  7. Create invoice and payment record
+  8. Extend subscription period
 ```
 
 **How Charging Works:**
@@ -151,21 +158,21 @@ stripe.PaymentIntent.create(
 ### Subscription Status Flow
 
 ```
-┌─────────┐
-│ active  │ ──renewal success──> │ active  │
-└─────────┘                       └─────────┘
-     │
-     │ payment fails
-     ↓
 ┌──────────┐
-│ past_due │ ──retry success──> │ active  │
-└──────────┘                     └─────────┘
-     │
-     │ 3 failed attempts
-     ↓
-┌──────────┐
-│ canceled │
-└──────────┘
+│ trialing │ ──trial ends + payment success──> │ active  │
+└──────────┘                                    └─────────┘
+     │                                               │
+     │ trial ends + payment fails                    │ renewal success
+     ↓                                               ↓
+┌──────────┐                                    ┌─────────┐
+│ past_due │ ──retry success──────────────────> │ active  │
+└──────────┘                                    └─────────┘
+     │                                               │
+     │ 3 failed attempts                             │ payment fails
+     ↓                                               ↓
+┌──────────┐                                    ┌──────────┐
+│ canceled │ <────────────────────────────────  │ past_due │
+└──────────┘                                    └──────────┘
 ```
 
 ### Payment Retry Logic
@@ -264,22 +271,28 @@ POST /api/v1/billing/webhook/
 
 ## Key Points
 
-1. **Setup Intent = Save Card** (one-time)
+1. **14-Day Free Trial** (automatic)
+   - All new tenants get free trial
+   - Card saved but NOT charged during trial
+   - First payment after 14 days
+
+2. **Setup Intent = Save Card** (one-time)
    - Customer enters card details
    - Card saved to Stripe customer
-   - No charge yet
+   - No charge during trial
 
-2. **Subscription = Backend Managed**
+3. **Subscription = Backend Managed**
    - Created in Django database
-   - Billing periods calculated
-   - Status tracked
+   - Status: 'trialing' during trial, 'active' after
+   - Billing periods calculated from trial end
 
-3. **Recurring Charges = Automated**
+4. **Recurring Charges = Automated**
    - Celery task runs daily
+   - Handles trial conversions and renewals
    - Charges saved card automatically
    - No customer interaction needed
 
-4. **Payment Method Saved = `off_session: true`**
+5. **Payment Method Saved = `off_session: true`**
    - Allows charging without customer present
    - Required for recurring payments
    - Set during setup intent

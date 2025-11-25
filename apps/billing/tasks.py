@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 def process_subscription_renewals():
     """
     Process subscription renewals for subscriptions ending today.
+    Also handles trial-to-active conversion and first payment after trial.
     This should run daily via Celery beat.
     """
     logger.info("Starting subscription renewal processing...")
@@ -33,9 +34,91 @@ def process_subscription_renewals():
         cancel_at_period_end=False
     )
     
+    # Find subscriptions where trial ends today
+    subscriptions_trial_ending = Subscription.objects.filter(
+        trial_end__date=today,
+        status='trialing'
+    )
+    
     renewed_count = 0
     failed_count = 0
+    trial_converted_count = 0
     
+    # Process trial-to-active conversions first
+    for subscription in subscriptions_trial_ending:
+        try:
+            logger.info(f"Processing trial end for subscription {subscription.id}")
+            
+            # Calculate amount
+            if subscription.billing_cycle == 'yearly':
+                amount = subscription.plan.price_yearly
+            else:
+                amount = subscription.plan.price_monthly
+            
+            # Try to charge via Stripe if enabled and customer has payment method
+            payment_successful = False
+            stripe_charge_id = None
+            
+            if STRIPE_ENABLED and subscription.stripe_customer_id:
+                try:
+                    charge = StripeService.charge_customer(
+                        subscription.stripe_customer_id,
+                        amount,
+                        f"First payment after trial - {subscription.plan.name}"
+                    )
+                    payment_successful = True
+                    stripe_charge_id = charge.id
+                    logger.info(f"Trial conversion payment successful: {charge.id} - ${amount}")
+                except Exception as e:
+                    logger.error(f"Trial conversion payment failed for subscription {subscription.id}: {str(e)}")
+                    # Mark subscription as past_due
+                    subscription.status = 'past_due'
+                    subscription.save()
+                    failed_count += 1
+                    continue
+            else:
+                # No Stripe - assume payment handled externally
+                payment_successful = True
+                logger.info(f"Stripe not enabled, marking trial as converted without payment")
+            
+            if payment_successful:
+                # Create invoice
+                invoice = Invoice.objects.create(
+                    tenant=subscription.tenant,
+                    subscription=subscription,
+                    subtotal=amount,
+                    total=amount,
+                    status='paid',
+                    period_start=subscription.current_period_start,
+                    period_end=subscription.current_period_end,
+                    due_date=subscription.current_period_end,
+                    paid_at=timezone.now()
+                )
+                invoice.generate_invoice_number()
+                
+                # Create payment record
+                Payment.objects.create(
+                    tenant=subscription.tenant,
+                    invoice=invoice,
+                    amount=amount,
+                    status='succeeded',
+                    payment_method='card',
+                    stripe_charge_id=stripe_charge_id or '',
+                    processed_at=timezone.now()
+                )
+                
+                # Convert trial to active
+                subscription.status = 'active'
+                subscription.save()
+                
+                trial_converted_count += 1
+                logger.info(f"Trial converted to active for subscription {subscription.id}")
+                
+        except Exception as e:
+            logger.error(f"Failed to process trial end for subscription {subscription.id}: {str(e)}")
+            failed_count += 1
+    
+    # Process regular renewals
     for subscription in subscriptions_to_renew:
         try:
             logger.info(f"Processing renewal for subscription {subscription.id}")
@@ -116,8 +199,9 @@ def process_subscription_renewals():
             logger.error(f"Failed to process renewal for subscription {subscription.id}: {str(e)}", exc_info=True)
             failed_count += 1
     
-    logger.info(f"Renewal processing complete. Renewed: {renewed_count}, Failed: {failed_count}")
+    logger.info(f"Renewal processing complete. Trial conversions: {trial_converted_count}, Renewed: {renewed_count}, Failed: {failed_count}")
     return {
+        'trial_converted': trial_converted_count,
         'renewed': renewed_count,
         'failed': failed_count
     }
