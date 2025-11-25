@@ -200,6 +200,23 @@ python manage.py check 2>/dev/null || {
     print_warning "System check has warnings (continuing...)"
 }
 
+# Step 20: Check Celery services
+print_status "Checking Celery services..."
+CELERY_WORKER_RUNNING=$(docker ps --filter "name=fieldrino_celery_worker" --filter "status=running" -q)
+CELERY_BEAT_RUNNING=$(docker ps --filter "name=fieldrino_celery_beat" --filter "status=running" -q)
+
+if [ -n "$CELERY_WORKER_RUNNING" ]; then
+    print_success "Celery worker is running"
+else
+    print_warning "Celery worker not running (check docker-compose logs celery-worker)"
+fi
+
+if [ -n "$CELERY_BEAT_RUNNING" ]; then
+    print_success "Celery beat is running"
+else
+    print_warning "Celery beat not running (check docker-compose logs celery-beat)"
+fi
+
 # Success message
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
@@ -214,6 +231,7 @@ echo "   • ReDoc:       http://localhost:8000/api/redoc/"
 echo ""
 echo "🔧 Management:"
 echo "   • Admin Panel:  http://localhost:8000/admin/"
+echo "   • Flower:       http://localhost:5555 (Celery monitoring)"
 echo "   • CloudBeaver:  http://localhost:8978 (database management)"
 echo "   • MailHog:      http://localhost:8025 (email testing)"
 echo ""
@@ -222,6 +240,13 @@ echo "   • PostgreSQL:  localhost:5432"
 echo "   • Database:    fieldrino_db"
 echo "   • User:        fieldrino_user"
 echo "   • Password:    fieldrino_password"
+echo ""
+echo "⚙️  Background Tasks:"
+echo "   • Celery Worker:  Running in Docker"
+echo "   • Celery Beat:    Running in Docker (scheduled tasks)"
+echo "   • View logs:      docker-compose logs -f celery-worker"
+echo ""
+echo "💡 Tip: Use './docker-manage.sh' for easy Docker management"
 echo ""
 echo "🚀 Starting Django development server..."
 echo "   Press Ctrl+C to stop"

@@ -104,10 +104,35 @@ FieldRino is a comprehensive, multi-tenant SaaS platform designed to revolutioni
 ### Prerequisites
 
 - Python 3.11+
-- Node.js 20+
-- PostgreSQL 15+
-- Redis 7+
-- Docker (recommended)
+- Docker & Docker Compose (recommended)
+- Node.js 20+ (for frontend)
+
+### Start Backend (Recommended)
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd FieldRino-backend
+
+# Quick start with Docker
+./start.sh
+
+# Or manually with Docker
+./docker-manage.sh start
+```
+
+This will start:
+- Django API (http://localhost:8000)
+- PostgreSQL database
+- Redis cache
+- Celery worker & beat (background tasks)
+- Flower monitoring (http://localhost:5555)
+- CloudBeaver DB UI (http://localhost:8978)
+- MailHog email testing (http://localhost:8025)
+
+### Documentation
+
+See `SETUP_SUMMARY.md` for complete setup guide.
 
 ## 📚 Documentation
 
