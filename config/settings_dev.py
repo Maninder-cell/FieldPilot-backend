@@ -40,8 +40,10 @@ SHARED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'drf_spectacular',
+    'django_celery_beat',  # Celery beat scheduler
     
     # Local shared apps
+    'apps.core',
     'apps.tenants',
     'apps.billing',
     'apps.authentication',  # Shared - users can belong to multiple tenants
@@ -332,6 +334,15 @@ EMAIL_USE_SSL = False
 EMAIL_HOST_USER = ''
 EMAIL_HOST_PASSWORD = ''
 DEFAULT_FROM_EMAIL = 'noreply@fieldrino.com'
+
+# Celery Configuration
+# Use 'redis' for Docker, 'localhost' for local development
+CELERY_BROKER_URL = config('CELERY_BROKER_URL', default='redis://redis:6379/0')
+CELERY_RESULT_BACKEND = config('CELERY_RESULT_BACKEND', default='redis://redis:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
 
 # Cache Configuration (Local memory cache for development)
 CACHES = {
