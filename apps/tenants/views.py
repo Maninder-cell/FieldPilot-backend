@@ -99,8 +99,9 @@ def create_tenant(request):
             # Create tenant
             tenant = serializer.save()
             
-            # Start 14-day trial
-            tenant.start_trial(days=14)
+            # Start trial (default 15 days, can be customized)
+            trial_days = request.data.get('trial_days', 15)
+            tenant.start_trial(days=trial_days)
             
             # Create tenant settings
             TenantSettings.objects.create(tenant=tenant)

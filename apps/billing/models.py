@@ -147,8 +147,13 @@ class Subscription(models.Model):
     
     @property
     def days_until_renewal(self):
-        """Days until next billing cycle."""
-        if self.current_period_end:
+        """Days until next billing cycle or trial end."""
+        # If in trial, show days until trial ends (not billing period)
+        if self.is_trial and self.trial_end:
+            delta = self.trial_end - timezone.now()
+            return max(0, delta.days)
+        # Otherwise show days until next billing cycle
+        elif self.current_period_end:
             delta = self.current_period_end - timezone.now()
             return max(0, delta.days)
         return 0
