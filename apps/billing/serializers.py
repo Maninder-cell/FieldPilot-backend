@@ -32,6 +32,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     is_active = serializers.ReadOnlyField()
     is_trial = serializers.ReadOnlyField()
     days_until_renewal = serializers.ReadOnlyField()
+    next_renewal_date = serializers.SerializerMethodField()
     usage_limits_exceeded = serializers.SerializerMethodField()
     
     class Meta:
@@ -40,9 +41,16 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'id', 'plan', 'status', 'billing_cycle', 'current_period_start',
             'current_period_end', 'cancel_at_period_end', 'canceled_at',
             'trial_start', 'trial_end', 'is_active', 'is_trial',
-            'days_until_renewal', 'current_users_count', 'current_equipment_count',
-            'current_storage_gb', 'usage_limits_exceeded', 'created_at'
+            'days_until_renewal', 'next_renewal_date', 'current_users_count', 
+            'current_equipment_count', 'current_storage_gb', 'usage_limits_exceeded', 
+            'created_at'
         ]
+    
+    def get_next_renewal_date(self, obj):
+        """Get the next renewal date (trial end if in trial, otherwise billing period end)."""
+        if obj.is_trial and obj.trial_end:
+            return obj.trial_end
+        return obj.current_period_end
     
     def get_usage_limits_exceeded(self, obj):
         """Get list of exceeded usage limits."""
