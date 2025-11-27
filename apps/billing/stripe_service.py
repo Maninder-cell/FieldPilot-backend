@@ -4,17 +4,40 @@ Stripe Integration Service
 Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 
-NOTE: Stripe is ONLY used for payment processing.
-Subscription management is handled by our backend.
+Stripe is the single source of truth for all billing operations.
+This service provides a comprehensive interface to Stripe's API.
 """
 from django.conf import settings
 from django.utils import timezone
 from datetime import datetime
+from typing import Optional, List, Dict, Callable, Any
 import logging
-
-from .models import Subscription, SubscriptionPlan, Invoice, Payment
+import time
 
 logger = logging.getLogger(__name__)
+
+
+class StripeError(Exception):
+    """Base exception for Stripe-related errors with user-friendly messages."""
+    def __init__(self, message: str, original_error: Optional[Exception] = None):
+        self.message = message
+        self.original_error = original_error
+        super().__init__(self.message)
+
+
+class StripeCardError(StripeError):
+    """Exception for card-related errors."""
+    pass
+
+
+class StripeConnectionError(StripeError):
+    """Exception for connection-related errors."""
+    pass
+
+
+class StripeRateLimitError(StripeError):
+    """Exception for rate limit errors."""
+    pass
 
 # Try to import Stripe, but make it optional
 STRIPE_ENABLED = False
@@ -24,379 +47,527 @@ try:
     if stripe_key and stripe_key.strip() and not stripe_key.startswith('sk_test_dummy'):
         stripe.api_key = stripe_key
         STRIPE_ENABLED = True
-        logger.info("Stripe payment processing enabled")
+        logger.info("Stripe billing system enabled")
     else:
-        logger.warning("Stripe not configured - payment processing disabled")
+        logger.warning("Stripe not configured - billing system disabled")
 except ImportError:
-    logger.warning("Stripe library not installed - payment processing disabled")
+    logger.warning("Stripe library not installed - billing system disabled")
 except Exception as e:
     logger.error(f"Error configuring Stripe: {str(e)}")
 
 
+def handle_stripe_errors(max_retries: int = 3):
+    """
+    Decorator to handle Stripe API errors with retry logic and user-friendly messages.
+    
+    Args:
+        max_retries: Maximum number of retry attempts for transient failures
+    """
+    def decorator(func: Callable) -> Callable:
+        def wrapper(*args, **kwargs) -> Any:
+            last_error = None
+            
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                    
+                except stripe.error.CardError as e:
+                    # Card was declined - don't retry
+                    logger.error(f"Card error in {func.__name__}: {e.user_message}", exc_info=True)
+                    decline_code = e.code
+                    user_message = e.user_message or "Your card was declined."
+                    
+                    # Provide more specific messages based on decline code
+                    if decline_code == 'insufficient_funds':
+                        user_message = "Your card has insufficient funds. Please use a different payment method."
+                    elif decline_code == 'expired_card':
+                        user_message = "Your card has expired. Please use a different payment method."
+                    elif decline_code == 'incorrect_cvc':
+                        user_message = "The card's security code (CVC) is incorrect. Please check and try again."
+                    elif decline_code == 'card_declined':
+                        user_message = "Your card was declined. Please contact your bank or use a different payment method."
+                    
+                    raise StripeCardError(user_message, e)
+                
+                except stripe.error.RateLimitError as e:
+                    # Rate limit hit - retry with exponential backoff
+                    wait_time = (2 ** attempt) * 1  # 1s, 2s, 4s
+                    logger.warning(f"Rate limit hit in {func.__name__}, attempt {attempt + 1}/{max_retries}. Waiting {wait_time}s")
+                    
+                    if attempt < max_retries - 1:
+                        time.sleep(wait_time)
+                        last_error = e
+                        continue
+                    else:
+                        logger.error(f"Rate limit exceeded after {max_retries} attempts", exc_info=True)
+                        raise StripeRateLimitError(
+                            "The billing service is currently experiencing high load. Please try again in a few moments.",
+                            e
+                        )
+                
+                except stripe.error.APIConnectionError as e:
+                    # Network error - retry with exponential backoff
+                    wait_time = (2 ** attempt) * 1  # 1s, 2s, 4s
+                    logger.warning(f"API connection error in {func.__name__}, attempt {attempt + 1}/{max_retries}. Waiting {wait_time}s")
+                    
+                    if attempt < max_retries - 1:
+                        time.sleep(wait_time)
+                        last_error = e
+                        continue
+                    else:
+                        logger.error(f"API connection failed after {max_retries} attempts", exc_info=True)
+                        raise StripeConnectionError(
+                            "Unable to connect to the billing service. Please check your internet connection and try again.",
+                            e
+                        )
+                
+                except stripe.error.InvalidRequestError as e:
+                    # Invalid parameters - don't retry
+                    logger.error(f"Invalid request in {func.__name__}: {str(e)}", exc_info=True)
+                    logger.error(f"Request details - Function: {func.__name__}, Args: {args}, Kwargs: {kwargs}")
+                    raise StripeError(
+                        "An error occurred while processing your request. Please contact support if this persists.",
+                        e
+                    )
+                
+                except stripe.error.AuthenticationError as e:
+                    # Authentication error - don't retry
+                    logger.critical(f"Stripe authentication error in {func.__name__}: {str(e)}", exc_info=True)
+                    raise StripeError(
+                        "Billing system configuration error. Please contact support.",
+                        e
+                    )
+                
+                except stripe.error.StripeError as e:
+                    # Generic Stripe error - don't retry
+                    logger.error(f"Stripe error in {func.__name__}: {str(e)}", exc_info=True)
+                    raise StripeError(
+                        "An error occurred with the billing service. Please try again or contact support.",
+                        e
+                    )
+                
+                except Exception as e:
+                    # Unexpected error - don't retry
+                    logger.error(f"Unexpected error in {func.__name__}: {str(e)}", exc_info=True)
+                    raise
+            
+            # Should never reach here, but just in case
+            if last_error:
+                raise last_error
+        
+        return wrapper
+    return decorator
+
+
 class StripeService:
     """
-    Service class for Stripe operations.
+    Service class for comprehensive Stripe operations.
+    Handles customers, subscriptions, invoices, payments, and payment methods.
     """
     
-    @staticmethod
-    def create_customer(tenant, user):
-        """
-        Create a Stripe customer for the tenant.
-        Only used for payment processing, not subscription management.
-        """
-        if not STRIPE_ENABLED:
-            raise ValueError("Stripe payment processing is not enabled. Check your STRIPE_SECRET_KEY configuration.")
-        
-        try:
-            logger.info(f"Creating Stripe customer for tenant: {tenant.name}")
-            
-            customer = stripe.Customer.create(
-                email=user.email,
-                name=f"{user.first_name} {user.last_name}",
-                metadata={
-                    'tenant_id': str(tenant.id),
-                    'tenant_name': tenant.name,
-                    'user_id': str(user.id)
-                }
-            )
-            
-            logger.info(f"Stripe customer created: {customer.id} for tenant {tenant.name}")
-            return customer
-            
-        except Exception as e:
-            logger.error(f"Failed to create Stripe customer: {str(e)}", exc_info=True)
-            raise
+    # ==================== Customer Management ====================
     
     @staticmethod
-    def create_subscription(tenant, plan, billing_cycle, payment_method_id=None):
+    @handle_stripe_errors(max_retries=3)
+    def get_or_create_customer(tenant, user) -> 'stripe.Customer':
         """
-        Create a Stripe subscription.
+        Get existing Stripe customer or create a new one for the tenant.
         
-        NOTE: Payment method should already be attached via confirmCardSetup() on frontend.
-        We just need to set it as default and create the subscription.
+        Args:
+            tenant: Tenant model instance
+            user: User model instance (for email and name)
+            
+        Returns:
+            stripe.Customer object
         """
-        try:
-            # Get or create Stripe customer
-            subscription_obj = getattr(tenant, 'subscription', None)
-            
-            if subscription_obj and subscription_obj.stripe_customer_id:
-                customer_id = subscription_obj.stripe_customer_id
-            else:
-                # Create new customer (need admin user)
-                from apps.authentication.models import User
-                from django_tenants.utils import schema_context
-                
-                with schema_context(tenant.schema_name):
-                    admin_user = User.objects.filter(role='admin').first()
-                    if not admin_user:
-                        raise ValueError("No admin user found for tenant")
-                
-                customer = StripeService.create_customer(tenant, admin_user)
-                customer_id = customer.id
-            
-            # Get price ID based on billing cycle
-            price_id = (
-                plan.stripe_price_id_yearly if billing_cycle == 'yearly' 
-                else plan.stripe_price_id_monthly
-            )
-            
-            if not price_id:
-                raise ValueError(f"No Stripe price ID configured for plan {plan.name}")
-            
-            # If payment method provided, set it as default
-            # (it's already attached via confirmCardSetup on frontend)
-            if payment_method_id:
-                stripe.Customer.modify(
-                    customer_id,
-                    invoice_settings={'default_payment_method': payment_method_id}
-                )
-                logger.info(f"Payment method set as default: {payment_method_id}")
-            
-            # Create subscription parameters
-            subscription_params = {
-                'customer': customer_id,
-                'items': [{'price': price_id}],
-                'metadata': {
-                    'tenant_id': str(tenant.id),
-                    'plan_id': str(plan.id),
-                    'billing_cycle': billing_cycle
-                },
-                'collection_method': 'charge_automatically',  # Automatically charge
-                'expand': ['latest_invoice.payment_intent']
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled. Check your STRIPE_SECRET_KEY configuration.")
+        
+        # Check if tenant already has a subscription with customer ID
+        if hasattr(tenant, 'subscription') and tenant.subscription and tenant.subscription.stripe_customer_id:
+            customer_id = tenant.subscription.stripe_customer_id
+            logger.info(f"Retrieving existing Stripe customer: {customer_id}")
+            return stripe.Customer.retrieve(customer_id)
+        
+        # Create new customer
+        logger.info(f"Creating Stripe customer for tenant: {tenant.name}")
+        
+        customer = stripe.Customer.create(
+            email=user.email,
+            name=f"{user.first_name} {user.last_name}",
+            metadata={
+                'tenant_id': str(tenant.id),
+                'tenant_name': tenant.name,
+                'user_id': str(user.id)
             }
-            
-            # Add payment method if provided (for immediate charge)
-            if payment_method_id:
-                subscription_params['default_payment_method'] = payment_method_id
-            
-            # Create Stripe subscription (will trigger immediate charge)
-            stripe_subscription = stripe.Subscription.create(**subscription_params)
-            
-            logger.info(f"Stripe subscription created: {stripe_subscription.id}")
-            logger.info(f"Subscription status: {stripe_subscription.status}")
-            
-            return stripe_subscription
-            
-        except stripe.error.StripeError as e:
-            logger.error(f"Failed to create Stripe subscription: {str(e)}")
-            raise
-    
-    @staticmethod
-    def update_subscription(subscription, new_plan=None, new_billing_cycle=None):
-        """
-        Update a Stripe subscription.
-        """
-        try:
-            if not subscription.stripe_subscription_id:
-                raise ValueError("No Stripe subscription ID found")
-            
-            # Get current Stripe subscription
-            stripe_subscription = stripe.Subscription.retrieve(
-                subscription.stripe_subscription_id
-            )
-            
-            update_params = {}
-            
-            # Update plan if provided
-            if new_plan:
-                price_id = (
-                    new_plan.stripe_price_id_yearly if new_billing_cycle == 'yearly'
-                    else new_plan.stripe_price_id_monthly
-                )
-                
-                if not price_id:
-                    raise ValueError(f"No Stripe price ID for plan {new_plan.name}")
-                
-                update_params['items'] = [{
-                    'id': stripe_subscription['items']['data'][0]['id'],
-                    'price': price_id
-                }]
-                
-                update_params['metadata'] = {
-                    **stripe_subscription.metadata,
-                    'plan_id': str(new_plan.id),
-                    'billing_cycle': new_billing_cycle or subscription.billing_cycle
-                }
-            
-            # Update subscription
-            if update_params:
-                updated_subscription = stripe.Subscription.modify(
-                    subscription.stripe_subscription_id,
-                    **update_params
-                )
-                
-                logger.info(f"Stripe subscription updated: {updated_subscription.id}")
-                return updated_subscription
-            
-            return stripe_subscription
-            
-        except stripe.error.StripeError as e:
-            logger.error(f"Failed to update Stripe subscription: {str(e)}")
-            raise
-    
-    @staticmethod
-    def cancel_subscription(subscription, cancel_immediately=False):
-        """
-        Cancel a Stripe subscription.
-        """
-        try:
-            if not subscription.stripe_subscription_id:
-                raise ValueError("No Stripe subscription ID found")
-            
-            if cancel_immediately:
-                # Cancel immediately
-                canceled_subscription = stripe.Subscription.delete(
-                    subscription.stripe_subscription_id
-                )
-            else:
-                # Cancel at period end
-                canceled_subscription = stripe.Subscription.modify(
-                    subscription.stripe_subscription_id,
-                    cancel_at_period_end=True
-                )
-            
-            logger.info(f"Stripe subscription canceled: {canceled_subscription.id}")
-            return canceled_subscription
-            
-        except stripe.error.StripeError as e:
-            logger.error(f"Failed to cancel Stripe subscription: {str(e)}")
-            raise
-    
-    @staticmethod
-    def attach_payment_method(customer_id, payment_method_id, set_as_default=False):
-        """
-        Set payment method as default for customer.
+        )
         
-        NOTE: When using stripe.confirmCardSetup() on frontend, the payment method
-        is AUTOMATICALLY attached to the customer. We should NOT call attach() again
-        or it will fail with "payment method already attached" error.
-        
-        This method only sets the payment method as default if requested.
-        """
-        try:
-            # DO NOT attach - already attached by confirmCardSetup()
-            # stripe.PaymentMethod.attach() will fail with "already attached" error
-            
-            # Only set as default if requested
-            if set_as_default:
-                stripe.Customer.modify(
-                    customer_id,
-                    invoice_settings={'default_payment_method': payment_method_id}
-                )
-                logger.info(f"Payment method set as default: {payment_method_id}")
-            else:
-                logger.info(f"Payment method already attached (via confirmCardSetup): {payment_method_id}")
-            
-            return True
-            
-        except stripe.error.StripeError as e:
-            logger.error(f"Failed to set payment method as default: {str(e)}")
-            raise
+        logger.info(f"Stripe customer created: {customer.id} for tenant {tenant.name}")
+        return customer
+    
+    # ==================== Subscription Management ====================
     
     @staticmethod
-    def get_customer_payment_methods(customer_id):
+    @handle_stripe_errors(max_retries=3)
+    def create_subscription(
+        customer_id: str,
+        price_id: str,
+        payment_method_id: str,
+        trial_end: Optional[datetime] = None,
+        metadata: Optional[Dict] = None
+    ) -> 'stripe.Subscription':
         """
-        Get customer's payment methods.
-        """
-        try:
-            payment_methods = stripe.PaymentMethod.list(
-                customer=customer_id,
-                type='card'
-            )
-            
-            return payment_methods.data
-            
-        except stripe.error.StripeError as e:
-            logger.error(f"Failed to get payment methods: {str(e)}")
-            raise
-    
-    @staticmethod
-    def sync_subscription_from_stripe(stripe_subscription_id):
-        """
-        Sync subscription data from Stripe.
-        """
-        try:
-            # Get Stripe subscription
-            stripe_subscription = stripe.Subscription.retrieve(
-                stripe_subscription_id,
-                expand=['customer', 'items.data.price.product']
-            )
-            
-            # Find local subscription
-            try:
-                subscription = Subscription.objects.get(
-                    stripe_subscription_id=stripe_subscription_id
-                )
-            except Subscription.DoesNotExist:
-                logger.warning(f"Local subscription not found for Stripe ID: {stripe_subscription_id}")
-                return None
-            
-            # Update subscription data
-            subscription.status = stripe_subscription.status
-            subscription.current_period_start = datetime.fromtimestamp(
-                stripe_subscription.current_period_start, tz=timezone.utc
-            )
-            subscription.current_period_end = datetime.fromtimestamp(
-                stripe_subscription.current_period_end, tz=timezone.utc
-            )
-            subscription.cancel_at_period_end = stripe_subscription.cancel_at_period_end
-            
-            if stripe_subscription.canceled_at:
-                subscription.canceled_at = datetime.fromtimestamp(
-                    stripe_subscription.canceled_at, tz=timezone.utc
-                )
-            
-            subscription.save()
-            
-            logger.info(f"Subscription synced from Stripe: {subscription.id}")
-            return subscription
-            
-        except stripe.error.StripeError as e:
-            logger.error(f"Failed to sync subscription from Stripe: {str(e)}")
-            raise
-    
-    @staticmethod
-    def create_setup_intent(customer_id):
-        """
-        Create a setup intent for saving payment method.
-        This is ONLY for collecting payment information.
-        The card will be saved for future recurring charges.
-        """
-        if not STRIPE_ENABLED:
-            raise ValueError("Stripe payment processing is not enabled. Check your STRIPE_SECRET_KEY configuration.")
-        
-        try:
-            logger.info(f"Creating setup intent for customer: {customer_id}")
-            
-            setup_intent = stripe.SetupIntent.create(
-                customer=customer_id,
-                payment_method_types=['card'],
-                usage='off_session'  # Important: allows charging without customer present
-            )
-            
-            logger.info(f"Setup intent created: {setup_intent.id}")
-            return setup_intent
-            
-        except Exception as e:
-            logger.error(f"Failed to create setup intent: {str(e)}", exc_info=True)
-            raise
-    
-    @staticmethod
-    def charge_customer(customer_id, amount, description, payment_method_id=None):
-        """
-        Charge a customer's saved payment method.
-        Used for recurring subscription payments.
+        Create a Stripe subscription with trial handling.
         
         Args:
             customer_id: Stripe customer ID
-            amount: Amount to charge (Decimal)
-            description: Charge description
-            payment_method_id: Optional payment method ID. If not provided, uses customer's default.
+            price_id: Stripe price ID for the subscription plan
+            payment_method_id: Stripe payment method ID (already attached to customer)
+            trial_end: Optional datetime for trial end (if in trial period)
+            metadata: Optional metadata dict to attach to subscription
             
         Returns:
-            Stripe PaymentIntent object
+            stripe.Subscription object
         """
         if not STRIPE_ENABLED:
-            raise ValueError("Stripe payment processing is not enabled.")
+            raise ValueError("Stripe billing system is not enabled.")
         
-        try:
-            logger.info(f"Charging customer {customer_id}: ${amount}")
+        logger.info(f"Creating Stripe subscription for customer: {customer_id}")
+        
+        # Set payment method as default
+        stripe.Customer.modify(
+            customer_id,
+            invoice_settings={'default_payment_method': payment_method_id}
+        )
+        logger.info(f"Payment method set as default: {payment_method_id}")
+        
+        # Build subscription parameters
+        subscription_params = {
+            'customer': customer_id,
+            'items': [{'price': price_id}],
+            'default_payment_method': payment_method_id,
+            'metadata': metadata or {},
+            'expand': ['latest_invoice.payment_intent']
+        }
+        
+        # Add trial end if provided
+        if trial_end:
+            trial_end_timestamp = int(trial_end.timestamp())
+            subscription_params['trial_end'] = trial_end_timestamp
+            logger.info(f"Subscription will have trial until: {trial_end}")
+        
+        # Create Stripe subscription
+        stripe_subscription = stripe.Subscription.create(**subscription_params)
+        
+        logger.info(f"Stripe subscription created: {stripe_subscription.id}")
+        logger.info(f"Subscription status: {stripe_subscription.status}")
+        
+        return stripe_subscription
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
+    def get_subscription(subscription_id: str) -> 'stripe.Subscription':
+        """
+        Retrieve a subscription from Stripe.
+        
+        Args:
+            subscription_id: Stripe subscription ID
             
-            # Convert amount to cents (Stripe uses smallest currency unit)
-            amount_cents = int(float(amount) * 100)
+        Returns:
+            stripe.Subscription object
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        logger.info(f"Retrieving Stripe subscription: {subscription_id}")
+        
+        subscription = stripe.Subscription.retrieve(
+            subscription_id,
+            expand=['customer', 'default_payment_method', 'latest_invoice']
+        )
+        
+        return subscription
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
+    def update_subscription(
+        subscription_id: str,
+        price_id: Optional[str] = None,
+        cancel_at_period_end: Optional[bool] = None
+    ) -> 'stripe.Subscription':
+        """
+        Update a Stripe subscription (plan change or cancellation settings).
+        
+        Args:
+            subscription_id: Stripe subscription ID
+            price_id: Optional new price ID for plan upgrade/downgrade
+            cancel_at_period_end: Optional boolean to cancel at period end
             
-            # Get payment method if not provided
-            if not payment_method_id:
-                # Get customer's default payment method
-                customer = stripe.Customer.retrieve(customer_id)
-                payment_method_id = customer.invoice_settings.default_payment_method
-                
-                if not payment_method_id:
-                    raise ValueError(f"No default payment method found for customer {customer_id}")
-                
-                logger.info(f"Using default payment method: {payment_method_id}")
-            
-            # Create payment intent with payment method
-            payment_intent = stripe.PaymentIntent.create(
-                amount=amount_cents,
-                currency='usd',
-                customer=customer_id,
-                payment_method=payment_method_id,
-                description=description,
-                off_session=True,
-                confirm=True,
+        Returns:
+            stripe.Subscription object
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        logger.info(f"Updating Stripe subscription: {subscription_id}")
+        
+        # Get current subscription
+        subscription = stripe.Subscription.retrieve(subscription_id)
+        
+        update_params = {}
+        
+        # Update price if provided (plan change)
+        if price_id:
+            update_params['items'] = [{
+                'id': subscription['items']['data'][0]['id'],
+                'price': price_id
+            }]
+            # Proration is automatic in Stripe
+            logger.info(f"Changing subscription to price: {price_id}")
+        
+        # Update cancellation setting if provided
+        if cancel_at_period_end is not None:
+            update_params['cancel_at_period_end'] = cancel_at_period_end
+            logger.info(f"Setting cancel_at_period_end to: {cancel_at_period_end}")
+        
+        # Apply updates
+        if update_params:
+            updated_subscription = stripe.Subscription.modify(
+                subscription_id,
+                **update_params
             )
+            logger.info(f"Stripe subscription updated: {updated_subscription.id}")
+            return updated_subscription
+        
+        return subscription
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
+    def cancel_subscription(subscription_id: str, immediately: bool = False) -> 'stripe.Subscription':
+        """
+        Cancel a Stripe subscription.
+        
+        Args:
+            subscription_id: Stripe subscription ID
+            immediately: If True, cancel immediately. If False, cancel at period end.
             
-            logger.info(f"Payment successful: {payment_intent.id} - Status: {payment_intent.status}")
-            return payment_intent
+        Returns:
+            stripe.Subscription object (or deleted subscription object if immediate)
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        logger.info(f"Canceling Stripe subscription: {subscription_id} (immediate={immediately})")
+        
+        if immediately:
+            # Cancel immediately (delete subscription)
+            canceled_subscription = stripe.Subscription.delete(subscription_id)
+            logger.info(f"Stripe subscription canceled immediately: {subscription_id}")
+        else:
+            # Cancel at period end
+            canceled_subscription = stripe.Subscription.modify(
+                subscription_id,
+                cancel_at_period_end=True
+            )
+            logger.info(f"Stripe subscription set to cancel at period end: {subscription_id}")
+        
+        return canceled_subscription
+    
+    # ==================== Invoice Management ====================
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
+    def list_invoices(
+        customer_id: str,
+        limit: int = 10,
+        starting_after: Optional[str] = None
+    ) -> List['stripe.Invoice']:
+        """
+        List invoices for a customer with pagination.
+        
+        Args:
+            customer_id: Stripe customer ID
+            limit: Number of invoices to return (default 10)
+            starting_after: Cursor for pagination (invoice ID)
             
-        except stripe.error.CardError as e:
-            # Card was declined
-            logger.error(f"Card declined: {str(e)}")
-            raise
-        except stripe.error.StripeError as e:
-            logger.error(f"Stripe error: {str(e)}")
-            raise
-        except Exception as e:
-            logger.error(f"Failed to charge customer: {str(e)}", exc_info=True)
-            raise
+        Returns:
+            List of stripe.Invoice objects
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        logger.info(f"Listing invoices for customer: {customer_id}")
+        
+        params = {
+            'customer': customer_id,
+            'limit': limit
+        }
+        
+        if starting_after:
+            params['starting_after'] = starting_after
+        
+        invoices = stripe.Invoice.list(**params)
+        
+        logger.info(f"Retrieved {len(invoices.data)} invoices for customer {customer_id}")
+        return invoices.data
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
+    def get_invoice(invoice_id: str) -> 'stripe.Invoice':
+        """
+        Retrieve a single invoice from Stripe.
+        
+        Args:
+            invoice_id: Stripe invoice ID
+            
+        Returns:
+            stripe.Invoice object
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        logger.info(f"Retrieving invoice: {invoice_id}")
+        
+        invoice = stripe.Invoice.retrieve(invoice_id)
+        
+        return invoice
+    
+    # ==================== Payment Management ====================
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
+    def list_charges(
+        customer_id: str,
+        limit: int = 10,
+        starting_after: Optional[str] = None
+    ) -> List['stripe.Charge']:
+        """
+        List charges (payments) for a customer with pagination.
+        
+        Args:
+            customer_id: Stripe customer ID
+            limit: Number of charges to return (default 10)
+            starting_after: Cursor for pagination (charge ID)
+            
+        Returns:
+            List of stripe.Charge objects
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        logger.info(f"Listing charges for customer: {customer_id}")
+        
+        params = {
+            'customer': customer_id,
+            'limit': limit
+        }
+        
+        if starting_after:
+            params['starting_after'] = starting_after
+        
+        charges = stripe.Charge.list(**params)
+        
+        logger.info(f"Retrieved {len(charges.data)} charges for customer {customer_id}")
+        return charges.data
+    
+    # ==================== Payment Method Management ====================
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
+    def create_setup_intent(customer_id: str) -> 'stripe.SetupIntent':
+        """
+        Create a setup intent for saving payment method.
+        Used to collect payment information for future charges.
+        
+        Args:
+            customer_id: Stripe customer ID
+            
+        Returns:
+            stripe.SetupIntent object
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        logger.info(f"Creating setup intent for customer: {customer_id}")
+        
+        setup_intent = stripe.SetupIntent.create(
+            customer=customer_id,
+            payment_method_types=['card'],
+            usage='off_session'  # Allows charging without customer present
+        )
+        
+        logger.info(f"Setup intent created: {setup_intent.id}")
+        return setup_intent
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
+    def list_payment_methods(customer_id: str) -> List['stripe.PaymentMethod']:
+        """
+        List payment methods for a customer.
+        
+        Args:
+            customer_id: Stripe customer ID
+            
+        Returns:
+            List of stripe.PaymentMethod objects
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        logger.info(f"Listing payment methods for customer: {customer_id}")
+        
+        payment_methods = stripe.PaymentMethod.list(
+            customer=customer_id,
+            type='card'
+        )
+        
+        logger.info(f"Retrieved {len(payment_methods.data)} payment methods")
+        return payment_methods.data
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
+    def set_default_payment_method(customer_id: str, payment_method_id: str) -> 'stripe.Customer':
+        """
+        Set a payment method as the default for a customer.
+        
+        Args:
+            customer_id: Stripe customer ID
+            payment_method_id: Stripe payment method ID
+            
+        Returns:
+            stripe.Customer object
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        logger.info(f"Setting default payment method for customer {customer_id}: {payment_method_id}")
+        
+        customer = stripe.Customer.modify(
+            customer_id,
+            invoice_settings={'default_payment_method': payment_method_id}
+        )
+        
+        logger.info(f"Default payment method updated for customer {customer_id}")
+        return customer
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
+    def detach_payment_method(payment_method_id: str) -> 'stripe.PaymentMethod':
+        """
+        Detach (remove) a payment method from a customer.
+        
+        Args:
+            payment_method_id: Stripe payment method ID
+            
+        Returns:
+            stripe.PaymentMethod object
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        logger.info(f"Detaching payment method: {payment_method_id}")
+        
+        payment_method = stripe.PaymentMethod.detach(payment_method_id)
+        
+        logger.info(f"Payment method detached: {payment_method_id}")
+        return payment_method

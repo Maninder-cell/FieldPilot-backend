@@ -14,13 +14,16 @@ from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema, OpenApiExample
 import logging
 
-from .models import SubscriptionPlan, Subscription, Invoice, Payment
+from .models import SubscriptionPlan, Subscription
 from .serializers import (
     SubscriptionPlanSerializer, SubscriptionSerializer, CreateSubscriptionSerializer,
-    UpdateSubscriptionSerializer, InvoiceSerializer, PaymentSerializer,
-    PaymentMethodSerializer, BillingOverviewSerializer
+    UpdateSubscriptionSerializer, StripeInvoiceSerializer, StripeChargeSerializer,
+    PaymentMethodSerializer, StripePaymentMethodSerializer, BillingOverviewSerializer
 )
-from .stripe_service import StripeService
+from .stripe_service import (
+    StripeService, StripeError, StripeCardError, 
+    StripeConnectionError, StripeRateLimitError
+)
 from apps.core.responses import success_response, error_response
 from apps.core.permissions import IsAdminUser
 from functools import wraps
@@ -101,7 +104,7 @@ def subscription_plans(request):
 @extend_schema(
     tags=['Billing'],
     summary='Get current subscription',
-    description='Get current tenant subscription details including usage and billing information',
+    description='Get current tenant subscription details from Stripe including usage and billing information',
     responses={
         200: SubscriptionSerializer,
         404: {'description': 'No active subscription found'},
@@ -112,17 +115,37 @@ def subscription_plans(request):
 @public_schema_only
 def current_subscription(request):
     """
-    Get current tenant's subscription.
+    Get current tenant's subscription from Stripe.
+    Merges Stripe billing data with local usage tracking.
     """
     try:
         tenant = get_tenant(request)
         
         try:
             subscription = tenant.subscription
-            # Update usage counts
-            subscription.update_usage_counts()
             
-            serializer = SubscriptionSerializer(subscription)
+            # Update usage counts
+            try:
+                subscription.update_usage_counts()
+            except Exception as e:
+                logger.warning(f"Could not update usage counts: {str(e)}")
+            
+            # Fetch latest data from Stripe
+            try:
+                stripe_subscription = StripeService.get_subscription(subscription.stripe_subscription_id)
+                
+                # Update local status if changed
+                if subscription.status != stripe_subscription.status:
+                    subscription.status = stripe_subscription.status
+                    subscription.save(update_fields=['status', 'updated_at'])
+                    logger.info(f"Updated subscription status to: {stripe_subscription.status}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to fetch subscription from Stripe: {str(e)}")
+                # Continue with local data if Stripe fetch fails
+                stripe_subscription = None
+            
+            serializer = SubscriptionSerializer(subscription, context={'stripe_subscription': stripe_subscription})
             
             return success_response(
                 data=serializer.data,
@@ -136,7 +159,7 @@ def current_subscription(request):
             )
             
     except Exception as e:
-        logger.error(f"Failed to get current subscription: {str(e)}")
+        logger.error(f"Failed to get current subscription: {str(e)}", exc_info=True)
         return error_response(
             message="Failed to retrieve subscription",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -146,7 +169,7 @@ def current_subscription(request):
 @extend_schema(
     tags=['Billing'],
     summary='Create subscription',
-    description='Create a new subscription for the tenant (Owner/Admin only). Subscription management is handled by backend. Stripe payment is optional.',
+    description='Create a new subscription for the tenant (Owner/Admin only). Stripe manages all billing.',
     request=CreateSubscriptionSerializer,
     responses={
         201: SubscriptionSerializer,
@@ -159,7 +182,7 @@ def current_subscription(request):
 def create_subscription(request):
     """
     Create a new subscription for the tenant.
-    Subscription is managed by our backend. Stripe is only used for payment processing (optional).
+    Stripe is the source of truth for all billing operations.
     """
     serializer = CreateSubscriptionSerializer(data=request.data)
     
@@ -184,139 +207,59 @@ def create_subscription(request):
                     status_code=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Check if tenant has active trial
-            now = timezone.now()
-            is_in_trial = tenant.is_trial_active
+            # Require payment method
+            if not payment_method_id:
+                return error_response(
+                    message="Payment method is required",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
             
-            # Calculate subscription periods
-            if is_in_trial:
-                # Trial period: subscription starts now but billing starts after trial
-                trial_start = now
+            # Get or create Stripe customer
+            user = request.user
+            customer = StripeService.get_or_create_customer(tenant, user)
+            customer_id = customer.id
+            logger.info(f"Using Stripe customer: {customer_id}")
+            
+            # Get price ID based on billing cycle
+            price_id = (
+                plan.stripe_price_id_yearly if billing_cycle == 'yearly' 
+                else plan.stripe_price_id_monthly
+            )
+            
+            if not price_id:
+                return error_response(
+                    message=f"No Stripe price ID configured for plan {plan.name}",
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            
+            # Determine trial end
+            trial_end = None
+            if tenant.is_trial_active:
                 trial_end = tenant.trial_ends_at
-                current_period_start = trial_end  # Billing starts after trial
-                
-                if billing_cycle == 'yearly':
-                    current_period_end = trial_end + timezone.timedelta(days=365)
-                else:
-                    current_period_end = trial_end + timezone.timedelta(days=30)
-                
-                subscription_status = 'trialing'
-                logger.info(f"Creating subscription in trial mode. Trial ends: {trial_end}")
-            else:
-                # No trial: subscription and billing start immediately
-                trial_start = None
-                trial_end = None
-                current_period_start = now
-                
-                if billing_cycle == 'yearly':
-                    current_period_end = now + timezone.timedelta(days=365)
-                else:
-                    current_period_end = now + timezone.timedelta(days=30)
-                
-                subscription_status = 'active'
-                logger.info("Creating subscription without trial (trial already expired or not set)")
+                logger.info(f"Creating subscription with trial until: {trial_end}")
             
-            # Create local subscription (backend manages this)
+            # Create Stripe subscription
+            stripe_subscription = StripeService.create_subscription(
+                customer_id=customer_id,
+                price_id=price_id,
+                payment_method_id=payment_method_id,
+                trial_end=trial_end,
+                metadata={
+                    'tenant_id': str(tenant.id),
+                    'tenant_name': tenant.name,
+                    'plan_id': str(plan.id),
+                    'billing_cycle': billing_cycle
+                }
+            )
+            
+            # Create local subscription record
             subscription = Subscription.objects.create(
                 tenant=tenant,
                 plan=plan,
-                status=subscription_status,
-                billing_cycle=billing_cycle,
-                current_period_start=current_period_start,
-                current_period_end=current_period_end,
-                trial_start=trial_start,
-                trial_end=trial_end,
-                stripe_customer_id=None,  # Optional - only if using Stripe
-                stripe_subscription_id=None  # Optional - only if using Stripe
+                stripe_customer_id=customer_id,
+                stripe_subscription_id=stripe_subscription.id,
+                status=stripe_subscription.status
             )
-            
-            # If payment method provided, save it but DON'T charge during trial
-            if payment_method_id:
-                try:
-                    from apps.billing.stripe_service import STRIPE_ENABLED
-                    if STRIPE_ENABLED:
-                        import stripe
-                        
-                        # Get customer_id from the payment method (already attached by confirmCardSetup)
-                        payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
-                        customer_id = payment_method.customer
-                        
-                        if not customer_id:
-                            # Payment method not attached (shouldn't happen with confirmCardSetup)
-                            user = request.user
-                            customer = StripeService.create_customer(tenant, user)
-                            customer_id = customer.id
-                            logger.warning(f"Payment method not attached, created new customer: {customer_id}")
-                        else:
-                            logger.info(f"Using customer from payment method: {customer_id}")
-                        
-                        # Update subscription with customer ID
-                        subscription.stripe_customer_id = customer_id
-                        
-                        # Set payment method as default (already attached via confirmCardSetup)
-                        StripeService.attach_payment_method(
-                            customer_id, payment_method_id, set_as_default=True
-                        )
-                        subscription.save()
-                        logger.info(f"Stripe payment method saved for subscription {subscription.id}")
-                        
-                        # Only charge immediately if NOT in trial
-                        if not is_in_trial:
-                            # Calculate amount based on billing cycle
-                            if billing_cycle == 'yearly':
-                                amount = plan.price_yearly
-                            else:
-                                amount = plan.price_monthly
-                            
-                            # Charge customer immediately for first period
-                            charge = StripeService.charge_customer(
-                                customer_id,
-                                amount,
-                                f"Initial subscription - {plan.name} ({billing_cycle})",
-                                payment_method_id=payment_method_id
-                            )
-                            
-                            logger.info(f"Initial payment successful: {charge.id} - ${amount}")
-                            
-                            # Create invoice record
-                            invoice = Invoice.objects.create(
-                                tenant=tenant,
-                                subscription=subscription,
-                                subtotal=amount,
-                                total=amount,
-                                status='paid',
-                                period_start=subscription.current_period_start,
-                                period_end=subscription.current_period_end,
-                                due_date=subscription.current_period_end,
-                                paid_at=timezone.now()
-                            )
-                            invoice.generate_invoice_number()
-                            logger.info(f"Invoice created: {invoice.invoice_number}")
-                            
-                            # Create payment record
-                            Payment.objects.create(
-                                tenant=tenant,
-                                invoice=invoice,
-                                amount=amount,
-                                status='succeeded',
-                                payment_method='card',
-                                stripe_charge_id=charge.id,
-                                processed_at=timezone.now()
-                            )
-                            logger.info(f"Payment record created for charge: {charge.id}")
-                        else:
-                            logger.info(f"Trial active - payment will be charged after trial ends on {trial_end}")
-                        
-                    else:
-                        logger.warning("Payment method provided but Stripe not enabled")
-                except Exception as e:
-                    # Rollback subscription if payment setup fails
-                    subscription.delete()
-                    logger.error(f"Payment setup failed: {str(e)}", exc_info=True)
-                    return error_response(
-                        message=f"Payment setup failed: {str(e)}",
-                        status_code=status.HTTP_400_BAD_REQUEST
-                    )
             
             # Update usage counts (ignore errors if tables don't exist yet)
             try:
@@ -332,10 +275,44 @@ def create_subscription(request):
                 status_code=status.HTTP_201_CREATED
             )
             
+    except StripeCardError as e:
+        # Card was declined - return user-friendly message
+        logger.error(f"Card error creating subscription: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_402_PAYMENT_REQUIRED
+        )
+    except StripeConnectionError as e:
+        # Network/connection error
+        logger.error(f"Connection error creating subscription: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    except StripeRateLimitError as e:
+        # Rate limit exceeded
+        logger.error(f"Rate limit error creating subscription: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+    except StripeError as e:
+        # Generic Stripe error
+        logger.error(f"Stripe error creating subscription: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    except ValueError as e:
+        logger.error(f"Validation error: {str(e)}")
+        return error_response(
+            message=str(e),
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
     except Exception as e:
         logger.error(f"Failed to create subscription: {str(e)}", exc_info=True)
         return error_response(
-            message=f"Failed to create subscription: {str(e)}",
+            message="An unexpected error occurred while creating your subscription. Please try again or contact support.",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -343,7 +320,7 @@ def create_subscription(request):
 @extend_schema(
     tags=['Billing'],
     summary='Update subscription',
-    description='Update subscription plan or billing cycle (upgrade/downgrade) - Owner/Admin only',
+    description='Update subscription plan or billing cycle (upgrade/downgrade) via Stripe - Owner/Admin only',
     request=UpdateSubscriptionSerializer,
     responses={
         200: SubscriptionSerializer,
@@ -356,7 +333,7 @@ def create_subscription(request):
 @public_schema_only
 def update_subscription(request):
     """
-    Update current subscription (upgrade/downgrade).
+    Update current subscription (upgrade/downgrade) via Stripe.
     """
     try:
         tenant = get_tenant(request)
@@ -377,39 +354,55 @@ def update_subscription(request):
             # Handle plan change
             if 'plan_slug' in validated_data:
                 new_plan = serializer.plan
-                new_billing_cycle = validated_data.get('billing_cycle', subscription.billing_cycle)
+                new_billing_cycle = validated_data.get('billing_cycle', 'monthly')
                 
-                # Update Stripe subscription
-                StripeService.update_subscription(
-                    subscription, new_plan, new_billing_cycle
+                # Get new price ID
+                price_id = (
+                    new_plan.stripe_price_id_yearly if new_billing_cycle == 'yearly'
+                    else new_plan.stripe_price_id_monthly
+                )
+                
+                if not price_id:
+                    return error_response(
+                        message=f"No Stripe price ID configured for plan {new_plan.name}",
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+                
+                # Update Stripe subscription (proration is automatic)
+                stripe_subscription = StripeService.update_subscription(
+                    subscription.stripe_subscription_id,
+                    price_id=price_id
                 )
                 
                 # Update local subscription
                 subscription.plan = new_plan
-                subscription.billing_cycle = new_billing_cycle
+                subscription.status = stripe_subscription.status
+                subscription.save()
+                
+                logger.info(f"Subscription plan updated for tenant {tenant.name}: {new_plan.name}")
             
-            # Handle cancellation
+            # Handle cancellation setting
             if 'cancel_at_period_end' in validated_data:
                 cancel_at_period_end = validated_data['cancel_at_period_end']
                 
-                if cancel_at_period_end:
-                    # Cancel at period end
-                    StripeService.cancel_subscription(subscription, cancel_immediately=False)
-                    subscription.cancel_at_period_end = True
-                else:
-                    # Reactivate subscription
-                    stripe.Subscription.modify(
-                        subscription.stripe_subscription_id,
-                        cancel_at_period_end=False
-                    )
-                    subscription.cancel_at_period_end = False
+                # Update Stripe subscription
+                stripe_subscription = StripeService.update_subscription(
+                    subscription.stripe_subscription_id,
+                    cancel_at_period_end=cancel_at_period_end
+                )
+                
+                # Update local status
+                subscription.status = stripe_subscription.status
+                subscription.save()
+                
+                action = "set to cancel at period end" if cancel_at_period_end else "reactivated"
+                logger.info(f"Subscription {action} for tenant {tenant.name}")
             
-            subscription.save()
-            
-            logger.info(f"Subscription updated for tenant {tenant.name}: {subscription.id}")
+            # Fetch updated subscription from Stripe
+            stripe_subscription = StripeService.get_subscription(subscription.stripe_subscription_id)
             
             return success_response(
-                data=SubscriptionSerializer(subscription).data,
+                data=SubscriptionSerializer(subscription, context={'stripe_subscription': stripe_subscription}).data,
                 message="Subscription updated successfully"
             )
             
@@ -418,10 +411,34 @@ def update_subscription(request):
             message="No active subscription found",
             status_code=status.HTTP_404_NOT_FOUND
         )
+    except StripeCardError as e:
+        logger.error(f"Card error updating subscription: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_402_PAYMENT_REQUIRED
+        )
+    except StripeConnectionError as e:
+        logger.error(f"Connection error updating subscription: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    except StripeRateLimitError as e:
+        logger.error(f"Rate limit error updating subscription: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+    except StripeError as e:
+        logger.error(f"Stripe error updating subscription: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
     except Exception as e:
         logger.error(f"Failed to update subscription: {str(e)}", exc_info=True)
         return error_response(
-            message="Failed to update subscription",
+            message="An unexpected error occurred while updating your subscription. Please try again or contact support.",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -429,7 +446,7 @@ def update_subscription(request):
 @extend_schema(
     tags=['Billing'],
     summary='Cancel subscription',
-    description='Cancel current subscription immediately or at period end (Owner/Admin only)',
+    description='Cancel current subscription via Stripe immediately or at period end (Owner/Admin only)',
     request={'type': 'object', 'properties': {
         'cancel_immediately': {'type': 'boolean', 'default': False},
         'reason': {'type': 'string'}
@@ -444,7 +461,7 @@ def update_subscription(request):
 @public_schema_only
 def cancel_subscription(request):
     """
-    Cancel current subscription.
+    Cancel current subscription via Stripe.
     """
     try:
         tenant = get_tenant(request)
@@ -455,22 +472,21 @@ def cancel_subscription(request):
         
         with transaction.atomic():
             # Cancel Stripe subscription
-            StripeService.cancel_subscription(subscription, cancel_immediately)
+            stripe_subscription = StripeService.cancel_subscription(
+                subscription.stripe_subscription_id,
+                immediately=cancel_immediately
+            )
             
             # Update local subscription
-            if cancel_immediately:
-                subscription.status = 'canceled'
-                subscription.canceled_at = timezone.now()
-            else:
-                subscription.cancel_at_period_end = True
-            
+            subscription.status = stripe_subscription.status
             subscription.cancellation_reason = cancellation_reason
             subscription.save()
             
-            logger.info(f"Subscription canceled for tenant {tenant.name}: {subscription.id}")
+            action = "immediately" if cancel_immediately else "at period end"
+            logger.info(f"Subscription canceled {action} for tenant {tenant.name}: {subscription.id}")
             
             return success_response(
-                data=SubscriptionSerializer(subscription).data,
+                data=SubscriptionSerializer(subscription, context={'stripe_subscription': stripe_subscription}).data,
                 message="Subscription canceled successfully"
             )
             
@@ -479,10 +495,28 @@ def cancel_subscription(request):
             message="No active subscription found",
             status_code=status.HTTP_404_NOT_FOUND
         )
-    except Exception as e:
-        logger.error(f"Failed to cancel subscription: {str(e)}")
+    except StripeConnectionError as e:
+        logger.error(f"Connection error canceling subscription: {e.message}")
         return error_response(
-            message="Failed to cancel subscription",
+            message=e.message,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    except StripeRateLimitError as e:
+        logger.error(f"Rate limit error canceling subscription: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+    except StripeError as e:
+        logger.error(f"Stripe error canceling subscription: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        logger.error(f"Failed to cancel subscription: {str(e)}", exc_info=True)
+        return error_response(
+            message="An unexpected error occurred while canceling your subscription. Please try again or contact support.",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -490,7 +524,7 @@ def cancel_subscription(request):
 @extend_schema(
     tags=['Billing'],
     summary='Get billing overview',
-    description='Get billing dashboard with subscription, usage, and payment information',
+    description='Get billing dashboard with subscription, usage, and payment information from Stripe',
     responses={
         200: BillingOverviewSerializer,
     }
@@ -500,21 +534,89 @@ def cancel_subscription(request):
 @public_schema_only
 def billing_overview(request):
     """
-    Get billing overview/dashboard.
+    Get billing overview/dashboard from Stripe.
     """
     try:
         tenant = get_tenant(request)
-        serializer = BillingOverviewSerializer()
+        
+        # Check if tenant has a subscription
+        if not hasattr(tenant, 'subscription') or not tenant.subscription:
+            return success_response(
+                data={
+                    'subscription': None,
+                    'current_invoice': None,
+                    'recent_payments': [],
+                    'usage_summary': {}
+                },
+                message="No subscription found"
+            )
+        
+        subscription = tenant.subscription
+        customer_id = subscription.stripe_customer_id
+        
+        # Fetch subscription from Stripe
+        try:
+            stripe_subscription = StripeService.get_subscription(subscription.stripe_subscription_id)
+        except Exception as e:
+            logger.error(f"Failed to fetch subscription from Stripe: {str(e)}")
+            stripe_subscription = None
+        
+        # Fetch latest invoice from Stripe
+        try:
+            stripe_invoices = StripeService.list_invoices(customer_id=customer_id, limit=1)
+            current_invoice = stripe_invoices[0] if stripe_invoices else None
+        except Exception as e:
+            logger.error(f"Failed to fetch invoices from Stripe: {str(e)}")
+            current_invoice = None
+        
+        # Fetch recent payments from Stripe
+        try:
+            recent_charges = StripeService.list_charges(customer_id=customer_id, limit=5)
+        except Exception as e:
+            logger.error(f"Failed to fetch charges from Stripe: {str(e)}")
+            recent_charges = []
+        
+        # Update usage counts
+        try:
+            subscription.update_usage_counts()
+        except Exception as e:
+            logger.warning(f"Could not update usage counts: {str(e)}")
+        
+        # Build response
+        serializer = BillingOverviewSerializer(context={
+            'subscription': subscription,
+            'stripe_subscription': stripe_subscription,
+            'current_invoice': current_invoice,
+            'recent_charges': recent_charges
+        })
         
         return success_response(
             data=serializer.to_representation(tenant),
             message="Billing overview retrieved successfully"
         )
-        
-    except Exception as e:
-        logger.error(f"Failed to get billing overview: {str(e)}")
+    
+    except StripeConnectionError as e:
+        logger.error(f"Connection error getting billing overview: {e.message}")
         return error_response(
-            message="Failed to retrieve billing overview",
+            message=e.message,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    except StripeRateLimitError as e:
+        logger.error(f"Rate limit error getting billing overview: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+    except StripeError as e:
+        logger.error(f"Stripe error getting billing overview: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        logger.error(f"Failed to get billing overview: {str(e)}", exc_info=True)
+        return error_response(
+            message="An unexpected error occurred while retrieving billing information. Please try again or contact support.",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -522,9 +624,9 @@ def billing_overview(request):
 @extend_schema(
     tags=['Billing'],
     summary='Get invoices',
-    description='Get list of tenant invoices with pagination',
+    description='Get list of tenant invoices from Stripe with pagination',
     responses={
-        200: InvoiceSerializer(many=True),
+        200: StripeInvoiceSerializer(many=True),
     }
 )
 @api_view(['GET'])
@@ -532,35 +634,62 @@ def billing_overview(request):
 @public_schema_only
 def invoices(request):
     """
-    Get tenant's invoices.
+    Get tenant's invoices from Stripe.
     """
     try:
         tenant = get_tenant(request)
-        invoices = tenant.invoices.all().order_by('-created_at')
         
-        # Pagination
-        from rest_framework.pagination import PageNumberPagination
-        paginator = PageNumberPagination()
-        page = paginator.paginate_queryset(invoices, request)
+        # Check if tenant has a subscription
+        if not hasattr(tenant, 'subscription') or not tenant.subscription:
+            return success_response(
+                data=[],
+                message="No subscription found"
+            )
         
-        if page is not None:
-            serializer = InvoiceSerializer(page, many=True)
-            return paginator.get_paginated_response({
-                'success': True,
-                'data': serializer.data,
-                'message': 'Invoices retrieved successfully'
-            })
+        subscription = tenant.subscription
+        customer_id = subscription.stripe_customer_id
         
-        serializer = InvoiceSerializer(invoices, many=True)
+        # Get pagination parameters
+        limit = int(request.GET.get('limit', 10))
+        starting_after = request.GET.get('starting_after', None)
+        
+        # Fetch invoices from Stripe
+        stripe_invoices = StripeService.list_invoices(
+            customer_id=customer_id,
+            limit=limit,
+            starting_after=starting_after
+        )
+        
+        # Serialize invoices
+        serializer = StripeInvoiceSerializer(stripe_invoices, many=True)
+        
         return success_response(
             data=serializer.data,
             message="Invoices retrieved successfully"
         )
-        
-    except Exception as e:
-        logger.error(f"Failed to get invoices: {str(e)}")
+    
+    except StripeConnectionError as e:
+        logger.error(f"Connection error getting invoices: {e.message}")
         return error_response(
-            message="Failed to retrieve invoices",
+            message=e.message,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    except StripeRateLimitError as e:
+        logger.error(f"Rate limit error getting invoices: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+    except StripeError as e:
+        logger.error(f"Stripe error getting invoices: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        logger.error(f"Failed to get invoices: {str(e)}", exc_info=True)
+        return error_response(
+            message="An unexpected error occurred while retrieving invoices. Please try again or contact support.",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -568,9 +697,9 @@ def invoices(request):
 @extend_schema(
     tags=['Billing'],
     summary='Get payments',
-    description='Get list of tenant payments with pagination',
+    description='Get list of tenant payments from Stripe with pagination',
     responses={
-        200: PaymentSerializer(many=True),
+        200: StripeChargeSerializer(many=True),
     }
 )
 @api_view(['GET'])
@@ -578,35 +707,62 @@ def invoices(request):
 @public_schema_only
 def payments(request):
     """
-    Get tenant's payments.
+    Get tenant's payments (charges) from Stripe.
     """
     try:
         tenant = get_tenant(request)
-        payments = tenant.payments.all().order_by('-created_at')
         
-        # Pagination
-        from rest_framework.pagination import PageNumberPagination
-        paginator = PageNumberPagination()
-        page = paginator.paginate_queryset(payments, request)
+        # Check if tenant has a subscription
+        if not hasattr(tenant, 'subscription') or not tenant.subscription:
+            return success_response(
+                data=[],
+                message="No subscription found"
+            )
         
-        if page is not None:
-            serializer = PaymentSerializer(page, many=True)
-            return paginator.get_paginated_response({
-                'success': True,
-                'data': serializer.data,
-                'message': 'Payments retrieved successfully'
-            })
+        subscription = tenant.subscription
+        customer_id = subscription.stripe_customer_id
         
-        serializer = PaymentSerializer(payments, many=True)
+        # Get pagination parameters
+        limit = int(request.GET.get('limit', 10))
+        starting_after = request.GET.get('starting_after', None)
+        
+        # Fetch charges from Stripe
+        stripe_charges = StripeService.list_charges(
+            customer_id=customer_id,
+            limit=limit,
+            starting_after=starting_after
+        )
+        
+        # Serialize charges
+        serializer = StripeChargeSerializer(stripe_charges, many=True)
+        
         return success_response(
             data=serializer.data,
             message="Payments retrieved successfully"
         )
-        
-    except Exception as e:
-        logger.error(f"Failed to get payments: {str(e)}")
+    
+    except StripeConnectionError as e:
+        logger.error(f"Connection error getting payments: {e.message}")
         return error_response(
-            message="Failed to retrieve payments",
+            message=e.message,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE
+        )
+    except StripeRateLimitError as e:
+        logger.error(f"Rate limit error getting payments: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS
+        )
+    except StripeError as e:
+        logger.error(f"Stripe error getting payments: {e.message}")
+        return error_response(
+            message=e.message,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
+    except Exception as e:
+        logger.error(f"Failed to get payments: {str(e)}", exc_info=True)
+        return error_response(
+            message="An unexpected error occurred while retrieving payments. Please try again or contact support.",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 
@@ -651,7 +807,7 @@ def create_setup_intent(request):
             logger.info(f"Reusing existing Stripe customer: {customer_id}")
         else:
             # Create a new Stripe customer
-            customer = StripeService.create_customer(tenant, user)
+            customer = StripeService.get_or_create_customer(tenant, user)
             customer_id = customer.id
             logger.info(f"Created new Stripe customer: {customer_id}")
         
@@ -680,59 +836,245 @@ def create_setup_intent(request):
 
 @extend_schema(
     tags=['Billing'],
-    summary='Add payment method',
-    description='Add payment method to customer account (Owner/Admin only)',
-    request=PaymentMethodSerializer,
+    summary='List payment methods',
+    description='Get list of payment methods for the customer (Owner/Admin only)',
     responses={
-        200: {'description': 'Payment method added successfully'},
-        400: {'description': 'Invalid payment method data'},
+        200: StripePaymentMethodSerializer(many=True),
+        404: {'description': 'No subscription found'},
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@public_schema_only
+def list_payment_methods(request):
+    """
+    List payment methods from Stripe.
+    """
+    try:
+        tenant = get_tenant(request)
+        
+        # Check if tenant has a subscription
+        if not hasattr(tenant, 'subscription') or not tenant.subscription:
+            return error_response(
+                message="No subscription found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        subscription = tenant.subscription
+        customer_id = subscription.stripe_customer_id
+        
+        # Fetch payment methods from Stripe
+        payment_methods = StripeService.list_payment_methods(customer_id)
+        
+        # Serialize payment methods
+        from .serializers import StripePaymentMethodSerializer
+        serializer = StripePaymentMethodSerializer(payment_methods, many=True)
+        
+        return success_response(
+            data=serializer.data,
+            message="Payment methods retrieved successfully"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to list payment methods: {str(e)}", exc_info=True)
+        return error_response(
+            message=f"Failed to retrieve payment methods: {str(e)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Billing'],
+    summary='Set default payment method',
+    description='Set a payment method as default for the customer (Owner/Admin only)',
+    request={'type': 'object', 'properties': {
+        'payment_method_id': {'type': 'string'}
+    }},
+    responses={
+        200: {'description': 'Default payment method updated successfully'},
+        400: {'description': 'Invalid request data'},
+        404: {'description': 'No subscription found'},
     }
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @public_schema_only
-def add_payment_method(request):
+def set_default_payment_method(request):
     """
-    Add payment method to customer.
+    Set default payment method in Stripe.
     """
-    serializer = PaymentMethodSerializer(data=request.data)
-    
-    if not serializer.is_valid():
-        return error_response(
-            message="Invalid payment method data",
-            details=serializer.errors,
-            status_code=status.HTTP_400_BAD_REQUEST
-        )
-    
     try:
         tenant = get_tenant(request)
+        
+        # Check if tenant has a subscription
+        if not hasattr(tenant, 'subscription') or not tenant.subscription:
+            return error_response(
+                message="No subscription found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
         subscription = tenant.subscription
+        customer_id = subscription.stripe_customer_id
         
-        payment_method_id = serializer.validated_data['payment_method_id']
-        set_as_default = serializer.validated_data['set_as_default']
+        payment_method_id = request.data.get('payment_method_id')
+        if not payment_method_id:
+            return error_response(
+                message="payment_method_id is required",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
         
-        # Attach payment method
-        StripeService.attach_payment_method(
-            subscription.stripe_customer_id,
-            payment_method_id,
-            set_as_default
-        )
+        # Set default payment method in Stripe
+        StripeService.set_default_payment_method(customer_id, payment_method_id)
         
         return success_response(
-            message="Payment method added successfully"
+            message="Default payment method updated successfully"
         )
         
-    except Subscription.DoesNotExist:
-        return error_response(
-            message="No subscription found",
-            status_code=status.HTTP_404_NOT_FOUND
-        )
     except Exception as e:
-        logger.error(f"Failed to add payment method: {str(e)}")
+        logger.error(f"Failed to set default payment method: {str(e)}", exc_info=True)
         return error_response(
-            message="Failed to add payment method",
+            message=f"Failed to set default payment method: {str(e)}",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@extend_schema(
+    tags=['Billing'],
+    summary='Remove payment method',
+    description='Remove a payment method from the customer (Owner/Admin only)',
+    responses={
+        200: {'description': 'Payment method removed successfully'},
+        404: {'description': 'No subscription found'},
+    }
+)
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+@public_schema_only
+def remove_payment_method(request, payment_method_id):
+    """
+    Remove (detach) payment method from Stripe.
+    """
+    try:
+        tenant = get_tenant(request)
+        
+        # Check if tenant has a subscription
+        if not hasattr(tenant, 'subscription') or not tenant.subscription:
+            return error_response(
+                message="No subscription found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Detach payment method from Stripe
+        StripeService.detach_payment_method(payment_method_id)
+        
+        return success_response(
+            message="Payment method removed successfully"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to remove payment method: {str(e)}", exc_info=True)
+        return error_response(
+            message=f"Failed to remove payment method: {str(e)}",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# ==================== Webhook Event Handlers ====================
+
+def handle_subscription_updated(event_data):
+    """Handle customer.subscription.updated event."""
+    try:
+        stripe_subscription = event_data['object']
+        subscription_id = stripe_subscription['id']
+        
+        # Find local subscription
+        try:
+            subscription = Subscription.objects.get(stripe_subscription_id=subscription_id)
+            
+            # Update status
+            old_status = subscription.status
+            subscription.status = stripe_subscription['status']
+            subscription.save(update_fields=['status', 'updated_at'])
+            
+            logger.info(f"Subscription {subscription_id} status updated: {old_status} -> {subscription.status}")
+            
+        except Subscription.DoesNotExist:
+            logger.warning(f"Local subscription not found for Stripe ID: {subscription_id}")
+            
+    except Exception as e:
+        logger.error(f"Error handling subscription.updated: {str(e)}", exc_info=True)
+
+
+def handle_subscription_deleted(event_data):
+    """Handle customer.subscription.deleted event."""
+    try:
+        stripe_subscription = event_data['object']
+        subscription_id = stripe_subscription['id']
+        
+        # Find local subscription
+        try:
+            subscription = Subscription.objects.get(stripe_subscription_id=subscription_id)
+            
+            # Mark as canceled
+            subscription.status = 'canceled'
+            subscription.save(update_fields=['status', 'updated_at'])
+            
+            logger.info(f"Subscription {subscription_id} marked as canceled")
+            
+        except Subscription.DoesNotExist:
+            logger.warning(f"Local subscription not found for Stripe ID: {subscription_id}")
+            
+    except Exception as e:
+        logger.error(f"Error handling subscription.deleted: {str(e)}", exc_info=True)
+
+
+def handle_invoice_payment_succeeded(event_data):
+    """Handle invoice.payment_succeeded event."""
+    try:
+        invoice = event_data['object']
+        invoice_id = invoice['id']
+        amount_paid = invoice['amount_paid'] / 100  # Convert from cents
+        
+        logger.info(f"Invoice payment succeeded: {invoice_id} - ${amount_paid}")
+        
+        # Optionally update subscription status if needed
+        if invoice.get('subscription'):
+            subscription_id = invoice['subscription']
+            try:
+                subscription = Subscription.objects.get(stripe_subscription_id=subscription_id)
+                if subscription.status != 'active':
+                    subscription.status = 'active'
+                    subscription.save(update_fields=['status', 'updated_at'])
+                    logger.info(f"Subscription {subscription_id} status updated to active after payment")
+            except Subscription.DoesNotExist:
+                pass
+                
+    except Exception as e:
+        logger.error(f"Error handling invoice.payment_succeeded: {str(e)}", exc_info=True)
+
+
+def handle_invoice_payment_failed(event_data):
+    """Handle invoice.payment_failed event."""
+    try:
+        invoice = event_data['object']
+        invoice_id = invoice['id']
+        customer_id = invoice['customer']
+        
+        logger.warning(f"Invoice payment failed: {invoice_id} for customer {customer_id}")
+        
+        # Update subscription status to past_due
+        if invoice.get('subscription'):
+            subscription_id = invoice['subscription']
+            try:
+                subscription = Subscription.objects.get(stripe_subscription_id=subscription_id)
+                subscription.status = 'past_due'
+                subscription.save(update_fields=['status', 'updated_at'])
+                logger.info(f"Subscription {subscription_id} status updated to past_due")
+            except Subscription.DoesNotExist:
+                logger.warning(f"Local subscription not found for Stripe ID: {subscription_id}")
+                
+    except Exception as e:
+        logger.error(f"Error handling invoice.payment_failed: {str(e)}", exc_info=True)
 
 
 @extend_schema(
@@ -746,7 +1088,7 @@ def add_payment_method(request):
 @permission_classes([AllowAny])
 def stripe_webhook(request):
     """
-    Handle Stripe webhooks.
+    Handle Stripe webhooks with comprehensive event handlers.
     """
     try:
         import stripe
@@ -755,31 +1097,47 @@ def stripe_webhook(request):
         payload = request.body
         sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
         
+        # Verify webhook signature
         try:
+            webhook_secret = getattr(settings, 'STRIPE_WEBHOOK_SECRET', None)
+            if not webhook_secret:
+                logger.error("STRIPE_WEBHOOK_SECRET not configured")
+                return HttpResponse(status=500)
+            
             event = stripe.Webhook.construct_event(
-                payload, sig_header, settings.STRIPE_WEBHOOK_SECRET
+                payload, sig_header, webhook_secret
             )
-        except ValueError:
-            logger.error("Invalid payload in Stripe webhook")
+        except ValueError as e:
+            logger.error(f"Invalid payload in Stripe webhook: {str(e)}")
             return HttpResponse(status=400)
-        except stripe.error.SignatureVerificationError:
-            logger.error("Invalid signature in Stripe webhook")
+        except stripe.error.SignatureVerificationError as e:
+            logger.error(f"Invalid signature in Stripe webhook: {str(e)}")
             return HttpResponse(status=400)
         
-        # Handle the event
-        if event['type'] == 'payment_intent.succeeded':
-            payment_intent = event['data']['object']
-            logger.info(f"Payment succeeded: {payment_intent['id']}")
-            
-        elif event['type'] == 'payment_intent.payment_failed':
-            payment_intent = event['data']['object']
-            logger.warning(f"Payment failed: {payment_intent['id']}")
-            
+        # Get event type and data
+        event_type = event['type']
+        event_data = event['data']
+        
+        logger.info(f"Received Stripe webhook: {event_type}")
+        
+        # Route to appropriate handler
+        handlers = {
+            'customer.subscription.updated': handle_subscription_updated,
+            'customer.subscription.deleted': handle_subscription_deleted,
+            'invoice.payment_succeeded': handle_invoice_payment_succeeded,
+            'invoice.payment_failed': handle_invoice_payment_failed,
+        }
+        
+        handler = handlers.get(event_type)
+        if handler:
+            handler(event_data)
         else:
-            logger.info(f"Unhandled Stripe event type: {event['type']}")
+            logger.info(f"Unhandled Stripe event type: {event_type}")
         
+        # Always return 200 to acknowledge receipt
         return HttpResponse(status=200)
         
     except Exception as e:
         logger.error(f"Error handling Stripe webhook: {str(e)}", exc_info=True)
+        # Return 500 so Stripe will retry
         return HttpResponse(status=500)

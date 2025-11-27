@@ -66,7 +66,8 @@ class SubscriptionPlan(models.Model):
 
 class Subscription(models.Model):
     """
-    Tenant subscriptions.
+    Tenant subscriptions - Stripe is the source of truth for billing data.
+    This model stores only Stripe references and local usage tracking.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.OneToOneField(
@@ -76,11 +77,11 @@ class Subscription(models.Model):
     )
     plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT)
     
-    # Stripe integration
-    stripe_customer_id = models.CharField(max_length=255, blank=True, null=True)
-    stripe_subscription_id = models.CharField(max_length=255, blank=True, null=True, unique=True)
+    # Stripe references (source of truth for billing)
+    stripe_customer_id = models.CharField(max_length=255)
+    stripe_subscription_id = models.CharField(max_length=255, unique=True)
     
-    # Subscription details
+    # Local status cache (synced via webhooks)
     status = models.CharField(
         max_length=50,
         choices=[
@@ -95,29 +96,10 @@ class Subscription(models.Model):
         default='trialing'
     )
     
-    billing_cycle = models.CharField(
-        max_length=20,
-        choices=[
-            ('monthly', 'Monthly'),
-            ('yearly', 'Yearly'),
-        ],
-        default='monthly'
-    )
-    
-    # Billing periods
-    current_period_start = models.DateTimeField()
-    current_period_end = models.DateTimeField()
-    
-    # Cancellation
-    cancel_at_period_end = models.BooleanField(default=False)
-    canceled_at = models.DateTimeField(null=True, blank=True)
+    # Cancellation tracking
     cancellation_reason = models.TextField(blank=True)
     
-    # Trial
-    trial_start = models.DateTimeField(null=True, blank=True)
-    trial_end = models.DateTimeField(null=True, blank=True)
-    
-    # Usage tracking
+    # Usage tracking (local only)
     current_users_count = models.IntegerField(default=0)
     current_equipment_count = models.IntegerField(default=0)
     current_storage_gb = models.DecimalField(max_digits=10, decimal_places=2, default=0)
@@ -131,6 +113,10 @@ class Subscription(models.Model):
         db_table = 'billing_subscriptions'
         verbose_name = 'Subscription'
         verbose_name_plural = 'Subscriptions'
+        indexes = [
+            models.Index(fields=['stripe_customer_id']),
+            models.Index(fields=['stripe_subscription_id']),
+        ]
     
     def __str__(self):
         return f"{self.tenant.name} - {self.plan.name}"
@@ -145,18 +131,38 @@ class Subscription(models.Model):
         """Check if subscription is in trial."""
         return self.status == 'trialing'
     
-    @property
-    def days_until_renewal(self):
-        """Days until next billing cycle or trial end."""
-        # If in trial, show days until trial ends (not billing period)
-        if self.is_trial and self.trial_end:
-            delta = self.trial_end - timezone.now()
-            return max(0, delta.days)
-        # Otherwise show days until next billing cycle
-        elif self.current_period_end:
-            delta = self.current_period_end - timezone.now()
-            return max(0, delta.days)
-        return 0
+    def sync_from_stripe(self):
+        """
+        Fetch latest subscription data from Stripe and update local status.
+        Returns the Stripe subscription object.
+        """
+        if not self.stripe_subscription_id:
+            raise ValueError("No Stripe subscription ID found")
+        
+        try:
+            import stripe
+            from django.conf import settings
+            
+            stripe.api_key = settings.STRIPE_SECRET_KEY
+            
+            # Retrieve subscription from Stripe
+            stripe_subscription = stripe.Subscription.retrieve(self.stripe_subscription_id)
+            
+            # Update local status
+            self.status = stripe_subscription.status
+            self.save(update_fields=['status', 'updated_at'])
+            
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(f"Synced subscription {self.id} from Stripe. Status: {self.status}")
+            
+            return stripe_subscription
+            
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to sync subscription from Stripe: {str(e)}")
+            raise
     
     def check_usage_limits(self):
         """Check if usage is within plan limits."""
@@ -178,8 +184,6 @@ class Subscription(models.Model):
     
     def update_usage_counts(self):
         """Update current usage counts."""
-        from django.db import transaction
-        
         try:
             # User model is in SHARED_APPS (public schema), so we need to count via TenantMember
             from apps.tenants.models import TenantMember
@@ -215,198 +219,3 @@ class Subscription(models.Model):
             import logging
             logger = logging.getLogger(__name__)
             logger.warning(f"Failed to update usage counts: {str(e)}")
-
-
-class Invoice(models.Model):
-    """
-    Billing invoices.
-    """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    tenant = models.ForeignKey(
-        'tenants.Tenant', 
-        on_delete=models.CASCADE, 
-        related_name='invoices'
-    )
-    subscription = models.ForeignKey(
-        Subscription, 
-        on_delete=models.CASCADE, 
-        related_name='invoices',
-        null=True, 
-        blank=True
-    )
-    
-    # Invoice details
-    invoice_number = models.CharField(max_length=50, unique=True)
-    stripe_invoice_id = models.CharField(max_length=255, blank=True)
-    
-    # Amounts
-    subtotal = models.DecimalField(max_digits=10, decimal_places=2)
-    tax = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    total = models.DecimalField(max_digits=10, decimal_places=2)
-    currency = models.CharField(max_length=3, default='USD')
-    
-    # Status
-    status = models.CharField(
-        max_length=50,
-        choices=[
-            ('draft', 'Draft'),
-            ('open', 'Open'),
-            ('paid', 'Paid'),
-            ('void', 'Void'),
-            ('uncollectible', 'Uncollectible'),
-        ],
-        default='draft'
-    )
-    
-    # Dates
-    issue_date = models.DateField(default=timezone.now)
-    due_date = models.DateField()
-    paid_at = models.DateTimeField(null=True, blank=True)
-    
-    # Files
-    invoice_pdf_url = models.URLField(blank=True)
-    
-    # Billing period
-    period_start = models.DateField()
-    period_end = models.DateField()
-    
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'billing_invoices'
-        ordering = ['-created_at']
-        verbose_name = 'Invoice'
-        verbose_name_plural = 'Invoices'
-    
-    def __str__(self):
-        return f"Invoice {self.invoice_number} - {self.tenant.name}"
-    
-    def generate_invoice_number(self):
-        """Generate unique invoice number."""
-        if not self.invoice_number:
-            year = timezone.now().year
-            month = timezone.now().month
-            
-            # Get count of invoices this month
-            count = Invoice.objects.filter(
-                created_at__year=year,
-                created_at__month=month
-            ).count() + 1
-            
-            self.invoice_number = f"FP-{year}{month:02d}-{count:04d}"
-    
-    def save(self, *args, **kwargs):
-        if not self.invoice_number:
-            self.generate_invoice_number()
-        super().save(*args, **kwargs)
-
-
-class Payment(models.Model):
-    """
-    Payment records.
-    """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    tenant = models.ForeignKey(
-        'tenants.Tenant', 
-        on_delete=models.CASCADE, 
-        related_name='payments'
-    )
-    invoice = models.ForeignKey(
-        Invoice, 
-        on_delete=models.CASCADE, 
-        related_name='payments',
-        null=True, 
-        blank=True
-    )
-    
-    # Stripe integration
-    stripe_payment_intent_id = models.CharField(max_length=255, blank=True)
-    stripe_charge_id = models.CharField(max_length=255, blank=True)
-    
-    # Payment details
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    currency = models.CharField(max_length=3, default='USD')
-    
-    # Payment method
-    payment_method = models.CharField(
-        max_length=50,
-        choices=[
-            ('card', 'Credit Card'),
-            ('bank_transfer', 'Bank Transfer'),
-            ('ach', 'ACH'),
-            ('wire', 'Wire Transfer'),
-        ],
-        default='card'
-    )
-    
-    # Status
-    status = models.CharField(
-        max_length=50,
-        choices=[
-            ('pending', 'Pending'),
-            ('succeeded', 'Succeeded'),
-            ('failed', 'Failed'),
-            ('canceled', 'Canceled'),
-            ('refunded', 'Refunded'),
-        ],
-        default='pending'
-    )
-    
-    # Failure information
-    failure_code = models.CharField(max_length=100, blank=True)
-    failure_message = models.TextField(blank=True)
-    
-    # Timestamps
-    processed_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        db_table = 'billing_payments'
-        ordering = ['-created_at']
-        verbose_name = 'Payment'
-        verbose_name_plural = 'Payments'
-    
-    def __str__(self):
-        return f"Payment {self.amount} {self.currency} - {self.tenant.name}"
-
-
-class UsageRecord(models.Model):
-    """
-    Track usage for billing purposes.
-    """
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    tenant = models.ForeignKey(
-        'tenants.Tenant', 
-        on_delete=models.CASCADE, 
-        related_name='usage_records'
-    )
-    
-    # Usage metrics
-    metric_name = models.CharField(max_length=100)  # users, equipment, storage, api_calls
-    value = models.DecimalField(max_digits=15, decimal_places=2)
-    unit = models.CharField(max_length=50)  # count, gb, calls
-    
-    # Time period
-    recorded_at = models.DateTimeField(default=timezone.now)
-    period_start = models.DateTimeField()
-    period_end = models.DateTimeField()
-    
-    # Metadata
-    metadata = models.JSONField(default=dict, blank=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        db_table = 'billing_usage_records'
-        ordering = ['-recorded_at']
-        verbose_name = 'Usage Record'
-        verbose_name_plural = 'Usage Records'
-        indexes = [
-            models.Index(fields=['tenant', 'metric_name', 'recorded_at']),
-        ]
-    
-    def __str__(self):
-        return f"{self.tenant.name} - {self.metric_name}: {self.value} {self.unit}"

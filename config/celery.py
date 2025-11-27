@@ -20,29 +20,21 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
 
 # Celery Beat Schedule - Automated recurring tasks
+# Note: Subscription renewals, payments, and invoicing are now fully managed by Stripe.
+# Stripe automatically handles renewals, retries, and dunning via webhooks.
 app.conf.beat_schedule = {
-    # Process subscription renewals daily at 2 AM
-    'process-subscription-renewals': {
-        'task': 'apps.billing.tasks.process_subscription_renewals',
-        'schedule': crontab(hour=2, minute=0),  # 2:00 AM daily
-    },
-    
-    # Retry failed payments daily at 3 AM
-    'retry-failed-payments': {
-        'task': 'apps.billing.tasks.retry_failed_payments',
-        'schedule': crontab(hour=3, minute=0),  # 3:00 AM daily
-    },
-    
-    # Send renewal reminders daily at 9 AM
-    'send-renewal-reminders': {
-        'task': 'apps.billing.tasks.send_renewal_reminders',
-        'schedule': crontab(hour=9, minute=0),  # 9:00 AM daily
-    },
-    
     # Update usage counts daily at midnight
+    # This is still needed for local usage tracking (not managed by Stripe)
     'update-usage-counts': {
         'task': 'apps.billing.tasks.update_all_usage_counts',
         'schedule': crontab(hour=0, minute=0),  # Midnight daily
+    },
+    
+    # Sync subscriptions from Stripe every 6 hours (backup to webhooks)
+    # This ensures local data stays in sync even if webhook events are missed
+    'sync-subscriptions-from-stripe': {
+        'task': 'apps.billing.tasks.sync_subscriptions_from_stripe',
+        'schedule': crontab(hour='*/6', minute=0),  # Every 6 hours
     },
 }
 

@@ -5,7 +5,7 @@ Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from rest_framework import serializers
-from .models import SubscriptionPlan, Subscription, Invoice, Payment
+from .models import SubscriptionPlan, Subscription
 
 
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
@@ -24,33 +24,136 @@ class SubscriptionPlanSerializer(serializers.ModelSerializer):
         ]
 
 
-class SubscriptionSerializer(serializers.ModelSerializer):
+class SubscriptionSerializer(serializers.Serializer):
     """
-    Serializer for subscriptions.
+    Serializer for subscriptions - fetches billing data from Stripe dynamically.
     """
+    id = serializers.UUIDField(read_only=True)
     plan = SubscriptionPlanSerializer(read_only=True)
-    is_active = serializers.ReadOnlyField()
-    is_trial = serializers.ReadOnlyField()
-    days_until_renewal = serializers.ReadOnlyField()
-    next_renewal_date = serializers.SerializerMethodField()
+    status = serializers.CharField(read_only=True)
+    
+    # Stripe data (fetched dynamically from Stripe subscription)
+    billing_cycle = serializers.SerializerMethodField()
+    current_period_start = serializers.SerializerMethodField()
+    current_period_end = serializers.SerializerMethodField()
+    cancel_at_period_end = serializers.SerializerMethodField()
+    canceled_at = serializers.SerializerMethodField()
+    trial_start = serializers.SerializerMethodField()
+    trial_end = serializers.SerializerMethodField()
+    
+    # Computed fields
+    is_active = serializers.SerializerMethodField()
+    is_trial = serializers.SerializerMethodField()
+    days_until_renewal = serializers.SerializerMethodField()
+    
+    # Local usage data
+    current_users_count = serializers.IntegerField(read_only=True)
+    current_equipment_count = serializers.IntegerField(read_only=True)
+    current_storage_gb = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     usage_limits_exceeded = serializers.SerializerMethodField()
     
-    class Meta:
-        model = Subscription
-        fields = [
-            'id', 'plan', 'status', 'billing_cycle', 'current_period_start',
-            'current_period_end', 'cancel_at_period_end', 'canceled_at',
-            'trial_start', 'trial_end', 'is_active', 'is_trial',
-            'days_until_renewal', 'next_renewal_date', 'current_users_count', 
-            'current_equipment_count', 'current_storage_gb', 'usage_limits_exceeded', 
-            'created_at'
-        ]
+    # Timestamps
+    created_at = serializers.DateTimeField(read_only=True)
     
-    def get_next_renewal_date(self, obj):
-        """Get the next renewal date (trial end if in trial, otherwise billing period end)."""
-        if obj.is_trial and obj.trial_end:
-            return obj.trial_end
-        return obj.current_period_end
+    def _get_stripe_subscription(self, obj):
+        """Get Stripe subscription from context or fetch it."""
+        # Check if Stripe subscription is in context (passed from view)
+        stripe_sub = self.context.get('stripe_subscription')
+        if stripe_sub:
+            return stripe_sub
+        
+        # Otherwise fetch from Stripe
+        try:
+            from .stripe_service import StripeService
+            return StripeService.get_subscription(obj.stripe_subscription_id)
+        except Exception:
+            return None
+    
+    def get_billing_cycle(self, obj):
+        """Get billing cycle from Stripe subscription."""
+        stripe_sub = self._get_stripe_subscription(obj)
+        if stripe_sub and stripe_sub.items and len(stripe_sub.items.data) > 0:
+            interval = stripe_sub.items.data[0].price.recurring.interval
+            return 'yearly' if interval == 'year' else 'monthly'
+        return None
+    
+    def get_current_period_start(self, obj):
+        """Get current period start from Stripe subscription."""
+        stripe_sub = self._get_stripe_subscription(obj)
+        if stripe_sub and stripe_sub.current_period_start:
+            from datetime import datetime
+            from django.utils import timezone
+            return datetime.fromtimestamp(stripe_sub.current_period_start, tz=timezone.utc)
+        return None
+    
+    def get_current_period_end(self, obj):
+        """Get current period end from Stripe subscription."""
+        stripe_sub = self._get_stripe_subscription(obj)
+        if stripe_sub and stripe_sub.current_period_end:
+            from datetime import datetime
+            from django.utils import timezone
+            return datetime.fromtimestamp(stripe_sub.current_period_end, tz=timezone.utc)
+        return None
+    
+    def get_cancel_at_period_end(self, obj):
+        """Get cancel at period end from Stripe subscription."""
+        stripe_sub = self._get_stripe_subscription(obj)
+        if stripe_sub:
+            return stripe_sub.cancel_at_period_end
+        return False
+    
+    def get_canceled_at(self, obj):
+        """Get canceled at timestamp from Stripe subscription."""
+        stripe_sub = self._get_stripe_subscription(obj)
+        if stripe_sub and stripe_sub.canceled_at:
+            from datetime import datetime
+            from django.utils import timezone
+            return datetime.fromtimestamp(stripe_sub.canceled_at, tz=timezone.utc)
+        return None
+    
+    def get_trial_start(self, obj):
+        """Get trial start from Stripe subscription."""
+        stripe_sub = self._get_stripe_subscription(obj)
+        if stripe_sub and stripe_sub.trial_start:
+            from datetime import datetime
+            from django.utils import timezone
+            return datetime.fromtimestamp(stripe_sub.trial_start, tz=timezone.utc)
+        return None
+    
+    def get_trial_end(self, obj):
+        """Get trial end from Stripe subscription."""
+        stripe_sub = self._get_stripe_subscription(obj)
+        if stripe_sub and stripe_sub.trial_end:
+            from datetime import datetime
+            from django.utils import timezone
+            return datetime.fromtimestamp(stripe_sub.trial_end, tz=timezone.utc)
+        return None
+    
+    def get_is_active(self, obj):
+        """Check if subscription is active."""
+        return obj.is_active
+    
+    def get_is_trial(self, obj):
+        """Check if subscription is in trial."""
+        return obj.is_trial
+    
+    def get_days_until_renewal(self, obj):
+        """Calculate days until next renewal."""
+        from django.utils import timezone
+        
+        # Get current period end from Stripe
+        current_period_end = self.get_current_period_end(obj)
+        if current_period_end:
+            delta = current_period_end - timezone.now()
+            return max(0, delta.days)
+        
+        # Fallback to trial end if in trial
+        trial_end = self.get_trial_end(obj)
+        if trial_end:
+            delta = trial_end - timezone.now()
+            return max(0, delta.days)
+        
+        return 0
     
     def get_usage_limits_exceeded(self, obj):
         """Get list of exceeded usage limits."""
@@ -95,31 +198,81 @@ class UpdateSubscriptionSerializer(serializers.Serializer):
         return value
 
 
-class InvoiceSerializer(serializers.ModelSerializer):
+class StripeInvoiceSerializer(serializers.Serializer):
     """
-    Serializer for invoices.
+    Serializer for Stripe invoices.
     """
+    id = serializers.CharField()  # Stripe invoice ID
+    number = serializers.CharField()
+    amount_due = serializers.IntegerField()  # In cents
+    amount_paid = serializers.IntegerField()  # In cents
+    currency = serializers.CharField()
+    status = serializers.CharField()
+    created = serializers.IntegerField()  # Unix timestamp
+    due_date = serializers.IntegerField(allow_null=True)  # Unix timestamp
+    paid_at = serializers.IntegerField(allow_null=True)  # Unix timestamp (status_transitions.paid_at)
+    invoice_pdf = serializers.URLField(allow_null=True)
+    period_start = serializers.IntegerField(allow_null=True)  # Unix timestamp
+    period_end = serializers.IntegerField(allow_null=True)  # Unix timestamp
     
-    class Meta:
-        model = Invoice
-        fields = [
-            'id', 'invoice_number', 'subtotal', 'tax', 'total', 'currency',
-            'status', 'issue_date', 'due_date', 'paid_at', 'invoice_pdf_url',
-            'period_start', 'period_end', 'created_at'
-        ]
+    def to_representation(self, instance):
+        """Convert Stripe invoice object to dict."""
+        # instance is a Stripe Invoice object
+        return {
+            'id': instance.id,
+            'number': instance.number,
+            'amount_due': instance.amount_due,
+            'amount_paid': instance.amount_paid,
+            'currency': instance.currency,
+            'status': instance.status,
+            'created': instance.created,
+            'due_date': instance.due_date,
+            'paid_at': instance.status_transitions.paid_at if instance.status_transitions else None,
+            'invoice_pdf': instance.invoice_pdf,
+            'period_start': instance.period_start,
+            'period_end': instance.period_end,
+        }
 
 
-class PaymentSerializer(serializers.ModelSerializer):
+class StripeChargeSerializer(serializers.Serializer):
     """
-    Serializer for payments.
+    Serializer for Stripe charges (payments).
     """
+    id = serializers.CharField()  # Stripe charge ID
+    amount = serializers.IntegerField()  # In cents
+    currency = serializers.CharField()
+    status = serializers.CharField()
+    payment_method_details = serializers.DictField()
+    failure_code = serializers.CharField(allow_null=True)
+    failure_message = serializers.CharField(allow_null=True)
+    created = serializers.IntegerField()  # Unix timestamp
+    receipt_url = serializers.URLField(allow_null=True)
     
-    class Meta:
-        model = Payment
-        fields = [
-            'id', 'amount', 'currency', 'payment_method', 'status',
-            'failure_code', 'failure_message', 'processed_at', 'created_at'
-        ]
+    def to_representation(self, instance):
+        """Convert Stripe charge object to dict."""
+        # instance is a Stripe Charge object
+        payment_method_details = {}
+        if instance.payment_method_details:
+            if instance.payment_method_details.card:
+                payment_method_details = {
+                    'type': 'card',
+                    'brand': instance.payment_method_details.card.brand,
+                    'last4': instance.payment_method_details.card.last4,
+                    'exp_month': instance.payment_method_details.card.exp_month,
+                    'exp_year': instance.payment_method_details.card.exp_year,
+                }
+        
+        return {
+            'id': instance.id,
+            'amount': instance.amount,
+            'currency': instance.currency,
+            'status': instance.status,
+            'payment_method_details': payment_method_details,
+            'failure_code': instance.failure_code,
+            'failure_message': instance.failure_message,
+            'created': instance.created,
+            'receipt_url': instance.receipt_url,
+        }
 
 
 class PaymentMethodSerializer(serializers.Serializer):
@@ -130,33 +283,51 @@ class PaymentMethodSerializer(serializers.Serializer):
     set_as_default = serializers.BooleanField(default=False)
 
 
+class StripePaymentMethodSerializer(serializers.Serializer):
+    """
+    Serializer for Stripe payment methods.
+    """
+    id = serializers.CharField()
+    type = serializers.CharField()
+    card = serializers.DictField()
+    
+    def to_representation(self, instance):
+        """Convert Stripe payment method object to dict."""
+        # instance is a Stripe PaymentMethod object
+        card_data = {}
+        if instance.card:
+            card_data = {
+                'brand': instance.card.brand,
+                'last4': instance.card.last4,
+                'exp_month': instance.card.exp_month,
+                'exp_year': instance.card.exp_year,
+            }
+        
+        return {
+            'id': instance.id,
+            'type': instance.type,
+            'card': card_data,
+        }
+
+
 class BillingOverviewSerializer(serializers.Serializer):
     """
-    Serializer for billing overview/dashboard.
+    Serializer for billing overview/dashboard - fetches data from Stripe.
     """
-    subscription = SubscriptionSerializer()
-    current_invoice = InvoiceSerializer(allow_null=True)
-    recent_payments = PaymentSerializer(many=True)
+    subscription = SubscriptionSerializer(allow_null=True)
+    current_invoice = StripeInvoiceSerializer(allow_null=True)
+    recent_payments = StripeChargeSerializer(many=True)
     usage_summary = serializers.DictField()
     
     def to_representation(self, instance):
-        """Custom representation for billing overview."""
+        """Custom representation for billing overview using Stripe data."""
         tenant = instance
         
-        try:
-            subscription = tenant.subscription
-        except Subscription.DoesNotExist:
-            subscription = None
-        
-        # Get current invoice (latest unpaid)
-        current_invoice = tenant.invoices.filter(
-            status__in=['draft', 'open']
-        ).first()
-        
-        # Get recent payments
-        recent_payments = tenant.payments.filter(
-            status='succeeded'
-        ).order_by('-created_at')[:5]
+        # Get subscription from context
+        subscription = self.context.get('subscription')
+        stripe_subscription = self.context.get('stripe_subscription')
+        current_invoice = self.context.get('current_invoice')
+        recent_charges = self.context.get('recent_charges', [])
         
         # Calculate usage summary
         usage_summary = {}
@@ -180,8 +351,8 @@ class BillingOverviewSerializer(serializers.Serializer):
             }
         
         return {
-            'subscription': SubscriptionSerializer(subscription).data if subscription else None,
-            'current_invoice': InvoiceSerializer(current_invoice).data if current_invoice else None,
-            'recent_payments': PaymentSerializer(recent_payments, many=True).data,
+            'subscription': SubscriptionSerializer(subscription, context={'stripe_subscription': stripe_subscription}).data if subscription else None,
+            'current_invoice': StripeInvoiceSerializer(current_invoice).data if current_invoice else None,
+            'recent_payments': StripeChargeSerializer(recent_charges, many=True).data,
             'usage_summary': usage_summary
         }

@@ -26,7 +26,11 @@ urlpatterns = [
     
     # Payment processing with Stripe
     path('setup-intent/', views.create_setup_intent, name='create_setup_intent'),
-    path('payment-method/add/', views.add_payment_method, name='add_payment_method'),
+    
+    # Payment method management
+    path('payment-methods/', views.list_payment_methods, name='list_payment_methods'),
+    path('payment-methods/set-default/', views.set_default_payment_method, name='set_default_payment_method'),
+    path('payment-methods/<str:payment_method_id>/', views.remove_payment_method, name='remove_payment_method'),
     
     # Stripe webhooks
     path('webhooks/stripe/', views.stripe_webhook, name='stripe_webhook'),
