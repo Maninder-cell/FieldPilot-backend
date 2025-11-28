@@ -13,7 +13,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse
 from drf_spectacular.utils import extend_schema, OpenApiExample
 import logging
-
+import stripe
 from .models import SubscriptionPlan, Subscription
 from .serializers import (
     SubscriptionPlanSerializer, SubscriptionSerializer, CreateSubscriptionSerializer,
@@ -877,12 +877,20 @@ def list_payment_methods(request):
         subscription = tenant.subscription
         customer_id = subscription.stripe_customer_id
         
+        # Fetch customer to get default payment method
+        customer = stripe.Customer.retrieve(customer_id)
+        default_payment_method_id = customer.invoice_settings.default_payment_method if customer.invoice_settings else None
+        
         # Fetch payment methods from Stripe
         payment_methods = StripeService.list_payment_methods(customer_id)
         
-        # Serialize payment methods
+        # Serialize payment methods with default flag
         from .serializers import StripePaymentMethodSerializer
-        serializer = StripePaymentMethodSerializer(payment_methods, many=True)
+        serializer = StripePaymentMethodSerializer(
+            payment_methods, 
+            many=True,
+            context={'default_payment_method_id': default_payment_method_id}
+        )
         
         return success_response(
             data=serializer.data,
@@ -1105,7 +1113,6 @@ def stripe_webhook(request):
     Handle Stripe webhooks with comprehensive event handlers.
     """
     try:
-        import stripe
         from django.conf import settings
         
         payload = request.body

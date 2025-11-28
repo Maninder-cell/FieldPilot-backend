@@ -345,6 +345,7 @@ class StripePaymentMethodSerializer(serializers.Serializer):
     id = serializers.CharField()
     type = serializers.CharField()
     card = serializers.DictField()
+    is_default = serializers.BooleanField()
     
     def to_representation(self, instance):
         """Convert Stripe payment method object to dict."""
@@ -358,10 +359,15 @@ class StripePaymentMethodSerializer(serializers.Serializer):
                 'exp_year': instance.card.exp_year,
             }
         
+        # Check if this is the default payment method
+        default_payment_method_id = self.context.get('default_payment_method_id')
+        is_default = instance.id == default_payment_method_id
+        
         return {
             'id': instance.id,
             'type': instance.type,
             'card': card_data,
+            'is_default': is_default,
         }
 
 
