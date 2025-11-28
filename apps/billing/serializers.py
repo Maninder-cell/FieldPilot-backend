@@ -45,6 +45,9 @@ class SubscriptionSerializer(serializers.Serializer):
     is_active = serializers.SerializerMethodField()
     is_trial = serializers.SerializerMethodField()
     days_until_renewal = serializers.SerializerMethodField()
+    next_payment_amount = serializers.SerializerMethodField()
+    next_renewal_date = serializers.SerializerMethodField()
+    has_proration_credit = serializers.SerializerMethodField()
     
     # Local usage data
     current_users_count = serializers.IntegerField(read_only=True)
@@ -188,6 +191,77 @@ class SubscriptionSerializer(serializers.Serializer):
     def get_usage_limits_exceeded(self, obj):
         """Get list of exceeded usage limits."""
         return obj.check_usage_limits()
+    
+    def get_next_payment_amount(self, obj):
+        """Get the next payment amount from Stripe upcoming invoice (includes prorations and credits)."""
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        try:
+            from .stripe_service import StripeService
+            
+            logger.info(f"Fetching upcoming invoice for subscription: {obj.stripe_subscription_id}")
+            
+            # Get upcoming invoice from Stripe
+            upcoming_invoice = StripeService.get_upcoming_invoice(obj.stripe_subscription_id)
+            
+            if upcoming_invoice:
+                # Use amount_remaining instead of amount_due
+                # amount_remaining is the actual amount to be charged after applying credits/balance
+                # amount_due is the total before credits
+                amount_remaining = float(upcoming_invoice.amount_remaining) / 100.0
+                amount_due = float(upcoming_invoice.amount_due) / 100.0
+                
+                logger.info(f"Upcoming invoice - amount_due: ${amount_due}, amount_remaining: ${amount_remaining} (will charge)")
+                
+                # Return the actual amount that will be charged
+                return max(0.0, amount_remaining)  # Ensure non-negative
+            else:
+                logger.warning("No upcoming invoice found from Stripe, using plan price")
+            
+            # Fallback to plan pricing if no upcoming invoice
+            if obj.plan:
+                if obj.billing_cycle == 'yearly':
+                    fallback_amount = float(obj.plan.price_yearly)
+                else:
+                    fallback_amount = float(obj.plan.price_monthly)
+                logger.info(f"Using plan price as fallback: ${fallback_amount}")
+                return fallback_amount
+        except Exception as e:
+            logger.error(f"Error getting upcoming invoice: {str(e)}", exc_info=True)
+            
+            # Fallback to plan pricing
+            if obj.plan:
+                if obj.billing_cycle == 'yearly':
+                    return float(obj.plan.price_yearly)
+                else:
+                    return float(obj.plan.price_monthly)
+        
+        return 0.0
+    
+    def get_next_renewal_date(self, obj):
+        """Get next renewal date (trial_end if in trial, otherwise current_period_end)."""
+        if self.get_is_trial(obj):
+            return self.get_trial_end(obj)
+        return self.get_current_period_end(obj)
+    
+    def get_has_proration_credit(self, obj):
+        """Check if there's a proration credit applied (e.g., from downgrade)."""
+        try:
+            from .stripe_service import StripeService
+            
+            # Get upcoming invoice from Stripe
+            upcoming_invoice = StripeService.get_upcoming_invoice(obj.stripe_subscription_id)
+            
+            if upcoming_invoice:
+                # Check if there are any credit line items (negative amounts)
+                for line in upcoming_invoice.lines.data:
+                    if line.amount < 0:
+                        return True
+            
+            return False
+        except Exception:
+            return False
 
 
 class CreateSubscriptionSerializer(serializers.Serializer):

@@ -431,6 +431,48 @@ class StripeService:
     
     @staticmethod
     @handle_stripe_errors(max_retries=3)
+    def get_upcoming_invoice(subscription_id: str) -> Optional['stripe.Invoice']:
+        """
+        Get the upcoming invoice for a subscription.
+        This shows what will be charged on the next billing cycle, including prorations.
+        
+        Args:
+            subscription_id: Stripe subscription ID
+            
+        Returns:
+            stripe.Invoice object or None if no upcoming invoice
+        """
+        if not STRIPE_ENABLED:
+            raise ValueError("Stripe billing system is not enabled.")
+        
+        try:
+            logger.info(f"Retrieving upcoming invoice for subscription: {subscription_id}")
+            
+            # Get the subscription to find the customer
+            subscription = stripe.Subscription.retrieve(subscription_id)
+            
+            # Retrieve upcoming invoice for the customer and subscription
+            upcoming_invoice = stripe.Invoice.upcoming(
+                customer=subscription.customer,
+                subscription=subscription_id
+            )
+            
+            # Log both amount_due and amount_remaining for debugging
+            amount_due = upcoming_invoice.amount_due / 100
+            amount_remaining = upcoming_invoice.amount_remaining / 100
+            logger.info(f"Upcoming invoice - amount_due: ${amount_due}, amount_remaining: ${amount_remaining}")
+            
+            return upcoming_invoice
+        except stripe.error.InvalidRequestError as e:
+            # No upcoming invoice (e.g., subscription canceled)
+            logger.info(f"No upcoming invoice for subscription {subscription_id}: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Error retrieving upcoming invoice: {str(e)}")
+            return None
+    
+    @staticmethod
+    @handle_stripe_errors(max_retries=3)
     def get_invoice(invoice_id: str) -> 'stripe.Invoice':
         """
         Retrieve a single invoice from Stripe.
