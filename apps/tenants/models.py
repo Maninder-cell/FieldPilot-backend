@@ -92,9 +92,30 @@ class Tenant(TenantMixin):
     
     @property
     def is_trial_active(self):
-        """Check if trial is still active."""
+        """
+        Check if trial is still active.
+        
+        Note: This checks the tenant-level trial (before subscription creation).
+        Once a subscription is created, check the subscription's trial status instead,
+        as Stripe is the source of truth for subscription trials.
+        """
         if not self.trial_ends_at:
             return False
+        
+        # Check if tenant has a subscription
+        if hasattr(self, 'subscription') and self.subscription:
+            # If subscription exists, check Stripe subscription trial status
+            # This handles cases where time is simulated in Stripe
+            try:
+                if self.subscription.stripe_subscription_id:
+                    # Sync from Stripe to get accurate trial status
+                    self.subscription.sync_from_stripe()
+                    return self.subscription.is_trial
+            except Exception:
+                # Fall back to local check if Stripe sync fails
+                pass
+        
+        # For tenants without subscriptions, check local trial_ends_at
         return timezone.now() < self.trial_ends_at
     
     def start_trial(self, days=14):
