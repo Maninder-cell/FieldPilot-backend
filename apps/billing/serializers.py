@@ -194,43 +194,28 @@ class SubscriptionSerializer(serializers.Serializer):
     
     def get_next_payment_amount(self, obj):
         """Get the next payment amount from Stripe upcoming invoice (includes prorations and credits)."""
-        import logging
-        logger = logging.getLogger(__name__)
-        
         try:
             from .stripe_service import StripeService
-            
-            logger.info(f"Fetching upcoming invoice for subscription: {obj.stripe_subscription_id}")
             
             # Get upcoming invoice from Stripe
             upcoming_invoice = StripeService.get_upcoming_invoice(obj.stripe_subscription_id)
             
             if upcoming_invoice:
-                # Use amount_remaining instead of amount_due
-                # amount_remaining is the actual amount to be charged after applying credits/balance
-                # amount_due is the total before credits
-                amount_remaining = float(upcoming_invoice.amount_remaining) / 100.0
-                amount_due = float(upcoming_invoice.amount_due) / 100.0
-                
-                logger.info(f"Upcoming invoice - amount_due: ${amount_due}, amount_remaining: ${amount_remaining} (will charge)")
-                
-                # Return the actual amount that will be charged
-                return max(0.0, amount_remaining)  # Ensure non-negative
-            else:
-                logger.warning("No upcoming invoice found from Stripe, using plan price")
+                # Use amount_remaining (actual amount to be charged after credits/prorations)
+                # Fall back to amount_due if amount_remaining is not available
+                if hasattr(upcoming_invoice, 'amount_remaining'):
+                    return max(0.0, float(upcoming_invoice.amount_remaining) / 100.0)
+                elif hasattr(upcoming_invoice, 'amount_due'):
+                    return max(0.0, float(upcoming_invoice.amount_due) / 100.0)
             
             # Fallback to plan pricing if no upcoming invoice
             if obj.plan:
                 if obj.billing_cycle == 'yearly':
-                    fallback_amount = float(obj.plan.price_yearly)
+                    return float(obj.plan.price_yearly)
                 else:
-                    fallback_amount = float(obj.plan.price_monthly)
-                logger.info(f"Using plan price as fallback: ${fallback_amount}")
-                return fallback_amount
-        except Exception as e:
-            logger.error(f"Error getting upcoming invoice: {str(e)}", exc_info=True)
-            
-            # Fallback to plan pricing
+                    return float(obj.plan.price_monthly)
+        except Exception:
+            # Fallback to plan pricing on error
             if obj.plan:
                 if obj.billing_cycle == 'yearly':
                     return float(obj.plan.price_yearly)

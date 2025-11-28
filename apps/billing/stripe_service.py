@@ -446,21 +446,16 @@ class StripeService:
             raise ValueError("Stripe billing system is not enabled.")
         
         try:
-            logger.info(f"Retrieving upcoming invoice for subscription: {subscription_id}")
-            
             # Get the subscription to find the customer
             subscription = stripe.Subscription.retrieve(subscription_id)
             
-            # Retrieve upcoming invoice for the customer and subscription
-            upcoming_invoice = stripe.Invoice.upcoming(
+            # Use create_preview for flexible billing mode subscriptions (Stripe's new API)
+            # This replaces the deprecated Invoice.upcoming() method
+            upcoming_invoice = stripe.Invoice.create_preview(
                 customer=subscription.customer,
-                subscription=subscription_id
+                subscription=subscription_id,
+                expand=['lines']  # Expand lines to get full details
             )
-            
-            # Log both amount_due and amount_remaining for debugging
-            amount_due = upcoming_invoice.amount_due / 100
-            amount_remaining = upcoming_invoice.amount_remaining / 100
-            logger.info(f"Upcoming invoice - amount_due: ${amount_due}, amount_remaining: ${amount_remaining}")
             
             return upcoming_invoice
         except stripe.error.InvalidRequestError as e:
