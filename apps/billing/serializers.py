@@ -77,22 +77,46 @@ class SubscriptionSerializer(serializers.Serializer):
         """Get current period start from Stripe subscription."""
         stripe_sub = self._get_stripe_subscription(obj)
         if stripe_sub:
+            from datetime import datetime
+            from django.utils import timezone
+            
+            # Try current_period_start first
             current_period_start = getattr(stripe_sub, 'current_period_start', None)
             if current_period_start:
-                from datetime import datetime
-                from django.utils import timezone
                 return datetime.fromtimestamp(current_period_start, tz=timezone.utc)
+            
+            # Fall back to billing_cycle_anchor (for subscriptions after trial)
+            billing_cycle_anchor = getattr(stripe_sub, 'billing_cycle_anchor', None)
+            if billing_cycle_anchor:
+                return datetime.fromtimestamp(billing_cycle_anchor, tz=timezone.utc)
+            
+            # Fall back to trial_end (if trial just ended)
+            trial_end = getattr(stripe_sub, 'trial_end', None)
+            if trial_end:
+                return datetime.fromtimestamp(trial_end, tz=timezone.utc)
         return None
     
     def get_current_period_end(self, obj):
         """Get current period end from Stripe subscription."""
         stripe_sub = self._get_stripe_subscription(obj)
         if stripe_sub:
+            from datetime import datetime, timedelta
+            from django.utils import timezone
+            
+            # Try current_period_end first
             current_period_end = getattr(stripe_sub, 'current_period_end', None)
             if current_period_end:
-                from datetime import datetime
-                from django.utils import timezone
                 return datetime.fromtimestamp(current_period_end, tz=timezone.utc)
+            
+            # Calculate from billing_cycle_anchor + billing cycle
+            billing_cycle_anchor = getattr(stripe_sub, 'billing_cycle_anchor', None)
+            if billing_cycle_anchor:
+                start = datetime.fromtimestamp(billing_cycle_anchor, tz=timezone.utc)
+                # Add 30 days for monthly, 365 for yearly (default to monthly)
+                if obj.billing_cycle == 'yearly':
+                    return start + timedelta(days=365)
+                else:
+                    return start + timedelta(days=30)
         return None
     
     def get_cancel_at_period_end(self, obj):
@@ -222,21 +246,33 @@ class StripeInvoiceSerializer(serializers.Serializer):
     period_end = serializers.IntegerField(allow_null=True)  # Unix timestamp
     
     def to_representation(self, instance):
-        """Convert Stripe invoice object to dict."""
-        # instance is a Stripe Invoice object
+        """Convert Stripe invoice object to dict with formatted values."""
+        from datetime import datetime
+        from django.utils import timezone
+        
+        # Helper to convert cents to dollars
+        def cents_to_dollars(cents):
+            return round(cents / 100, 2) if cents else 0
+        
+        # Helper to convert timestamp to ISO string
+        def timestamp_to_iso(timestamp):
+            if timestamp:
+                return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
+            return None
+        
         return {
             'id': instance.id,
             'number': instance.number,
-            'amount_due': instance.amount_due,
-            'amount_paid': instance.amount_paid,
-            'currency': instance.currency,
+            'amount_due': cents_to_dollars(instance.amount_due),
+            'amount_paid': cents_to_dollars(instance.amount_paid),
+            'currency': instance.currency.upper(),
             'status': instance.status,
-            'created': instance.created,
-            'due_date': instance.due_date,
-            'paid_at': instance.status_transitions.paid_at if instance.status_transitions else None,
+            'created': timestamp_to_iso(instance.created),
+            'due_date': timestamp_to_iso(instance.due_date),
+            'paid_at': timestamp_to_iso(instance.status_transitions.paid_at) if instance.status_transitions else None,
             'invoice_pdf': instance.invoice_pdf,
-            'period_start': instance.period_start,
-            'period_end': instance.period_end,
+            'period_start': timestamp_to_iso(instance.period_start),
+            'period_end': timestamp_to_iso(instance.period_end),
         }
 
 
@@ -255,14 +291,27 @@ class StripeChargeSerializer(serializers.Serializer):
     receipt_url = serializers.URLField(allow_null=True)
     
     def to_representation(self, instance):
-        """Convert Stripe charge object to dict."""
-        # instance is a Stripe Charge object
+        """Convert Stripe charge object to dict with formatted values."""
+        from datetime import datetime
+        from django.utils import timezone
+        
+        # Helper to convert cents to dollars
+        def cents_to_dollars(cents):
+            return round(cents / 100, 2) if cents else 0
+        
+        # Helper to convert timestamp to ISO string
+        def timestamp_to_iso(timestamp):
+            if timestamp:
+                return datetime.fromtimestamp(timestamp, tz=timezone.utc).isoformat()
+            return None
+        
+        # Format payment method details
         payment_method_details = {}
         if instance.payment_method_details:
             if instance.payment_method_details.card:
                 payment_method_details = {
                     'type': 'card',
-                    'brand': instance.payment_method_details.card.brand,
+                    'brand': instance.payment_method_details.card.brand.capitalize(),
                     'last4': instance.payment_method_details.card.last4,
                     'exp_month': instance.payment_method_details.card.exp_month,
                     'exp_year': instance.payment_method_details.card.exp_year,
@@ -270,13 +319,13 @@ class StripeChargeSerializer(serializers.Serializer):
         
         return {
             'id': instance.id,
-            'amount': instance.amount,
-            'currency': instance.currency,
+            'amount': cents_to_dollars(instance.amount),
+            'currency': instance.currency.upper(),
             'status': instance.status,
             'payment_method_details': payment_method_details,
             'failure_code': instance.failure_code,
             'failure_message': instance.failure_message,
-            'created': instance.created,
+            'created': timestamp_to_iso(instance.created),
             'receipt_url': instance.receipt_url,
         }
 
