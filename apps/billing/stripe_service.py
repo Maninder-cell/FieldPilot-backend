@@ -215,24 +215,42 @@ class StripeService:
         payment_method_id: str,
         trial_end: Optional[datetime] = None,
         metadata: Optional[Dict] = None
-    ) -> 'stripe.Subscription':
+    ) -> tuple['stripe.Subscription', str]:
         """
         Create a Stripe subscription with trial handling.
         
         Args:
-            customer_id: Stripe customer ID
+            customer_id: Stripe customer ID (may be overridden if payment method belongs to different customer)
             price_id: Stripe price ID for the subscription plan
             payment_method_id: Stripe payment method ID (already attached to customer)
             trial_end: Optional datetime for trial end (if in trial period)
             metadata: Optional metadata dict to attach to subscription
             
         Returns:
-            stripe.Subscription object
+            Tuple of (stripe.Subscription object, actual customer_id used)
         """
         if not STRIPE_ENABLED:
             raise ValueError("Stripe billing system is not enabled.")
         
         logger.info(f"Creating Stripe subscription for customer: {customer_id}")
+        
+        # Retrieve payment method to check which customer it belongs to
+        payment_method = stripe.PaymentMethod.retrieve(payment_method_id)
+        
+        # If payment method is attached to a different customer, we need to use that customer instead
+        if payment_method.customer and payment_method.customer != customer_id:
+            logger.warning(f"Payment method {payment_method_id} is attached to customer {payment_method.customer}, but subscription requested for {customer_id}")
+            logger.info(f"Using payment method's customer: {payment_method.customer}")
+            customer_id = payment_method.customer
+        elif not payment_method.customer:
+            # Payment method not attached to any customer, attach it now
+            stripe.PaymentMethod.attach(
+                payment_method_id,
+                customer=customer_id
+            )
+            logger.info(f"Payment method attached to customer: {payment_method_id}")
+        else:
+            logger.info(f"Payment method already attached to correct customer: {payment_method_id}")
         
         # Set payment method as default
         stripe.Customer.modify(
@@ -262,7 +280,7 @@ class StripeService:
         logger.info(f"Stripe subscription created: {stripe_subscription.id}")
         logger.info(f"Subscription status: {stripe_subscription.status}")
         
-        return stripe_subscription
+        return stripe_subscription, customer_id
     
     @staticmethod
     @handle_stripe_errors(max_retries=3)

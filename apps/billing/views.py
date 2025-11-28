@@ -215,10 +215,18 @@ def create_subscription(request):
                 )
             
             # Get or create Stripe customer
-            user = request.user
-            customer = StripeService.get_or_create_customer(tenant, user)
-            customer_id = customer.id
-            logger.info(f"Using Stripe customer: {customer_id}")
+            # First check if we have a pending customer from setup intent
+            customer_id = request.session.get('pending_stripe_customer_id')
+            if customer_id:
+                logger.info(f"Reusing Stripe customer from setup intent: {customer_id}")
+                # Clear the session variable after use
+                del request.session['pending_stripe_customer_id']
+            else:
+                # Create new customer if not found in session
+                user = request.user
+                customer = StripeService.get_or_create_customer(tenant, user)
+                customer_id = customer.id
+                logger.info(f"Created new Stripe customer: {customer_id}")
             
             # Get price ID based on billing cycle
             price_id = (
@@ -239,7 +247,7 @@ def create_subscription(request):
                 logger.info(f"Creating subscription with trial until: {trial_end}")
             
             # Create Stripe subscription
-            stripe_subscription = StripeService.create_subscription(
+            stripe_subscription, actual_customer_id = StripeService.create_subscription(
                 customer_id=customer_id,
                 price_id=price_id,
                 payment_method_id=payment_method_id,
@@ -252,13 +260,14 @@ def create_subscription(request):
                 }
             )
             
-            # Create local subscription record
+            # Create local subscription record using the actual customer ID
             subscription = Subscription.objects.create(
                 tenant=tenant,
                 plan=plan,
-                stripe_customer_id=customer_id,
+                stripe_customer_id=actual_customer_id,
                 stripe_subscription_id=stripe_subscription.id,
-                status=stripe_subscription.status
+                status=stripe_subscription.status,
+                billing_cycle=billing_cycle
             )
             
             # Update usage counts (ignore errors if tables don't exist yet)
@@ -806,9 +815,11 @@ def create_setup_intent(request):
             customer_id = tenant.subscription.stripe_customer_id
             logger.info(f"Reusing existing Stripe customer: {customer_id}")
         else:
-            # Create a new Stripe customer
+            # Create a new Stripe customer and store it in session for reuse
             customer = StripeService.get_or_create_customer(tenant, user)
             customer_id = customer.id
+            # Store customer_id in session so create_subscription can reuse it
+            request.session['pending_stripe_customer_id'] = customer_id
             logger.info(f"Created new Stripe customer: {customer_id}")
         
         setup_intent = StripeService.create_setup_intent(customer_id)

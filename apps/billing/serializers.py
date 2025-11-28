@@ -70,63 +70,69 @@ class SubscriptionSerializer(serializers.Serializer):
             return None
     
     def get_billing_cycle(self, obj):
-        """Get billing cycle from Stripe subscription."""
-        stripe_sub = self._get_stripe_subscription(obj)
-        if stripe_sub and stripe_sub.items and len(stripe_sub.items.data) > 0:
-            interval = stripe_sub.items.data[0].price.recurring.interval
-            return 'yearly' if interval == 'year' else 'monthly'
-        return None
+        """Get billing cycle from model (stored locally)."""
+        return obj.billing_cycle if hasattr(obj, 'billing_cycle') else None
     
     def get_current_period_start(self, obj):
         """Get current period start from Stripe subscription."""
         stripe_sub = self._get_stripe_subscription(obj)
-        if stripe_sub and stripe_sub.current_period_start:
-            from datetime import datetime
-            from django.utils import timezone
-            return datetime.fromtimestamp(stripe_sub.current_period_start, tz=timezone.utc)
+        if stripe_sub:
+            current_period_start = getattr(stripe_sub, 'current_period_start', None)
+            if current_period_start:
+                from datetime import datetime
+                from django.utils import timezone
+                return datetime.fromtimestamp(current_period_start, tz=timezone.utc)
         return None
     
     def get_current_period_end(self, obj):
         """Get current period end from Stripe subscription."""
         stripe_sub = self._get_stripe_subscription(obj)
-        if stripe_sub and stripe_sub.current_period_end:
-            from datetime import datetime
-            from django.utils import timezone
-            return datetime.fromtimestamp(stripe_sub.current_period_end, tz=timezone.utc)
+        if stripe_sub:
+            current_period_end = getattr(stripe_sub, 'current_period_end', None)
+            if current_period_end:
+                from datetime import datetime
+                from django.utils import timezone
+                return datetime.fromtimestamp(current_period_end, tz=timezone.utc)
         return None
     
     def get_cancel_at_period_end(self, obj):
         """Get cancel at period end from Stripe subscription."""
         stripe_sub = self._get_stripe_subscription(obj)
         if stripe_sub:
-            return stripe_sub.cancel_at_period_end
+            return getattr(stripe_sub, 'cancel_at_period_end', False)
         return False
     
     def get_canceled_at(self, obj):
         """Get canceled at timestamp from Stripe subscription."""
         stripe_sub = self._get_stripe_subscription(obj)
-        if stripe_sub and stripe_sub.canceled_at:
-            from datetime import datetime
-            from django.utils import timezone
-            return datetime.fromtimestamp(stripe_sub.canceled_at, tz=timezone.utc)
+        if stripe_sub:
+            canceled_at = getattr(stripe_sub, 'canceled_at', None)
+            if canceled_at:
+                from datetime import datetime
+                from django.utils import timezone
+                return datetime.fromtimestamp(canceled_at, tz=timezone.utc)
         return None
     
     def get_trial_start(self, obj):
         """Get trial start from Stripe subscription."""
         stripe_sub = self._get_stripe_subscription(obj)
-        if stripe_sub and stripe_sub.trial_start:
-            from datetime import datetime
-            from django.utils import timezone
-            return datetime.fromtimestamp(stripe_sub.trial_start, tz=timezone.utc)
+        if stripe_sub:
+            trial_start = getattr(stripe_sub, 'trial_start', None)
+            if trial_start:
+                from datetime import datetime
+                from django.utils import timezone
+                return datetime.fromtimestamp(trial_start, tz=timezone.utc)
         return None
     
     def get_trial_end(self, obj):
         """Get trial end from Stripe subscription."""
         stripe_sub = self._get_stripe_subscription(obj)
-        if stripe_sub and stripe_sub.trial_end:
-            from datetime import datetime
-            from django.utils import timezone
-            return datetime.fromtimestamp(stripe_sub.trial_end, tz=timezone.utc)
+        if stripe_sub:
+            trial_end = getattr(stripe_sub, 'trial_end', None)
+            if trial_end:
+                from datetime import datetime
+                from django.utils import timezone
+                return datetime.fromtimestamp(trial_end, tz=timezone.utc)
         return None
     
     def get_is_active(self, obj):
