@@ -9,6 +9,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db import transaction
 from django.utils import timezone
+from django.conf import settings
 from drf_spectacular.utils import extend_schema, OpenApiExample
 import logging
 
@@ -430,19 +431,62 @@ def invite_member(request):
                         status_code=status.HTTP_400_BAD_REQUEST
                     )
                 else:
-                    # Reactivate the inactive member
+                    # User was previously a member but was removed - reactivate directly (no invitation needed)
                     existing_member.is_active = True
                     existing_member.role = role
                     existing_member.save()
+                    logger.info(f"Reactivated member: {email} in {membership.tenant.name}")
                     message = f"User {email} has been reactivated and added back to the company"
             else:
-                # Add as member directly
-                TenantMember.objects.create(
+                # User exists but was never a member - send invitation (requires acceptance)
+                from apps.tenants.models import TenantInvitation
+                import secrets
+                from datetime import timedelta
+                
+                # Check if invitation already exists (any status)
+                existing_invitation = TenantInvitation.objects.filter(
                     tenant=membership.tenant,
-                    user=user,
-                    role=role
-                )
-                message = f"User {email} added to company"
+                    email=email
+                ).first()
+                
+                if existing_invitation:
+                    if existing_invitation.status == 'pending' and existing_invitation.is_valid():
+                        return error_response(
+                            message=f"An invitation has already been sent to {email}",
+                            status_code=status.HTTP_400_BAD_REQUEST
+                        )
+                    else:
+                        # Reuse existing invitation (expired, revoked, or accepted)
+                        existing_invitation.status = 'pending'
+                        existing_invitation.role = role
+                        existing_invitation.invited_by = request.user
+                        existing_invitation.token = secrets.token_urlsafe(32)
+                        existing_invitation.expires_at = timezone.now() + timedelta(days=7)
+                        existing_invitation.accepted_at = None
+                        existing_invitation.save()
+                        invitation = existing_invitation
+                else:
+                    # Create new invitation
+                    invitation = TenantInvitation.objects.create(
+                        tenant=membership.tenant,
+                        email=email,
+                        role=role,
+                        invited_by=request.user,
+                        token=secrets.token_urlsafe(32),
+                        expires_at=timezone.now() + timedelta(days=7)
+                    )
+                
+                # Send invitation email
+                try:
+                    from apps.core.email_utils import send_team_invitation_email
+                    frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+                    send_team_invitation_email(invitation, frontend_url)
+                    logger.info(f"Invitation email sent to existing user {email} to join {membership.tenant.name}")
+                except Exception as e:
+                    logger.error(f"Failed to send invitation email to {email}: {str(e)}")
+                    # Don't fail the invitation creation if email fails
+                
+                message = f"Invitation sent to {email}. They need to accept the invitation to join."
             
         except User.DoesNotExist:
             # Create invitation for non-existent user
@@ -450,36 +494,48 @@ def invite_member(request):
             import secrets
             from datetime import timedelta
             
-            # Check if invitation already exists
+            # Check if invitation already exists (any status)
             existing_invitation = TenantInvitation.objects.filter(
                 tenant=membership.tenant,
-                email=email,
-                status='pending'
+                email=email
             ).first()
             
             if existing_invitation:
-                if existing_invitation.is_valid():
+                if existing_invitation.status == 'pending' and existing_invitation.is_valid():
                     return error_response(
                         message=f"An invitation has already been sent to {email}",
                         status_code=status.HTTP_400_BAD_REQUEST
                     )
                 else:
-                    # Delete expired invitation
-                    existing_invitation.delete()
+                    # Reuse existing invitation (expired, revoked, declined, or accepted)
+                    existing_invitation.status = 'pending'
+                    existing_invitation.role = role
+                    existing_invitation.invited_by = request.user
+                    existing_invitation.token = secrets.token_urlsafe(32)
+                    existing_invitation.expires_at = timezone.now() + timedelta(days=7)
+                    existing_invitation.accepted_at = None
+                    existing_invitation.save()
+                    invitation = existing_invitation
+            else:
+                # Create new invitation
+                invitation = TenantInvitation.objects.create(
+                    tenant=membership.tenant,
+                    email=email,
+                    role=role,
+                    invited_by=request.user,
+                    token=secrets.token_urlsafe(32),
+                    expires_at=timezone.now() + timedelta(days=7)
+                )
             
-            # Create new invitation
-            invitation = TenantInvitation.objects.create(
-                tenant=membership.tenant,
-                email=email,
-                role=role,
-                invited_by=request.user,
-                token=secrets.token_urlsafe(32),
-                expires_at=timezone.now() + timedelta(days=7)
-            )
-            
-            # TODO: Send invitation email with token
-            # For now, user needs to register with the invited email
-            logger.info(f"Invitation created for {email} to join {membership.tenant.name}")
+            # Send invitation email
+            try:
+                from apps.core.email_utils import send_team_invitation_email
+                frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+                send_team_invitation_email(invitation, frontend_url)
+                logger.info(f"Invitation email sent to {email} to join {membership.tenant.name}")
+            except Exception as e:
+                logger.error(f"Failed to send invitation email to {email}: {str(e)}")
+                # Don't fail the invitation creation if email fails
             
             message = f"Invitation sent to {email}. They need to register with this email to join."
         
@@ -612,12 +668,88 @@ def check_invitation(request):
 
 @extend_schema(
     tags=['Onboarding'],
-    summary='Accept invitation',
-    description='Accept a pending invitation to join a tenant',
+    summary='Accept invitation by token',
+    description='Accept a pending invitation to join a tenant using invitation token',
     responses={
         200: {'description': 'Invitation accepted successfully'},
         404: {'description': 'Invitation not found or expired'},
     }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@public_schema_only
+def accept_invitation_by_token(request, token):
+    """
+    Accept an invitation to join a tenant using the invitation token.
+    
+    Note: Only accessible from public schema (localhost).
+    """
+    from django.db import connection
+    
+    try:
+        with transaction.atomic():
+            # Switch to public schema for tenant operations
+            connection.set_schema_to_public()
+            
+            from apps.tenants.models import TenantInvitation
+            
+            invitation = TenantInvitation.objects.get(
+                token=token,
+                email=request.user.email,
+                status='pending'
+            )
+            
+            if not invitation.is_valid():
+                return error_response(
+                    message="This invitation has expired",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if user is already a member
+            if invitation.tenant.members.filter(user=request.user).exists():
+                invitation.status = 'accepted'
+                invitation.accepted_at = timezone.now()
+                invitation.save()
+                
+                return error_response(
+                    message="You are already a member of this company",
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Accept invitation (creates membership)
+            invitation.accept(request.user)
+            
+            return success_response(
+                data={
+                    'tenant_name': invitation.tenant.name,
+                    'role': invitation.role
+                },
+                message=f"Successfully joined {invitation.tenant.name}"
+            )
+        
+    except TenantInvitation.DoesNotExist:
+        return error_response(
+            message="Invitation not found or invalid token",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Failed to accept invitation: {str(e)}")
+        return error_response(
+            message="Failed to accept invitation",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+# Keep old function for backward compatibility (deprecated)
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Accept invitation (deprecated)',
+    description='Accept a pending invitation to join a tenant - Use accept_invitation_by_token instead',
+    responses={
+        200: {'description': 'Invitation accepted successfully'},
+        404: {'description': 'Invitation not found or expired'},
+    },
+    deprecated=True
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -909,8 +1041,15 @@ def resend_invitation(request, invitation_id):
             invitation.status = 'pending'
             invitation.save()
             
-            # TODO: Send invitation email
-            logger.info(f"Invitation resent: {invitation.email} by {request.user.email}")
+            # Send invitation email
+            try:
+                from apps.core.email_utils import send_team_invitation_email
+                frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
+                send_team_invitation_email(invitation, frontend_url)
+                logger.info(f"Invitation email resent to {invitation.email} by {request.user.email}")
+            except Exception as e:
+                logger.error(f"Failed to resend invitation email to {invitation.email}: {str(e)}")
+                # Don't fail if email fails
             
             return success_response(
                 message=f"Invitation resent to {invitation.email}"

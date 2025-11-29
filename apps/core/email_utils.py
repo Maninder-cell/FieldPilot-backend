@@ -137,25 +137,35 @@ def send_welcome_email(user, dashboard_url=None):
     )
 
 
-def send_team_invitation_email(invitation):
+def send_team_invitation_email(invitation, frontend_url=None):
     """
     Send team invitation email.
     
     Args:
-        invitation: Invitation instance
+        invitation: TenantInvitation instance
+        frontend_url: Frontend URL for invitation acceptance (optional)
     
     Returns:
         bool: True if email sent successfully
     """
+    # Calculate days until expiry
+    from django.utils import timezone
+    days_until_expiry = (invitation.expires_at - timezone.now()).days
+    
+    # Build invitation URL
+    if frontend_url:
+        invitation_url = f"{frontend_url}/accept-invitation/{invitation.token}"
+    else:
+        invitation_url = f"http://localhost:3000/accept-invitation/{invitation.token}"
+    
     context = {
         'invitee_name': invitation.email.split('@')[0].title(),  # Extract name from email
-        'inviter_name': invitation.invited_by.full_name,
+        'inviter_name': invitation.invited_by.full_name if invitation.invited_by else 'Team Admin',
         'company_name': invitation.tenant.name,
         'role': invitation.role,
-        'department': invitation.department,
-        'invitation_url': invitation.get_invitation_url(),
-        'invitation_code': invitation.code,
-        'expiry_days': 7,
+        'invitation_url': invitation_url,
+        'invitation_token': invitation.token,  # Full token
+        'expiry_days': max(1, days_until_expiry),  # At least 1 day
         'email': invitation.email
     }
     
