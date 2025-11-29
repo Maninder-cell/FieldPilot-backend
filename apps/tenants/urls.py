@@ -19,9 +19,13 @@ urlpatterns = [
     # Members
     path('members/', views.tenant_members, name='tenant_members'),
     path('members/invite/', views.invite_member, name='invite_member'),
+    path('members/<uuid:member_id>/role/', views.update_member_role, name='update_member_role'),
+    path('members/<uuid:member_id>/remove/', views.remove_member, name='remove_member'),
     
     # Invitations
     path('invitations/pending/', views.pending_invitations, name='pending_invitations'),
     path('invitations/check/', views.check_invitation, name='check_invitation'),
     path('invitations/<uuid:invitation_id>/accept/', views.accept_invitation, name='accept_invitation'),
+    path('invitations/<uuid:invitation_id>/resend/', views.resend_invitation, name='resend_invitation'),
+    path('invitations/<uuid:invitation_id>/revoke/', views.revoke_invitation, name='revoke_invitation'),
 ]

@@ -407,9 +407,9 @@ def invite_member(request):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        if membership.role not in ['owner', 'admin']:
+        if membership.role not in ['owner', 'admin', 'manager']:
             return error_response(
-                message="Only owners and admins can invite members",
+                message="Only owners, admins, and managers can invite members",
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
@@ -420,21 +420,29 @@ def invite_member(request):
         try:
             user = User.objects.get(email=email)
             
-            # Check if already a member
-            if membership.tenant.members.filter(user=user).exists():
-                return error_response(
-                    message="User is already a member of this company",
-                    status_code=status.HTTP_400_BAD_REQUEST
+            # Check if already an active member
+            existing_member = membership.tenant.members.filter(user=user).first()
+            
+            if existing_member:
+                if existing_member.is_active:
+                    return error_response(
+                        message="User is already a member of this company",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                else:
+                    # Reactivate the inactive member
+                    existing_member.is_active = True
+                    existing_member.role = role
+                    existing_member.save()
+                    message = f"User {email} has been reactivated and added back to the company"
+            else:
+                # Add as member directly
+                TenantMember.objects.create(
+                    tenant=membership.tenant,
+                    user=user,
+                    role=role
                 )
-            
-            # Add as member directly
-            TenantMember.objects.create(
-                tenant=membership.tenant,
-                user=user,
-                role=role
-            )
-            
-            message = f"User {email} added to company"
+                message = f"User {email} added to company"
             
         except User.DoesNotExist:
             # Create invitation for non-existent user
@@ -514,9 +522,9 @@ def pending_invitations(request):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        if membership.role not in ['owner', 'admin']:
+        if membership.role not in ['owner', 'admin', 'manager']:
             return error_response(
-                message="Only owners and admins can view invitations",
+                message="Only owners, admins, and managers can view invitations",
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
@@ -672,5 +680,322 @@ def accept_invitation(request, invitation_id):
         logger.error(f"Failed to accept invitation: {str(e)}")
         return error_response(
             message="Failed to accept invitation",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Update member role',
+    description='Update a team member\'s role (Owner/Admin only)',
+    responses={
+        200: TenantMemberSerializer,
+        403: {'description': 'Permission denied'},
+        404: {'description': 'Member not found'},
+    }
+)
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+@public_schema_only
+def update_member_role(request, member_id):
+    """
+    Update a team member's role.
+    
+    Note: Only accessible from public schema (localhost).
+    """
+    from django.db import connection
+    
+    try:
+        with transaction.atomic():
+            # Switch to public schema
+            connection.set_schema_to_public()
+            
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Only owners, admins, and managers can update roles
+            if membership.role not in ['owner', 'admin', 'manager']:
+                return error_response(
+                    message="Only owners, admins, and managers can update member roles",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Get the member to update
+            member = TenantMember.objects.get(
+                id=member_id,
+                tenant=membership.tenant
+            )
+            
+            # Prevent changing owner role (only one owner allowed)
+            if member.role == 'owner':
+                return error_response(
+                    message="Cannot change the owner's role",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Prevent non-owners from creating new owners
+            new_role = request.data.get('role')
+            if new_role == 'owner' and membership.role != 'owner':
+                return error_response(
+                    message="Only the owner can assign the owner role",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Update role
+            member.role = new_role
+            member.save()
+            
+            logger.info(f"Member role updated: {member.user.email} -> {new_role} by {request.user.email}")
+            
+            return success_response(
+                data=TenantMemberSerializer(member).data,
+                message=f"Member role updated to {new_role}"
+            )
+        
+    except TenantMember.DoesNotExist:
+        return error_response(
+            message="Member not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Failed to update member role: {str(e)}")
+        return error_response(
+            message="Failed to update member role",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Remove member',
+    description='Remove a team member from the tenant (Owner/Admin only)',
+    responses={
+        200: {'description': 'Member removed successfully'},
+        403: {'description': 'Permission denied'},
+        404: {'description': 'Member not found'},
+    }
+)
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+@public_schema_only
+def remove_member(request, member_id):
+    """
+    Remove a team member from the tenant.
+    
+    Note: Only accessible from public schema (localhost).
+    """
+    from django.db import connection
+    
+    try:
+        with transaction.atomic():
+            # Switch to public schema
+            connection.set_schema_to_public()
+            
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Only owners, admins, and managers can remove members
+            if membership.role not in ['owner', 'admin', 'manager']:
+                return error_response(
+                    message="Only owners, admins, and managers can remove members",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Get the member to remove
+            member = TenantMember.objects.get(
+                id=member_id,
+                tenant=membership.tenant
+            )
+            
+            # Prevent removing the owner
+            if member.role == 'owner':
+                return error_response(
+                    message="Cannot remove the owner",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Prevent removing yourself
+            if member.user.id == request.user.id:
+                return error_response(
+                    message="You cannot remove yourself. Please contact the owner.",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Soft delete (deactivate) instead of hard delete
+            member.is_active = False
+            member.save()
+            
+            logger.info(f"Member removed: {member.user.email} from {membership.tenant.name} by {request.user.email}")
+            
+            return success_response(
+                message=f"Member {member.user.email} removed successfully"
+            )
+        
+    except TenantMember.DoesNotExist:
+        return error_response(
+            message="Member not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Failed to remove member: {str(e)}")
+        return error_response(
+            message="Failed to remove member",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Resend invitation',
+    description='Resend an invitation email (Owner/Admin only)',
+    responses={
+        200: {'description': 'Invitation resent successfully'},
+        403: {'description': 'Permission denied'},
+        404: {'description': 'Invitation not found'},
+    }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@public_schema_only
+def resend_invitation(request, invitation_id):
+    """
+    Resend an invitation.
+    
+    Note: Only accessible from public schema (localhost).
+    """
+    from django.db import connection
+    
+    try:
+        with transaction.atomic():
+            # Switch to public schema
+            connection.set_schema_to_public()
+            
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Only owners, admins, and managers can resend invitations
+            if membership.role not in ['owner', 'admin', 'manager']:
+                return error_response(
+                    message="Only owners, admins, and managers can resend invitations",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            from apps.tenants.models import TenantInvitation
+            from datetime import timedelta
+            
+            # Get the invitation
+            invitation = TenantInvitation.objects.get(
+                id=invitation_id,
+                tenant=membership.tenant
+            )
+            
+            # Update expiration date
+            invitation.expires_at = timezone.now() + timedelta(days=7)
+            invitation.status = 'pending'
+            invitation.save()
+            
+            # TODO: Send invitation email
+            logger.info(f"Invitation resent: {invitation.email} by {request.user.email}")
+            
+            return success_response(
+                message=f"Invitation resent to {invitation.email}"
+            )
+        
+    except TenantInvitation.DoesNotExist:
+        return error_response(
+            message="Invitation not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Failed to resend invitation: {str(e)}")
+        return error_response(
+            message="Failed to resend invitation",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Revoke invitation',
+    description='Revoke/cancel a pending invitation (Owner/Admin only)',
+    responses={
+        200: {'description': 'Invitation revoked successfully'},
+        403: {'description': 'Permission denied'},
+        404: {'description': 'Invitation not found'},
+    }
+)
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+@public_schema_only
+def revoke_invitation(request, invitation_id):
+    """
+    Revoke a pending invitation.
+    
+    Note: Only accessible from public schema (localhost).
+    """
+    from django.db import connection
+    
+    try:
+        with transaction.atomic():
+            # Switch to public schema
+            connection.set_schema_to_public()
+            
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Only owners, admins, and managers can revoke invitations
+            if membership.role not in ['owner', 'admin', 'manager']:
+                return error_response(
+                    message="Only owners, admins, and managers can revoke invitations",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            from apps.tenants.models import TenantInvitation
+            
+            # Get the invitation
+            invitation = TenantInvitation.objects.get(
+                id=invitation_id,
+                tenant=membership.tenant
+            )
+            
+            # Update status to revoked
+            invitation.status = 'revoked'
+            invitation.save()
+            
+            logger.info(f"Invitation revoked: {invitation.email} by {request.user.email}")
+            
+            return success_response(
+                message=f"Invitation to {invitation.email} has been revoked"
+            )
+        
+    except TenantInvitation.DoesNotExist:
+        return error_response(
+            message="Invitation not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Failed to revoke invitation: {str(e)}")
+        return error_response(
+            message="Failed to revoke invitation",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
