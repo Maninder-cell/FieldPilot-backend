@@ -28,4 +28,5 @@ urlpatterns = [
     path('me/', views.me, name='me'),
     path('profile/', views.profile, name='profile'),
     path('profile/update/', views.update_profile, name='update_profile'),
+    path('profile/avatar/', views.upload_avatar, name='upload_avatar'),
 ]

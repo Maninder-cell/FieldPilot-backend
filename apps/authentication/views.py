@@ -725,6 +725,99 @@ def update_profile(request):
 
 @extend_schema(
     tags=['Authentication'],
+    summary='Upload user avatar',
+    description='Upload avatar image for the authenticated user',
+    request={
+        'multipart/form-data': {
+            'type': 'object',
+            'properties': {
+                'avatar': {
+                    'type': 'string',
+                    'format': 'binary'
+                }
+            }
+        }
+    },
+    responses={
+        200: {'description': 'Avatar uploaded successfully'},
+        400: {'description': 'Invalid file or file too large'},
+    }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@public_schema_only
+def upload_avatar(request):
+    """
+    Upload user avatar image.
+    
+    Note: Avatar upload is only available from the public schema (localhost).
+    """
+    try:
+        if 'avatar' not in request.FILES:
+            return error_response(
+                message="No avatar file provided",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        avatar_file = request.FILES['avatar']
+        
+        # Validate file size (max 5MB)
+        if avatar_file.size > 5 * 1024 * 1024:
+            return error_response(
+                message="File size too large. Maximum size is 5MB",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Validate file type
+        allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp']
+        if avatar_file.content_type not in allowed_types:
+            return error_response(
+                message="Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Save the file
+        import os
+        from django.conf import settings
+        from django.core.files.storage import default_storage
+        
+        # Create uploads directory if it doesn't exist
+        upload_dir = os.path.join(settings.MEDIA_ROOT, 'avatars')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Generate unique filename
+        import uuid
+        file_extension = os.path.splitext(avatar_file.name)[1]
+        filename = f"{request.user.id}_{uuid.uuid4().hex}{file_extension}"
+        file_path = os.path.join('avatars', filename)
+        
+        # Save file
+        saved_path = default_storage.save(file_path, avatar_file)
+        
+        # Generate URL
+        avatar_url = request.build_absolute_uri(settings.MEDIA_URL + saved_path)
+        
+        # Update user avatar_url
+        request.user.avatar_url = avatar_url
+        request.user.save()
+        
+        logger.info(f"Avatar uploaded for user: {request.user.email}")
+        
+        return success_response(
+            data={'avatar_url': avatar_url},
+            message="Avatar uploaded successfully"
+        )
+        
+    except Exception as e:
+        logger.error(f"Avatar upload failed: {str(e)}")
+        return error_response(
+            message="Failed to upload avatar",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Authentication'],
     summary='Get current user info',
     description='Retrieve information about the currently authenticated user',
     responses={

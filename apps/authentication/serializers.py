@@ -325,8 +325,8 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
             'department', 'job_title', 'date_of_birth', 'address',
             'city', 'state', 'zip_code', 'country',
             'emergency_contact_name', 'emergency_contact_phone',
-            'emergency_contact_relationship', 'skills', 'certifications',
-            'timezone', 'language', 'email_notifications',
+            'emergency_contact_relationship', 'hire_date', 'skills', 
+            'certifications', 'timezone', 'language', 'email_notifications',
             'sms_notifications', 'push_notifications'
         ]
     
