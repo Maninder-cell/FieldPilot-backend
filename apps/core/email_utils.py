@@ -154,9 +154,9 @@ def send_team_invitation_email(invitation, frontend_url=None):
     
     # Build invitation URL
     if frontend_url:
-        invitation_url = f"{frontend_url}/accept-invitation/{invitation.token}"
+        invitation_url = f"{frontend_url}/invitations/accept/{invitation.token}"
     else:
-        invitation_url = f"http://localhost:3000/accept-invitation/{invitation.token}"
+        invitation_url = f"http://localhost:3000/invitations/accept/{invitation.token}"
     
     context = {
         'invitee_name': invitation.email.split('@')[0].title(),  # Extract name from email

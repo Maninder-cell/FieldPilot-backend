@@ -25,6 +25,7 @@ urlpatterns = [
     # Invitations
     path('invitations/pending/', views.pending_invitations, name='pending_invitations'),
     path('invitations/check/', views.check_invitation, name='check_invitation'),
+    path('invitations/<str:token>/', views.get_invitation_by_token, name='get_invitation_by_token'),
     path('invitations/accept/<str:token>/', views.accept_invitation_by_token, name='accept_invitation_by_token'),
     path('invitations/<uuid:invitation_id>/resend/', views.resend_invitation, name='resend_invitation'),
     path('invitations/<uuid:invitation_id>/revoke/', views.revoke_invitation, name='revoke_invitation'),

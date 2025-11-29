@@ -668,6 +668,63 @@ def check_invitation(request):
 
 @extend_schema(
     tags=['Onboarding'],
+    summary='Get invitation details by token (Public)',
+    description='Get invitation details using the invitation token - No authentication required',
+    responses={
+        200: {'description': 'Invitation details'},
+        404: {'description': 'Invitation not found or expired'},
+    }
+)
+@api_view(['GET'])
+@permission_classes([AllowAny])
+@public_schema_only
+def get_invitation_by_token(request, token):
+    """
+    Get invitation details by token (public endpoint).
+    
+    Note: Only accessible from public schema (localhost).
+    """
+    try:
+        from apps.tenants.models import TenantInvitation
+        
+        invitation = TenantInvitation.objects.get(
+            token=token,
+            status='pending'
+        )
+        
+        if not invitation.is_valid():
+            return error_response(
+                message="This invitation has expired",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        return success_response(
+            data={
+                'id': str(invitation.id),
+                'email': invitation.email,
+                'tenant_name': invitation.tenant.name,
+                'role': invitation.role,
+                'invited_by': invitation.invited_by.email if invitation.invited_by else None,
+                'expires_at': invitation.expires_at.isoformat(),
+            },
+            message="Invitation details retrieved successfully"
+        )
+        
+    except TenantInvitation.DoesNotExist:
+        return error_response(
+            message="Invitation not found or invalid token",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Failed to get invitation: {str(e)}")
+        return error_response(
+            message="Failed to retrieve invitation",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
     summary='Accept invitation by token',
     description='Accept a pending invitation to join a tenant using invitation token',
     responses={
