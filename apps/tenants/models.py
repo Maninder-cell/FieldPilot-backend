@@ -170,6 +170,7 @@ class TenantMember(models.Model):
     employee_id = models.CharField(max_length=50, blank=True)
     department = models.CharField(max_length=100, blank=True)
     job_title = models.CharField(max_length=100, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
     
     is_active = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)

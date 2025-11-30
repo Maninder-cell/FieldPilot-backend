@@ -92,6 +92,7 @@ def current_user_profile(request):
                 'employee_id': membership.employee_id,
                 'department': membership.department,
                 'job_title': membership.job_title,
+                'phone': membership.phone,
                 'is_active': membership.is_active,
                 'joined_at': membership.joined_at.isoformat() if membership.joined_at else None,
                 # Helper flags
@@ -161,6 +162,7 @@ def user_tenant_memberships(request):
                 'employee_id': membership.employee_id,
                 'department': membership.department,
                 'job_title': membership.job_title,
+                'phone': membership.phone,
                 'joined_at': membership.joined_at.isoformat() if membership.joined_at else None,
             })
         
@@ -216,8 +218,8 @@ def update_tenant_profile(request):
         
         membership = request.tenant_membership
         
-        # Allow users to update their own department and job_title
-        allowed_fields = ['department', 'job_title']
+        # Allow users to update their own department, job_title, and phone
+        allowed_fields = ['department', 'job_title', 'phone']
         
         updated = False
         for field in allowed_fields:
@@ -235,6 +237,7 @@ def update_tenant_profile(request):
             'employee_id': membership.employee_id,
             'department': membership.department,
             'job_title': membership.job_title,
+            'phone': membership.phone,
         }
         
         return success_response(

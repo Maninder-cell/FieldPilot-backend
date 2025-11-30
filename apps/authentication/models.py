@@ -22,7 +22,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     # Personal information
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
-    phone = models.CharField(max_length=20, blank=True)
     avatar_url = models.URLField(blank=True)
     
     # Status

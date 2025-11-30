@@ -75,7 +75,7 @@ class TenantMemberSerializer(serializers.ModelSerializer):
         model = TenantMember
         fields = [
             'id', 'tenant', 'user', 'user_email', 'user_name', 'role', 
-            'employee_id', 'department', 'job_title',
+            'employee_id', 'department', 'job_title', 'phone',
             'is_active', 'joined_at'
         ]
         read_only_fields = ['id', 'joined_at', 'employee_id']
