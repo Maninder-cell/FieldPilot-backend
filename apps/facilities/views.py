@@ -23,8 +23,27 @@ from .serializers import (
 )
 from apps.core.responses import success_response, error_response
 from apps.core.permissions import IsAdminUser
+from apps.tenants.decorators import check_tenant_permission
 
 logger = logging.getLogger(__name__)
+
+
+def require_role(request, allowed_roles):
+    """Helper to check tenant role and return error if not authorized."""
+    if not hasattr(request, 'tenant_role') or not request.tenant_role:
+        return error_response(
+            message='You are not a member of this organization',
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    if request.tenant_role not in allowed_roles:
+        roles_str = ', '.join(allowed_roles)
+        return error_response(
+            message=f'This action requires one of these roles: {roles_str}',
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    return None
 
 
 @extend_schema(
@@ -90,11 +109,9 @@ def customer_list_create(request):
     
     elif request.method == 'POST':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can create customers',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         serializer = CreateCustomerSerializer(data=request.data)
         
@@ -157,11 +174,9 @@ def customer_detail(request, customer_id):
     
     elif request.method in ['PUT', 'PATCH']:
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can update customers',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         partial = request.method == 'PATCH'
         serializer = UpdateCustomerSerializer(customer, data=request.data, partial=partial)
@@ -191,11 +206,9 @@ def customer_detail(request, customer_id):
     
     elif request.method == 'DELETE':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can delete customers',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         try:
             # Soft delete
@@ -231,11 +244,9 @@ def customer_invite(request):
     Send an invitation to a customer.
     """
     # Check permissions (admin/manager only)
-    if request.user.role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can invite customers',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
+    error = require_role(request, ['owner', 'admin', 'manager'])
+    if error:
+        return error
     
     serializer = InviteCustomerSerializer(data=request.data)
     
@@ -471,7 +482,7 @@ def facility_list_create(request):
     """
     if request.method == 'GET':
         # Get queryset based on user role
-        if request.user.role == 'customer':
+        if request.tenant_role == 'customer':
             # Customers only see facilities assigned to them
             try:
                 customer = request.user.customer_profile
@@ -526,11 +537,9 @@ def facility_list_create(request):
     
     elif request.method == 'POST':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can create facilities',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         serializer = CreateFacilitySerializer(data=request.data)
         
@@ -580,7 +589,7 @@ def facility_detail(request, facility_id):
         facility = Facility.objects.get(pk=facility_id)
         
         # Check customer access
-        if request.user.role == 'customer':
+        if request.tenant_role == 'customer':
             try:
                 customer = request.user.customer_profile
                 if facility.customer != customer:
@@ -608,7 +617,7 @@ def facility_detail(request, facility_id):
     
     elif request.method in ['PUT', 'PATCH']:
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can update facilities',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -642,7 +651,7 @@ def facility_detail(request, facility_id):
     
     elif request.method == 'DELETE':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can delete facilities',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -684,7 +693,7 @@ def facility_buildings(request, facility_id):
         facility = Facility.objects.get(pk=facility_id)
         
         # Check customer access
-        if request.user.role == 'customer':
+        if request.tenant_role == 'customer':
             try:
                 customer = request.user.customer_profile
                 if facility.customer != customer:
@@ -753,7 +762,7 @@ def facility_equipment(request, facility_id):
         facility = Facility.objects.get(pk=facility_id)
         
         # Check customer access
-        if request.user.role == 'customer':
+        if request.tenant_role == 'customer':
             try:
                 customer = request.user.customer_profile
                 if facility.customer != customer:
@@ -835,7 +844,7 @@ def building_list_create(request):
     """
     if request.method == 'GET':
         # Get queryset based on user role
-        if request.user.role == 'customer':
+        if request.tenant_role == 'customer':
             # Customers only see buildings assigned to them or in their facilities
             try:
                 customer = request.user.customer_profile
@@ -896,7 +905,7 @@ def building_list_create(request):
     
     elif request.method == 'POST':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can create buildings',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -950,7 +959,7 @@ def building_detail(request, building_id):
         building = Building.objects.get(pk=building_id)
         
         # Check customer access
-        if request.user.role == 'customer':
+        if request.tenant_role == 'customer':
             try:
                 customer = request.user.customer_profile
                 if building.customer != customer and building.facility.customer != customer:
@@ -978,7 +987,7 @@ def building_detail(request, building_id):
     
     elif request.method in ['PUT', 'PATCH']:
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can update buildings',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -1012,7 +1021,7 @@ def building_detail(request, building_id):
     
     elif request.method == 'DELETE':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can delete buildings',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -1054,7 +1063,7 @@ def building_equipment(request, building_id):
         building = Building.objects.get(pk=building_id)
         
         # Check customer access
-        if request.user.role == 'customer':
+        if request.tenant_role == 'customer':
             try:
                 customer = request.user.customer_profile
                 if building.customer != customer and building.facility.customer != customer:
@@ -1156,7 +1165,7 @@ def location_list_create(request):
     
     elif request.method == 'POST':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can create locations',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -1223,7 +1232,7 @@ def location_detail(request, location_id):
     
     elif request.method in ['PUT', 'PATCH']:
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can update locations',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -1257,7 +1266,7 @@ def location_detail(request, location_id):
     
     elif request.method == 'DELETE':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can delete locations',
                 status_code=status.HTTP_403_FORBIDDEN

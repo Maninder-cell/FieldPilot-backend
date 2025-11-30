@@ -14,7 +14,7 @@ from .managers import UserManager
 class User(AbstractBaseUser, PermissionsMixin):
     """
     Custom User model for FieldRino.
-    Each user belongs to a specific tenant.
+    For multi-tenant role management, use TenantMember model.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
@@ -24,24 +24,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=100)
     phone = models.CharField(max_length=20, blank=True)
     avatar_url = models.URLField(blank=True)
-    
-    # Role and permissions
-    role = models.CharField(
-        max_length=50,
-        choices=[
-            ('admin', 'Administrator'),
-            ('manager', 'Manager'),
-            ('employee', 'Employee'),
-            ('technician', 'Technician'),
-            ('customer', 'Customer'),
-        ],
-        default='employee'
-    )
-    
-    # Employee information
-    employee_id = models.CharField(max_length=50, blank=True, unique=True, null=True)
-    department = models.CharField(max_length=100, blank=True)
-    job_title = models.CharField(max_length=100, blank=True)
     
     # Status
     is_active = models.BooleanField(default=True)
@@ -89,8 +71,6 @@ class User(AbstractBaseUser, PermissionsMixin):
         verbose_name_plural = 'Users'
         indexes = [
             models.Index(fields=['email']),
-            models.Index(fields=['role']),
-            models.Index(fields=['employee_id']),
         ]
         # Fix reverse accessor conflicts
         default_related_name = 'fieldrino_users'
@@ -103,53 +83,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         """Return full name."""
         return f"{self.first_name} {self.last_name}".strip()
     
-    @property
-    def is_admin(self):
-        """Check if user is admin."""
-        return self.role == 'admin'
-    
-    @property
-    def is_manager(self):
-        """Check if user is manager or admin."""
-        return self.role in ['admin', 'manager']
-    
-    @property
-    def is_technician(self):
-        """Check if user is technician."""
-        return self.role == 'technician'
-    
-    def generate_employee_id(self):
-        """Generate unique employee ID."""
-        if not self.employee_id:
-            # Generate based on role and creation order
-            role_prefix = {
-                'admin': 'ADM',
-                'manager': 'MGR',
-                'employee': 'EMP',
-                'technician': 'TEC',
-                'customer': 'CUS',
-            }.get(self.role, 'USR')
-            
-            # Find the highest existing employee ID for this role prefix
-            existing_ids = User.objects.filter(
-                employee_id__startswith=role_prefix
-            ).values_list('employee_id', flat=True)
-            
-            if existing_ids:
-                # Extract numbers from existing IDs and find max
-                numbers = []
-                for emp_id in existing_ids:
-                    try:
-                        num = int(emp_id.replace(role_prefix, ''))
-                        numbers.append(num)
-                    except (ValueError, AttributeError):
-                        continue
-                
-                next_num = max(numbers) + 1 if numbers else 1
-            else:
-                next_num = 1
-            
-            self.employee_id = f"{role_prefix}{next_num:04d}"
+
     
     def set_otp(self, purpose, length=6):
         """Generate and set OTP for specific purpose."""
@@ -184,30 +118,7 @@ class User(AbstractBaseUser, PermissionsMixin):
         
         return False
     
-    def save(self, *args, **kwargs):
-        from django.db import IntegrityError
-        
-        # Generate employee ID if not set
-        if not self.employee_id:
-            self.generate_employee_id()
-        
-        # Set staff status for admin users
-        if self.role == 'admin':
-            self.is_staff = True
-        
-        # Retry logic for unique constraint violations on employee_id
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                super().save(*args, **kwargs)
-                break
-            except IntegrityError as e:
-                if 'employee_id' in str(e) and attempt < max_retries - 1:
-                    # Regenerate employee_id and retry
-                    self.employee_id = None
-                    self.generate_employee_id()
-                else:
-                    raise
+
 
 
 class UserProfile(models.Model):

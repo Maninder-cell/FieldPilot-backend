@@ -149,18 +149,27 @@ class Domain(DomainMixin):
 class TenantMember(models.Model):
     """
     Link users to tenants with roles.
+    This is the source of truth for user roles in a multi-tenant system.
+    A user can have different roles in different tenants.
     """
     ROLE_CHOICES = [
         ('owner', 'Owner'),
         ('admin', 'Admin'),
         ('manager', 'Manager'),
         ('employee', 'Employee'),
+        ('technician', 'Technician'),
+        ('customer', 'Customer'),
     ]
     
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, related_name='members')
     user = models.ForeignKey('authentication.User', on_delete=models.CASCADE, related_name='tenant_memberships')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee')
+    
+    # Tenant-specific employee information (moved from User model)
+    employee_id = models.CharField(max_length=50, blank=True)
+    department = models.CharField(max_length=100, blank=True)
+    job_title = models.CharField(max_length=100, blank=True)
     
     is_active = models.BooleanField(default=True)
     joined_at = models.DateTimeField(auto_now_add=True)
@@ -169,9 +178,79 @@ class TenantMember(models.Model):
         db_table = 'tenant_members'
         unique_together = ['tenant', 'user']
         ordering = ['-joined_at']
+        indexes = [
+            models.Index(fields=['tenant', 'user', 'is_active']),
+            models.Index(fields=['role']),
+            models.Index(fields=['employee_id']),
+        ]
     
     def __str__(self):
         return f"{self.user.email} - {self.tenant.name} ({self.role})"
+    
+    @property
+    def is_owner(self):
+        """Check if member is owner."""
+        return self.role == 'owner'
+    
+    @property
+    def is_admin(self):
+        """Check if member is admin or owner."""
+        return self.role in ['owner', 'admin']
+    
+    @property
+    def is_manager(self):
+        """Check if member is manager, admin, or owner."""
+        return self.role in ['owner', 'admin', 'manager']
+    
+    @property
+    def is_technician(self):
+        """Check if member is technician."""
+        return self.role == 'technician'
+    
+    @property
+    def is_customer(self):
+        """Check if member is customer."""
+        return self.role == 'customer'
+    
+    def generate_employee_id(self):
+        """Generate unique employee ID within this tenant."""
+        if not self.employee_id:
+            role_prefix = {
+                'owner': 'OWN',
+                'admin': 'ADM',
+                'manager': 'MGR',
+                'employee': 'EMP',
+                'technician': 'TEC',
+                'customer': 'CUS',
+            }.get(self.role, 'USR')
+            
+            # Find the highest existing employee ID for this role prefix in this tenant
+            existing_ids = TenantMember.objects.filter(
+                tenant=self.tenant,
+                employee_id__startswith=role_prefix
+            ).values_list('employee_id', flat=True)
+            
+            if existing_ids:
+                numbers = []
+                for emp_id in existing_ids:
+                    try:
+                        num = int(emp_id.replace(role_prefix, ''))
+                        numbers.append(num)
+                    except (ValueError, AttributeError):
+                        continue
+                
+                next_num = max(numbers) + 1 if numbers else 1
+            else:
+                next_num = 1
+            
+            self.employee_id = f"{role_prefix}{next_num:04d}"
+    
+    def save(self, *args, **kwargs):
+        # Generate employee ID if not set
+        if not self.employee_id:
+            self.generate_employee_id()
+        
+        super().save(*args, **kwargs)
 
 
 class TenantSettings(models.Model):

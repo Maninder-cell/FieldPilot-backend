@@ -52,7 +52,7 @@ def equipment_list_create(request):
     """
     if request.method == 'GET':
         # Get queryset based on user role
-        if request.user.role == 'customer':
+        if request.tenant_role == 'customer':
             # Customers only see equipment assigned to them or in their facilities/buildings
             try:
                 customer = request.user.customer_profile
@@ -123,7 +123,7 @@ def equipment_list_create(request):
     
     elif request.method == 'POST':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can create equipment',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -177,7 +177,7 @@ def equipment_detail(request, equipment_id):
         equipment = Equipment.objects.get(pk=equipment_id)
         
         # Check customer access
-        if request.user.role == 'customer':
+        if request.tenant_role == 'customer':
             try:
                 customer = request.user.customer_profile
                 if (equipment.customer != customer and
@@ -207,7 +207,7 @@ def equipment_detail(request, equipment_id):
     
     elif request.method in ['PUT', 'PATCH']:
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can update equipment',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -241,7 +241,7 @@ def equipment_detail(request, equipment_id):
     
     elif request.method == 'DELETE':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can delete equipment',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -283,7 +283,7 @@ def equipment_history(request, equipment_id):
         equipment = Equipment.objects.get(pk=equipment_id)
         
         # Check customer access
-        if request.user.role == 'customer':
+        if request.tenant_role == 'customer':
             try:
                 customer = request.user.customer_profile
                 if (equipment.customer != customer and

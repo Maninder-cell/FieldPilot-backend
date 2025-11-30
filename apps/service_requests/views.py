@@ -60,7 +60,7 @@ def service_request_list_create(request):
     """
     if request.method == 'GET':
         # Only customers can use this endpoint for listing
-        if request.user.role != 'customer':
+        if request.tenant_role != 'customer':
             return error_response(
                 message='This endpoint is for customers only. Admins should use /admin/ endpoint.',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -97,7 +97,7 @@ def service_request_list_create(request):
     
     elif request.method == 'POST':
         # Only customers can create requests
-        if request.user.role != 'customer':
+        if request.tenant_role != 'customer':
             return error_response(
                 message='Only customers can create service requests.',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -190,7 +190,7 @@ def service_request_detail(request, request_id):
         )
     
     # Check permissions - customer can only access their own requests
-    if request.user.role == 'customer' and service_request.customer != request.user:
+    if request.tenant_role == 'customer' and service_request.customer != request.user:
         return error_response(
             message='You can only access your own service requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -198,7 +198,7 @@ def service_request_detail(request, request_id):
     
     if request.method == 'GET':
         # Use appropriate serializer based on user role
-        if request.user.role in ['admin', 'manager']:
+        if request.tenant_role in ['admin', 'manager']:
             serializer = ServiceRequestSerializer(service_request, context={'request': request})
         else:
             serializer = CustomerServiceRequestSerializer(service_request, context={'request': request})
@@ -315,7 +315,7 @@ def admin_service_request_list(request):
     Task 6.1: Admin request listing
     """
     # Only admin/manager can access
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can access this endpoint',
             status_code=status.HTTP_403_FORBIDDEN
@@ -369,7 +369,7 @@ def mark_under_review(request, request_id):
     Task 6.2: Request review endpoint
     """
     # Only admin/manager can access
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can review requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -424,7 +424,7 @@ def update_internal_notes(request, request_id):
     Task 6.3: Internal notes endpoint
     """
     # Only admin/manager can access
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can update internal notes',
             status_code=status.HTTP_403_FORBIDDEN
@@ -483,7 +483,7 @@ def accept_request(request, request_id):
     Task 7.1: Request acceptance endpoint
     """
     # Only admin/manager can access
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can accept requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -558,7 +558,7 @@ def reject_request(request, request_id):
     Task 7.2: Request rejection endpoint
     """
     # Only admin/manager can access
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can reject requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -630,7 +630,7 @@ def convert_to_task(request, request_id):
     Task 8.2: Convert-to-task endpoint
     """
     # Only admin/manager can access
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can convert requests to tasks',
             status_code=status.HTTP_403_FORBIDDEN
@@ -751,7 +751,7 @@ def request_timeline(request, request_id):
         )
     
     # Check permissions
-    if request.user.role == 'customer' and service_request.customer != request.user:
+    if request.tenant_role == 'customer' and service_request.customer != request.user:
         return error_response(
             message='You can only view timeline for your own requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -792,7 +792,7 @@ def request_comments(request, request_id):
         )
     
     # Check permissions
-    if request.user.role == 'customer' and service_request.customer != request.user:
+    if request.tenant_role == 'customer' and service_request.customer != request.user:
         return error_response(
             message='You can only access comments for your own requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -800,7 +800,7 @@ def request_comments(request, request_id):
     
     if request.method == 'GET':
         # Get comments (filter internal for customers)
-        if request.user.role in ['admin', 'manager']:
+        if request.tenant_role in ['admin', 'manager']:
             comments = service_request.comments.all()
         else:
             comments = service_request.comments.filter(is_internal=False)
@@ -880,7 +880,7 @@ def request_attachments(request, request_id):
         )
     
     # Check permissions
-    if request.user.role == 'customer' and service_request.customer != request.user:
+    if request.tenant_role == 'customer' and service_request.customer != request.user:
         return error_response(
             message='You can only access attachments for your own requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1074,7 +1074,7 @@ def service_request_reports(request):
     Task 17.1: Admin reports endpoint
     """
     # Only admin/manager can access
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can access reports',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1220,7 +1220,7 @@ def admin_dashboard_analytics(request):
     Task 17.2: Dashboard analytics
     """
     # Only admin/manager can access
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can access analytics',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1275,7 +1275,7 @@ def request_clarification(request, request_id):
     Task 10.2: Clarification request feature
     """
     # Only admin/manager can request clarification
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can request clarification',
             status_code=status.HTTP_403_FORBIDDEN

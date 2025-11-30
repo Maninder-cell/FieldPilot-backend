@@ -65,7 +65,7 @@ def task_list_create(request):
     """
     if request.method == 'GET':
         # Get queryset based on user role
-        if request.user.role == 'technician':
+        if request.tenant_role == 'technician':
             # Technicians see tasks assigned to them or their teams
             queryset = Task.objects.filter(
                 Q(assignments__assignee=request.user) |
@@ -130,7 +130,7 @@ def task_list_create(request):
     
     elif request.method == 'POST':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can create tasks',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -239,7 +239,7 @@ def task_detail(request, task_id):
         )
     
     # Check access permissions
-    if request.user.role == 'technician':
+    if request.tenant_role == 'technician':
         # Technicians can only access tasks assigned to them
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
@@ -261,7 +261,7 @@ def task_detail(request, task_id):
     
     elif request.method == 'PATCH':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can update tasks',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -318,7 +318,7 @@ def task_detail(request, task_id):
     
     elif request.method == 'DELETE':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can delete tasks',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -358,7 +358,7 @@ def task_assign(request, task_id):
     Assign task to technicians or teams.
     """
     # Check permissions (admin/manager only)
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can assign tasks',
             status_code=status.HTTP_403_FORBIDDEN
@@ -442,7 +442,7 @@ def task_update_status(request, task_id):
     Update task administrative status.
     """
     # Check permissions (admin/manager only)
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can update task status',
             status_code=status.HTTP_403_FORBIDDEN
@@ -519,7 +519,7 @@ def task_update_work_status(request, task_id):
     Update work status for technician's assignment.
     """
     # Check permissions (technician only)
-    if request.user.role != 'technician':
+    if request.tenant_role != 'technician':
         return error_response(
             message='Only technicians can update work status',
             status_code=status.HTTP_403_FORBIDDEN
@@ -615,7 +615,7 @@ def task_history(request, task_id):
         )
     
     # Check access permissions
-    if request.user.role == 'technician':
+    if request.tenant_role == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -711,7 +711,7 @@ def team_list_create(request):
     
     elif request.method == 'POST':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can create teams',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -789,7 +789,7 @@ def team_detail(request, team_id):
     
     elif request.method == 'PATCH':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can update teams',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -822,7 +822,7 @@ def team_detail(request, team_id):
     
     elif request.method == 'DELETE':
         # Check permissions (admin/manager only)
-        if request.user.role not in ['admin', 'manager']:
+        if request.tenant_role not in ['admin', 'manager']:
             return error_response(
                 message='Only admins and managers can delete teams',
                 status_code=status.HTTP_403_FORBIDDEN
@@ -859,7 +859,7 @@ def team_add_members(request, team_id):
     Add members to a team.
     """
     # Check permissions (admin/manager only)
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can add team members',
             status_code=status.HTTP_403_FORBIDDEN
@@ -913,7 +913,7 @@ def team_remove_member(request, team_id, member_id):
     Remove a member from a team.
     """
     # Check permissions (admin/manager only)
-    if request.user.role not in ['admin', 'manager']:
+    if request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='Only admins and managers can remove team members',
             status_code=status.HTTP_403_FORBIDDEN
@@ -975,7 +975,7 @@ def task_travel(request, task_id):
     Log travel started for a task.
     """
     # Check permissions (technician only)
-    if request.user.role != 'technician':
+    if request.tenant_role != 'technician':
         return error_response(
             message='Only technicians can log travel',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1074,7 +1074,7 @@ def task_arrive(request, task_id):
     Log arrival at site for a task.
     """
     # Check permissions (technician only)
-    if request.user.role != 'technician':
+    if request.tenant_role != 'technician':
         return error_response(
             message='Only technicians can log arrival',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1155,7 +1155,7 @@ def task_depart(request, task_id):
     Log departure from site for a task.
     """
     # Check permissions (technician only)
-    if request.user.role != 'technician':
+    if request.tenant_role != 'technician':
         return error_response(
             message='Only technicians can log departure',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1244,7 +1244,7 @@ def task_lunch_start(request, task_id):
     Log lunch break start for a task.
     """
     # Check permissions (technician only)
-    if request.user.role != 'technician':
+    if request.tenant_role != 'technician':
         return error_response(
             message='Only technicians can log lunch',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1325,7 +1325,7 @@ def task_lunch_end(request, task_id):
     Log lunch break end for a task.
     """
     # Check permissions (technician only)
-    if request.user.role != 'technician':
+    if request.tenant_role != 'technician':
         return error_response(
             message='Only technicians can log lunch',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1421,7 +1421,7 @@ def task_time_logs(request, task_id):
         )
     
     # Check access permissions
-    if request.user.role == 'technician':
+    if request.tenant_role == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -1470,7 +1470,7 @@ def task_comments(request, task_id):
         )
     
     # Check access permissions
-    if request.user.role == 'technician':
+    if request.tenant_role == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -1569,7 +1569,7 @@ def comment_detail(request, comment_id):
         )
     
     # Check permissions (only author can update/delete)
-    if comment.author != request.user and request.user.role not in ['admin', 'manager']:
+    if comment.author != request.user and request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='You can only modify your own comments',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1645,7 +1645,7 @@ def task_attachments(request, task_id):
         )
     
     # Check access permissions
-    if request.user.role == 'technician':
+    if request.tenant_role == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -1737,7 +1737,7 @@ def attachment_delete(request, attachment_id):
         )
     
     # Check permissions (only uploader or admin/manager can delete)
-    if attachment.uploaded_by != request.user and request.user.role not in ['admin', 'manager']:
+    if attachment.uploaded_by != request.user and request.tenant_role not in ['admin', 'manager']:
         return error_response(
             message='You can only delete your own attachments',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1786,7 +1786,7 @@ def attachment_download(request, attachment_id):
     
     # Check access permissions
     task = attachment.task
-    if request.user.role == 'technician':
+    if request.tenant_role == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -1977,7 +1977,7 @@ def task_materials(request, task_id):
         )
     
     # Check access permissions
-    if request.user.role == 'technician':
+    if request.tenant_role == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -2029,7 +2029,7 @@ def work_hours_report(request):
     from .utils import WorkHoursCalculator
     
     # Check permissions (admin/manager can see all, technicians see only their own)
-    if request.user.role == 'technician':
+    if request.tenant_role == 'technician':
         technician_id = str(request.user.id)
     else:
         technician_id = request.query_params.get('technician')

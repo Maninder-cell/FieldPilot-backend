@@ -68,13 +68,17 @@ class TenantMemberSerializer(serializers.ModelSerializer):
     Serializer for tenant members.
     """
     user = UserSerializer(read_only=True)
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
     
     class Meta:
         model = TenantMember
         fields = [
-            'id', 'tenant', 'user', 'role', 'is_active', 'joined_at'
+            'id', 'tenant', 'user', 'user_email', 'user_name', 'role', 
+            'employee_id', 'department', 'job_title',
+            'is_active', 'joined_at'
         ]
-        read_only_fields = ['id', 'joined_at']
+        read_only_fields = ['id', 'joined_at', 'employee_id']
 
 
 class InviteMemberSerializer(serializers.Serializer):

@@ -272,6 +272,10 @@ class ChangePasswordSerializer(serializers.Serializer):
 class UserSerializer(serializers.ModelSerializer):
     """
     Serializer for user information.
+    
+    Note: role, employee_id, department, and job_title are now tenant-specific
+    and should be accessed via TenantMember, not User model.
+    These fields are kept for backward compatibility but will be deprecated.
     """
     full_name = serializers.ReadOnlyField()
     
@@ -279,12 +283,11 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'first_name', 'last_name', 'full_name',
-            'phone', 'avatar_url', 'role', 'employee_id', 'department',
-            'job_title', 'is_active', 'is_verified', 'two_factor_enabled',
+            'phone', 'avatar_url', 'is_active', 'is_verified', 'two_factor_enabled',
             'created_at', 'last_login_at'
         ]
         read_only_fields = [
-            'id', 'employee_id', 'is_verified', 'created_at', 'last_login_at'
+            'id', 'is_verified', 'created_at', 'last_login_at'
         ]
 
 

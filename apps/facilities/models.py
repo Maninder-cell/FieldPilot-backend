@@ -223,10 +223,8 @@ class CustomerInvitation(UUIDPrimaryKeyMixin, models.Model):
         self.customer.status = 'active'
         self.customer.save(update_fields=['user', 'status', 'updated_at'])
         
-        # Update user role to customer if not already
-        if user.role != 'customer':
-            user.role = 'customer'
-            user.save(update_fields=['role'])
+        # Note: User role is now managed via TenantMember, not User model
+        # The tenant membership should already exist or be created separately
     
     def revoke(self):
         """

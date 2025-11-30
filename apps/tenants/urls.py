@@ -6,6 +6,11 @@ This source code is proprietary and confidential.
 """
 from django.urls import path
 from . import views
+from .views_profile import (
+    current_user_profile,
+    user_tenant_memberships,
+    update_tenant_profile
+)
 
 urlpatterns = [
     # Tenant management
@@ -29,4 +34,9 @@ urlpatterns = [
     path('invitations/accept/<str:token>/', views.accept_invitation_by_token, name='accept_invitation_by_token'),
     path('invitations/<uuid:invitation_id>/resend/', views.resend_invitation, name='resend_invitation'),
     path('invitations/<uuid:invitation_id>/revoke/', views.revoke_invitation, name='revoke_invitation'),
+    
+    # User Profile (tenant-specific)
+    path('profile/', current_user_profile, name='current_user_profile'),
+    path('profile/memberships/', user_tenant_memberships, name='user_tenant_memberships'),
+    path('profile/update/', update_tenant_profile, name='update_tenant_profile'),
 ]
