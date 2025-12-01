@@ -253,13 +253,13 @@ def create_subscription(request):
                 )
             
             # Determine trial end
-            # Check tenant's trial status (for new subscriptions)
+            # Only apply trial for first-time subscriptions (not resubscriptions)
             trial_end = None
-            if tenant.trial_ends_at and timezone.now() < tenant.trial_ends_at:
+            if not existing_subscription and tenant.trial_ends_at and timezone.now() < tenant.trial_ends_at:
                 trial_end = tenant.trial_ends_at
                 logger.info(f"Creating subscription with trial until: {trial_end}")
             else:
-                logger.info("No active trial - subscription will start immediately")
+                logger.info("No trial - subscription will start immediately")
             
             # Create Stripe subscription
             stripe_subscription, actual_customer_id = StripeService.create_subscription(
