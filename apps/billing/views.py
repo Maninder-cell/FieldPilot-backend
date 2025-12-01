@@ -227,18 +227,22 @@ def create_subscription(request):
                 )
             
             # Get or create Stripe customer
-            # First check if we have a pending customer from setup intent
-            customer_id = request.session.get('pending_stripe_customer_id')
-            if customer_id:
+            # First check if we have an existing subscription with customer_id
+            if existing_subscription and existing_subscription.stripe_customer_id:
+                customer_id = existing_subscription.stripe_customer_id
+                logger.info(f"Reusing Stripe customer from previous subscription: {customer_id}")
+            # Then check if we have a pending customer from setup intent
+            elif request.session.get('pending_stripe_customer_id'):
+                customer_id = request.session.get('pending_stripe_customer_id')
                 logger.info(f"Reusing Stripe customer from setup intent: {customer_id}")
                 # Clear the session variable after use
                 del request.session['pending_stripe_customer_id']
             else:
-                # Create new customer if not found in session
+                # Get or create customer (this checks Stripe first)
                 user = request.user
                 customer = StripeService.get_or_create_customer(tenant, user)
                 customer_id = customer.id
-                logger.info(f"Created new Stripe customer: {customer_id}")
+                logger.info(f"Using Stripe customer: {customer_id}")
             
             # Get price ID based on billing cycle
             price_id = (
