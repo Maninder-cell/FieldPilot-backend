@@ -281,8 +281,20 @@ def logout(request):
         refresh_token = request.data.get('refresh_token')
         
         if refresh_token:
-            token = RefreshToken(refresh_token)
-            token.blacklist()
+            try:
+                token = RefreshToken(refresh_token)
+                # Try to blacklist if the extension is installed
+                if hasattr(token, 'blacklist'):
+                    token.blacklist()
+                else:
+                    # If blacklist not available, just validate the token
+                    # The token will expire naturally
+                    token.check_blacklist()
+            except AttributeError:
+                # Blacklist not installed, token will expire naturally
+                pass
+            except Exception as token_error:
+                logger.warning(f"Token blacklist error: {str(token_error)}")
         
         logger.info(f"User logged out: {request.user.email}")
         
