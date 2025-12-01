@@ -363,7 +363,63 @@ def update_subscription(request):
         with transaction.atomic():
             validated_data = serializer.validated_data
             
-            # Handle plan change
+            # Check if subscription is canceled - create new subscription instead
+            if subscription.status == 'canceled':
+                # Get plan and billing cycle
+                new_plan = serializer.plan if 'plan_slug' in validated_data else subscription.plan
+                new_billing_cycle = validated_data.get('billing_cycle', 'monthly')
+                
+                # Get price ID
+                price_id = (
+                    new_plan.stripe_price_id_yearly if new_billing_cycle == 'yearly'
+                    else new_plan.stripe_price_id_monthly
+                )
+                
+                if not price_id:
+                    return error_response(
+                        message=f"No Stripe price ID configured for plan {new_plan.name}",
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+                
+                # Get customer's default payment method
+                customer = stripe.Customer.retrieve(subscription.stripe_customer_id)
+                payment_method_id = customer.invoice_settings.default_payment_method
+                
+                if not payment_method_id:
+                    return error_response(
+                        message="No payment method found. Please add a payment method first.",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Create new Stripe subscription using existing customer ID
+                stripe_subscription, actual_customer_id = StripeService.create_subscription(
+                    customer_id=subscription.stripe_customer_id,
+                    price_id=price_id,
+                    payment_method_id=payment_method_id,
+                    trial_end=None  # No trial for resubscription
+                )
+                
+                # Update existing subscription record
+                subscription.plan = new_plan
+                subscription.stripe_subscription_id = stripe_subscription.id
+                subscription.status = stripe_subscription.status
+                subscription.current_period_start = timezone.datetime.fromtimestamp(
+                    stripe_subscription.current_period_start, tz=timezone.utc
+                )
+                subscription.current_period_end = timezone.datetime.fromtimestamp(
+                    stripe_subscription.current_period_end, tz=timezone.utc
+                )
+                subscription.cancellation_reason = ''
+                subscription.save()
+                
+                logger.info(f"Resubscribed tenant {tenant.name} to plan {new_plan.name}")
+                
+                return success_response(
+                    data=SubscriptionSerializer(subscription, context={'stripe_subscription': stripe_subscription}).data,
+                    message="Subscription reactivated successfully"
+                )
+            
+            # Handle plan change for active subscriptions
             if 'plan_slug' in validated_data:
                 new_plan = serializer.plan
                 new_billing_cycle = validated_data.get('billing_cycle', 'monthly')
