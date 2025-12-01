@@ -36,29 +36,49 @@ class TenantMembershipMiddleware:
                 # Get current tenant from django-tenants
                 tenant = getattr(connection, 'tenant', None)
                 
-                # Only check membership if we're in a tenant schema (not public)
-                if tenant and hasattr(tenant, 'schema_name') and tenant.schema_name != 'public':
+                if tenant and hasattr(tenant, 'schema_name'):
+                    # TenantMember is in SHARED_APPS (public schema)
+                    # We need to query it from public schema regardless of current schema
+                    from django_tenants.utils import schema_context
+                    
                     try:
-                        # Get user's membership in current tenant
-                        membership = TenantMember.objects.get(
-                            tenant=tenant,
-                            user=request.user,
-                            is_active=True
-                        )
-                        request.tenant_membership = membership
-                        request.tenant_role = membership.role
-                        
-                        logger.debug(
-                            f"User {request.user.email} accessing tenant {tenant.name} "
-                            f"with role {membership.role}"
-                        )
-                    except TenantMember.DoesNotExist:
-                        logger.warning(
-                            f"User {request.user.email} attempted to access tenant "
-                            f"{tenant.name} but is not a member"
-                        )
-                        # User is not a member of this tenant
-                        pass
+                        # Always query TenantMember from public schema
+                        with schema_context('public'):
+                            try:
+                                # Get user's membership in current tenant
+                                membership = TenantMember.objects.get(
+                                    tenant=tenant,
+                                    user=request.user,
+                                    is_active=True
+                                )
+                                request.tenant_membership = membership
+                                request.tenant_role = membership.role
+                                
+                                logger.debug(
+                                    f"User {request.user.email} accessing tenant {tenant.name} "
+                                    f"with role {membership.role}"
+                                )
+                            except TenantMember.DoesNotExist:
+                                # User is not a member of this specific tenant
+                                # Try to get user's first active membership as fallback
+                                membership = TenantMember.objects.filter(
+                                    user=request.user,
+                                    is_active=True
+                                ).first()
+                                
+                                if membership:
+                                    request.tenant_membership = membership
+                                    request.tenant_role = membership.role
+                                    logger.debug(
+                                        f"User {request.user.email} using primary tenant "
+                                        f"{membership.tenant.name} with role {membership.role}"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"User {request.user.email} has no active tenant memberships"
+                                    )
+                    except Exception as e:
+                        logger.error(f"Error querying tenant membership: {str(e)}", exc_info=True)
             except Exception as e:
                 logger.error(f"Error in TenantMembershipMiddleware: {str(e)}", exc_info=True)
         

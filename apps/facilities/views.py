@@ -29,7 +29,43 @@ logger = logging.getLogger(__name__)
 
 
 def require_role(request, allowed_roles):
-    """Helper to check tenant role and return error if not authorized."""
+    """
+    Helper to check tenant role and return error if not authorized.
+    
+    Note: This should be called AFTER DRF's permission_classes have run,
+    which means the user is already authenticated at this point.
+    """
+    # If tenant_role is not set, try to set it now (in case middleware didn't run)
+    if not hasattr(request, 'tenant_role') or request.tenant_role is None:
+        # Try to get tenant membership
+        from django.db import connection
+        from apps.tenants.models import TenantMember
+        from django_tenants.utils import schema_context
+        
+        tenant = getattr(connection, 'tenant', None)
+        if tenant and request.user.is_authenticated:
+            try:
+                with schema_context('public'):
+                    membership = TenantMember.objects.filter(
+                        tenant=tenant,
+                        user=request.user,
+                        is_active=True
+                    ).first()
+                    
+                    if not membership:
+                        # Try user's first active membership
+                        membership = TenantMember.objects.filter(
+                            user=request.user,
+                            is_active=True
+                        ).first()
+                    
+                    if membership:
+                        request.tenant_role = membership.role
+                        request.tenant_membership = membership
+            except Exception as e:
+                logger.error(f"Error getting tenant membership in require_role: {str(e)}")
+    
+    # Now check if we have a role
     if not hasattr(request, 'tenant_role') or not request.tenant_role:
         return error_response(
             message='You are not a member of this organization',
