@@ -160,6 +160,11 @@ def register(request):
             # Create user profile
             UserProfile.objects.create(user=user)
             
+            # Generate JWT tokens
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+            
             # Send verification email
             if send_otp_email(user, 'email_verification'):
                 logger.info(f"User registered: {user.email}")
@@ -167,13 +172,20 @@ def register(request):
                 return success_response(
                     data={
                         'user': UserSerializer(user).data,
+                        'access': access_token,
+                        'refresh': refresh_token,
                         'message': 'Registration successful. Please check your email for verification code.'
                     },
                     status_code=status.HTTP_201_CREATED
                 )
             else:
-                return error_response(
-                    message="Registration successful but failed to send verification email. Please try resending OTP.",
+                return success_response(
+                    data={
+                        'user': UserSerializer(user).data,
+                        'access': access_token,
+                        'refresh': refresh_token,
+                        'message': 'Registration successful but failed to send verification email. Please try resending OTP.'
+                    },
                     status_code=status.HTTP_201_CREATED
                 )
                 
