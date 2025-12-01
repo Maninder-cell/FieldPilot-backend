@@ -124,13 +124,7 @@ def current_subscription(request):
         try:
             subscription = tenant.subscription
             
-            # Update usage counts
-            try:
-                subscription.update_usage_counts()
-            except Exception as e:
-                logger.warning(f"Could not update usage counts: {str(e)}")
-            
-            # Fetch latest data from Stripe
+            # Fetch latest data from Stripe first
             try:
                 stripe_subscription = StripeService.get_subscription(subscription.stripe_subscription_id)
                 
@@ -144,6 +138,19 @@ def current_subscription(request):
                 logger.error(f"Failed to fetch subscription from Stripe: {str(e)}")
                 # Continue with local data if Stripe fetch fails
                 stripe_subscription = None
+            
+            # If subscription is canceled, return null
+            if subscription.status == 'canceled':
+                return success_response(
+                    data=None,
+                    message="No active subscription found"
+                )
+            
+            # Update usage counts for active subscriptions
+            try:
+                subscription.update_usage_counts()
+            except Exception as e:
+                logger.warning(f"Could not update usage counts: {str(e)}")
             
             serializer = SubscriptionSerializer(subscription, context={'stripe_subscription': stripe_subscription})
             
@@ -200,12 +207,17 @@ def create_subscription(request):
             billing_cycle = serializer.validated_data['billing_cycle']
             payment_method_id = serializer.validated_data.get('payment_method_id')
             
-            # Check if tenant already has a subscription
-            if hasattr(tenant, 'subscription') and tenant.subscription.is_active:
-                return error_response(
-                    message="Tenant already has an active subscription",
-                    status_code=status.HTTP_400_BAD_REQUEST
-                )
+            # Check if tenant already has an active subscription
+            existing_subscription = None
+            try:
+                existing_subscription = tenant.subscription
+                if existing_subscription.is_active:
+                    return error_response(
+                        message="Tenant already has an active subscription",
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+            except Subscription.DoesNotExist:
+                pass
             
             # Require payment method
             if not payment_method_id:
@@ -263,15 +275,33 @@ def create_subscription(request):
                 }
             )
             
-            # Create local subscription record using the actual customer ID
-            subscription = Subscription.objects.create(
-                tenant=tenant,
-                plan=plan,
-                stripe_customer_id=actual_customer_id,
-                stripe_subscription_id=stripe_subscription.id,
-                status=stripe_subscription.status,
-                billing_cycle=billing_cycle
-            )
+            # Create or update local subscription record
+            if existing_subscription:
+                # Update existing canceled subscription
+                existing_subscription.plan = plan
+                existing_subscription.stripe_customer_id = actual_customer_id
+                existing_subscription.stripe_subscription_id = stripe_subscription.id
+                existing_subscription.status = stripe_subscription.status
+                existing_subscription.billing_cycle = billing_cycle
+                existing_subscription.current_period_start = timezone.datetime.fromtimestamp(
+                    stripe_subscription.current_period_start, tz=timezone.utc
+                )
+                existing_subscription.current_period_end = timezone.datetime.fromtimestamp(
+                    stripe_subscription.current_period_end, tz=timezone.utc
+                )
+                existing_subscription.cancellation_reason = ''
+                existing_subscription.save()
+                subscription = existing_subscription
+            else:
+                # Create new subscription record
+                subscription = Subscription.objects.create(
+                    tenant=tenant,
+                    plan=plan,
+                    stripe_customer_id=actual_customer_id,
+                    stripe_subscription_id=stripe_subscription.id,
+                    status=stripe_subscription.status,
+                    billing_cycle=billing_cycle
+                )
             
             # Update usage counts (ignore errors if tables don't exist yet)
             try:
@@ -625,9 +655,26 @@ def billing_overview(request):
         # Fetch subscription from Stripe
         try:
             stripe_subscription = StripeService.get_subscription(subscription.stripe_subscription_id)
+            
+            # Update local status if changed
+            if subscription.status != stripe_subscription.status:
+                subscription.status = stripe_subscription.status
+                subscription.save(update_fields=['status', 'updated_at'])
         except Exception as e:
             logger.error(f"Failed to fetch subscription from Stripe: {str(e)}")
             stripe_subscription = None
+        
+        # If subscription is canceled, return as if no subscription exists
+        if subscription.status == 'canceled':
+            return success_response(
+                data={
+                    'subscription': None,
+                    'current_invoice': None,
+                    'recent_payments': [],
+                    'usage_summary': {}
+                },
+                message="No active subscription found"
+            )
         
         # Fetch latest invoice from Stripe
         try:
