@@ -435,7 +435,7 @@ class BillingOverviewSerializer(serializers.Serializer):
     Serializer for billing overview/dashboard - fetches data from Stripe.
     """
     subscription = SubscriptionSerializer(allow_null=True)
-    current_invoice = StripeInvoiceSerializer(allow_null=True)
+    recent_invoices = StripeInvoiceSerializer(many=True)
     recent_payments = StripeChargeSerializer(many=True)
     usage_summary = serializers.DictField()
     
@@ -446,7 +446,7 @@ class BillingOverviewSerializer(serializers.Serializer):
         # Get subscription from context
         subscription = self.context.get('subscription')
         stripe_subscription = self.context.get('stripe_subscription')
-        current_invoice = self.context.get('current_invoice')
+        recent_invoices = self.context.get('recent_invoices', [])
         recent_charges = self.context.get('recent_charges', [])
         
         # Calculate usage summary
@@ -472,7 +472,7 @@ class BillingOverviewSerializer(serializers.Serializer):
         
         return {
             'subscription': SubscriptionSerializer(subscription, context={'stripe_subscription': stripe_subscription}).data if subscription else None,
-            'current_invoice': StripeInvoiceSerializer(current_invoice).data if current_invoice else None,
+            'recent_invoices': StripeInvoiceSerializer(recent_invoices, many=True).data,
             'recent_payments': StripeChargeSerializer(recent_charges, many=True).data,
             'usage_summary': usage_summary
         }

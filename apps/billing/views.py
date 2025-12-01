@@ -670,34 +670,33 @@ def billing_overview(request):
             logger.error(f"Failed to fetch subscription from Stripe: {str(e)}")
             stripe_subscription = None
         
-        # If subscription is canceled, return as if no subscription exists
-        if subscription.status == 'canceled':
-            return success_response(
-                data={
-                    'subscription': None,
-                    'current_invoice': None,
-                    'recent_payments': [],
-                    'usage_summary': {}
-                },
-                message="No active subscription found"
-            )
-        
-        # Fetch latest invoice from Stripe
+        # Fetch recent invoices from Stripe (even for canceled subscriptions)
         try:
-            stripe_invoices = StripeService.list_invoices(customer_id=customer_id, limit=1)
-            current_invoice = stripe_invoices[0] if stripe_invoices else None
+            recent_invoices = StripeService.list_invoices(customer_id=customer_id, limit=5)
         except Exception as e:
             logger.error(f"Failed to fetch invoices from Stripe: {str(e)}")
-            current_invoice = None
+            recent_invoices = []
         
-        # Fetch recent payments from Stripe
+        # Fetch recent payments from Stripe (even for canceled subscriptions)
         try:
             recent_charges = StripeService.list_charges(customer_id=customer_id, limit=5)
         except Exception as e:
             logger.error(f"Failed to fetch charges from Stripe: {str(e)}")
             recent_charges = []
         
-        # Update usage counts
+        # If subscription is canceled, return payment history but no active subscription
+        if subscription.status == 'canceled':
+            return success_response(
+                data={
+                    'subscription': None,
+                    'recent_invoices': StripeInvoiceSerializer(recent_invoices, many=True).data,
+                    'recent_payments': StripeChargeSerializer(recent_charges, many=True).data,
+                    'usage_summary': {}
+                },
+                message="Subscription canceled - showing payment history"
+            )
+        
+        # Update usage counts for active subscriptions
         try:
             subscription.update_usage_counts()
         except Exception as e:
@@ -707,7 +706,7 @@ def billing_overview(request):
         serializer = BillingOverviewSerializer(context={
             'subscription': subscription,
             'stripe_subscription': stripe_subscription,
-            'current_invoice': current_invoice,
+            'recent_invoices': recent_invoices,
             'recent_charges': recent_charges
         })
         
