@@ -437,6 +437,7 @@ def update_subscription(request):
                 subscription.plan = new_plan
                 subscription.stripe_subscription_id = stripe_subscription.id
                 subscription.status = stripe_subscription.status
+                subscription.billing_cycle = new_billing_cycle  # Update billing cycle
                 subscription.current_period_start = timezone.datetime.fromtimestamp(
                     stripe_subscription.current_period_start, tz=timezone.utc
                 )
@@ -456,7 +457,7 @@ def update_subscription(request):
             # Handle plan change for active subscriptions
             if 'plan_slug' in validated_data:
                 new_plan = serializer.plan
-                new_billing_cycle = validated_data.get('billing_cycle', 'monthly')
+                new_billing_cycle = validated_data.get('billing_cycle', subscription.billing_cycle)  # Default to current cycle if not specified
                 
                 # Get new price ID
                 price_id = (
@@ -478,10 +479,11 @@ def update_subscription(request):
                 
                 # Update local subscription
                 subscription.plan = new_plan
+                subscription.billing_cycle = new_billing_cycle  # Update billing cycle
                 subscription.status = stripe_subscription.status
                 subscription.save()
                 
-                logger.info(f"Subscription plan updated for tenant {tenant.name}: {new_plan.name}")
+                logger.info(f"Subscription plan updated for tenant {tenant.name}: {new_plan.name} ({new_billing_cycle})")
             
             # Handle cancellation setting
             if 'cancel_at_period_end' in validated_data:
@@ -970,19 +972,27 @@ def create_setup_intent(request):
 def list_payment_methods(request):
     """
     List payment methods from Stripe.
+    Works for both active and canceled subscriptions.
     """
     try:
         tenant = get_tenant(request)
         
-        # Check if tenant has a subscription
+        # Check if tenant has a subscription (including canceled ones)
         if not hasattr(tenant, 'subscription') or not tenant.subscription:
-            return error_response(
-                message="No subscription found",
-                status_code=status.HTTP_404_NOT_FOUND
+            return success_response(
+                data=[],
+                message="No subscription history found"
             )
         
         subscription = tenant.subscription
         customer_id = subscription.stripe_customer_id
+        
+        # If no customer ID, return empty list
+        if not customer_id:
+            return success_response(
+                data=[],
+                message="No payment methods found"
+            )
         
         # Fetch customer to get default payment method
         customer = stripe.Customer.retrieve(customer_id)
