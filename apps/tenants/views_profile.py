@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 @extend_schema(
-    tags=['Profile'],
+    tags=['Onboarding'],
     summary='Get current user tenant profile',
     description='Get current user\'s profile including tenant-specific role and information',
     responses={
@@ -123,7 +123,7 @@ def current_user_profile(request):
 
 
 @extend_schema(
-    tags=['Profile'],
+    tags=['Onboarding'],
     summary='Get all user tenant memberships',
     description='Get list of all tenants the current user is a member of',
     responses={
@@ -180,7 +180,7 @@ def user_tenant_memberships(request):
 
 
 @extend_schema(
-    tags=['Profile'],
+    tags=['Onboarding'],
     summary='Update tenant-specific profile',
     description='Update current user\'s tenant-specific information (department, job_title)',
     request={
