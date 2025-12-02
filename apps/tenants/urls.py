@@ -40,4 +40,11 @@ urlpatterns = [
     path('profile/', current_user_profile, name='current_user_profile'),
     path('profile/memberships/', user_tenant_memberships, name='user_tenant_memberships'),
     path('profile/update/', update_tenant_profile, name='update_tenant_profile'),
+    
+    # Technician Wage Rates (Phase 2)
+    path('technicians/wage-rates/', views.get_technician_wage_rates, name='get_technician_wage_rates'),
+    path('technicians/wage-rates/create/', views.create_technician_wage_rate, name='create_technician_wage_rate'),
+    path('technicians/wage-rates/<uuid:rate_id>/', views.get_technician_wage_rate, name='get_technician_wage_rate'),
+    path('technicians/wage-rates/<uuid:rate_id>/update/', views.update_technician_wage_rate, name='update_technician_wage_rate'),
+    path('technicians/wage-rates/<uuid:rate_id>/delete/', views.delete_technician_wage_rate, name='delete_technician_wage_rate'),
 ]

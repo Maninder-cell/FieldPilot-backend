@@ -135,9 +135,25 @@ class TechnicianWageRateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
     
     def validate_technician(self, value):
-        """Validate that the user is a technician."""
-        if value.role != 'technician':
-            raise serializers.ValidationError("Wage rates can only be set for technicians.")
+        """Validate that the user is a technician in the current tenant."""
+        from django.db import connection
+        
+        # Get current tenant from connection
+        if not hasattr(connection, 'tenant') or not connection.tenant:
+            raise serializers.ValidationError("Cannot validate technician role outside tenant context.")
+        
+        # Check if user is a technician in this tenant
+        try:
+            member = TenantMember.objects.get(
+                tenant=connection.tenant,
+                user=value,
+                is_active=True
+            )
+            if member.role != 'technician':
+                raise serializers.ValidationError("Wage rates can only be set for technicians.")
+        except TenantMember.DoesNotExist:
+            raise serializers.ValidationError("User is not a member of this tenant.")
+        
         return value
 
 
@@ -154,9 +170,25 @@ class CreateTechnicianWageRateSerializer(serializers.ModelSerializer):
         ]
     
     def validate_technician(self, value):
-        """Validate that the user is a technician."""
-        if value.role != 'technician':
-            raise serializers.ValidationError("Wage rates can only be set for technicians.")
+        """Validate that the user is a technician in the current tenant."""
+        from django.db import connection
+        
+        # Get current tenant from connection
+        if not hasattr(connection, 'tenant') or not connection.tenant:
+            raise serializers.ValidationError("Cannot validate technician role outside tenant context.")
+        
+        # Check if user is a technician in this tenant
+        try:
+            member = TenantMember.objects.get(
+                tenant=connection.tenant,
+                user=value,
+                is_active=True
+            )
+            if member.role != 'technician':
+                raise serializers.ValidationError("Wage rates can only be set for technicians.")
+        except TenantMember.DoesNotExist:
+            raise serializers.ValidationError("User is not a member of this tenant.")
+        
         return value
     
     def validate(self, data):

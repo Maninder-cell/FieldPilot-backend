@@ -1293,3 +1293,423 @@ def tenant_settings(request):
             message="Failed to process settings",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+
+# ============================================================================
+# Technician Wage Rates (Phase 2)
+# ============================================================================
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Get all technician wage rates',
+    description='Get list of all technician wage rates for the current tenant',
+    responses={
+        200: {'description': 'List of technician wage rates'},
+        403: {'description': 'Permission denied'},
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_technician_wage_rates(request):
+    """
+    Get all technician wage rates for the current tenant.
+    Only accessible by Owner/Admin.
+    """
+    try:
+        from django.db import connection
+        from apps.tenants.models import TechnicianWageRate
+        from apps.tenants.serializers import TechnicianWageRateSerializer
+        
+        # Check permissions
+        if connection.schema_name == 'public':
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            if membership.role not in ['owner', 'admin']:
+                return error_response(
+                    message="Only owners and admins can view wage rates",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            connection.set_tenant(membership.tenant)
+        else:
+            try:
+                member = TenantMember.objects.get(user=request.user, is_active=True)
+                if member.role not in ['owner', 'admin']:
+                    return error_response(
+                        message="Only owners and admins can view wage rates",
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
+            except TenantMember.DoesNotExist:
+                return error_response(
+                    message="You are not a member of this company",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Get all wage rates
+        rates = TechnicianWageRate.objects.select_related(
+            'technician', 'created_by'
+        ).order_by('-effective_from', '-created_at')
+        
+        serializer = TechnicianWageRateSerializer(rates, many=True)
+        
+        return success_response(
+            data=serializer.data,
+            message="Wage rates retrieved successfully"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get technician wage rates: {str(e)}")
+        return error_response(
+            message="Failed to retrieve wage rates",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Create technician wage rate',
+    description='Create a new wage rate for a technician (Owner/Admin only)',
+    request={'application/json': {
+        'type': 'object',
+        'properties': {
+            'technician': {'type': 'string', 'format': 'uuid'},
+            'normal_hourly_rate': {'type': 'number'},
+            'overtime_hourly_rate': {'type': 'number'},
+            'effective_from': {'type': 'string', 'format': 'date'},
+            'effective_to': {'type': 'string', 'format': 'date', 'nullable': True},
+            'notes': {'type': 'string'},
+        },
+        'required': ['technician', 'normal_hourly_rate', 'overtime_hourly_rate', 'effective_from']
+    }},
+    responses={
+        201: {'description': 'Wage rate created successfully'},
+        400: {'description': 'Invalid data'},
+        403: {'description': 'Permission denied'},
+    }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_technician_wage_rate(request):
+    """
+    Create a new technician wage rate.
+    Only accessible by Owner/Admin.
+    """
+    try:
+        from django.db import connection
+        from apps.tenants.models import TechnicianWageRate
+        from apps.tenants.serializers import CreateTechnicianWageRateSerializer
+        
+        # Check permissions
+        if connection.schema_name == 'public':
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            if membership.role not in ['owner', 'admin']:
+                return error_response(
+                    message="Only owners and admins can create wage rates",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            connection.set_tenant(membership.tenant)
+        else:
+            try:
+                member = TenantMember.objects.get(user=request.user, is_active=True)
+                if member.role not in ['owner', 'admin']:
+                    return error_response(
+                        message="Only owners and admins can create wage rates",
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
+            except TenantMember.DoesNotExist:
+                return error_response(
+                    message="You are not a member of this company",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Validate and create
+        serializer = CreateTechnicianWageRateSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return error_response(
+                message="Invalid wage rate data",
+                details=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Set created_by
+        rate = serializer.save(created_by=request.user)
+        
+        logger.info(f"Wage rate created for technician {rate.technician.email} by {request.user.email}")
+        
+        from apps.tenants.serializers import TechnicianWageRateSerializer
+        return success_response(
+            data=TechnicianWageRateSerializer(rate).data,
+            message="Wage rate created successfully",
+            status_code=status.HTTP_201_CREATED
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to create technician wage rate: {str(e)}")
+        return error_response(
+            message="Failed to create wage rate",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Get technician wage rate by ID',
+    description='Get a specific technician wage rate',
+    responses={
+        200: {'description': 'Wage rate details'},
+        403: {'description': 'Permission denied'},
+        404: {'description': 'Wage rate not found'},
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_technician_wage_rate(request, rate_id):
+    """
+    Get a specific technician wage rate.
+    Only accessible by Owner/Admin.
+    """
+    try:
+        from django.db import connection
+        from apps.tenants.models import TechnicianWageRate
+        from apps.tenants.serializers import TechnicianWageRateSerializer
+        
+        # Check permissions
+        if connection.schema_name == 'public':
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            if membership.role not in ['owner', 'admin']:
+                return error_response(
+                    message="Only owners and admins can view wage rates",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            connection.set_tenant(membership.tenant)
+        else:
+            try:
+                member = TenantMember.objects.get(user=request.user, is_active=True)
+                if member.role not in ['owner', 'admin']:
+                    return error_response(
+                        message="Only owners and admins can view wage rates",
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
+            except TenantMember.DoesNotExist:
+                return error_response(
+                    message="You are not a member of this company",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Get wage rate
+        rate = TechnicianWageRate.objects.select_related(
+            'technician', 'created_by'
+        ).get(id=rate_id)
+        
+        serializer = TechnicianWageRateSerializer(rate)
+        
+        return success_response(
+            data=serializer.data,
+            message="Wage rate retrieved successfully"
+        )
+        
+    except TechnicianWageRate.DoesNotExist:
+        return error_response(
+            message="Wage rate not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Failed to get technician wage rate: {str(e)}")
+        return error_response(
+            message="Failed to retrieve wage rate",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Update technician wage rate',
+    description='Update an existing technician wage rate (Owner/Admin only)',
+    request={'application/json': {
+        'type': 'object',
+        'properties': {
+            'normal_hourly_rate': {'type': 'number'},
+            'overtime_hourly_rate': {'type': 'number'},
+            'effective_from': {'type': 'string', 'format': 'date'},
+            'effective_to': {'type': 'string', 'format': 'date', 'nullable': True},
+            'notes': {'type': 'string'},
+            'is_active': {'type': 'boolean'},
+        }
+    }},
+    responses={
+        200: {'description': 'Wage rate updated successfully'},
+        400: {'description': 'Invalid data'},
+        403: {'description': 'Permission denied'},
+        404: {'description': 'Wage rate not found'},
+    }
+)
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def update_technician_wage_rate(request, rate_id):
+    """
+    Update a technician wage rate.
+    Only accessible by Owner/Admin.
+    """
+    try:
+        from django.db import connection
+        from apps.tenants.models import TechnicianWageRate
+        from apps.tenants.serializers import TechnicianWageRateSerializer
+        
+        # Check permissions
+        if connection.schema_name == 'public':
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            if membership.role not in ['owner', 'admin']:
+                return error_response(
+                    message="Only owners and admins can update wage rates",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            connection.set_tenant(membership.tenant)
+        else:
+            try:
+                member = TenantMember.objects.get(user=request.user, is_active=True)
+                if member.role not in ['owner', 'admin']:
+                    return error_response(
+                        message="Only owners and admins can update wage rates",
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
+            except TenantMember.DoesNotExist:
+                return error_response(
+                    message="You are not a member of this company",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Get and update wage rate
+        rate = TechnicianWageRate.objects.get(id=rate_id)
+        
+        serializer = TechnicianWageRateSerializer(rate, data=request.data, partial=True)
+        
+        if not serializer.is_valid():
+            return error_response(
+                message="Invalid wage rate data",
+                details=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer.save()
+        
+        logger.info(f"Wage rate updated for technician {rate.technician.email} by {request.user.email}")
+        
+        return success_response(
+            data=serializer.data,
+            message="Wage rate updated successfully"
+        )
+        
+    except TechnicianWageRate.DoesNotExist:
+        return error_response(
+            message="Wage rate not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Failed to update technician wage rate: {str(e)}")
+        return error_response(
+            message="Failed to update wage rate",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Delete technician wage rate',
+    description='Delete a technician wage rate (Owner/Admin only)',
+    responses={
+        200: {'description': 'Wage rate deleted successfully'},
+        403: {'description': 'Permission denied'},
+        404: {'description': 'Wage rate not found'},
+    }
+)
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_technician_wage_rate(request, rate_id):
+    """
+    Delete a technician wage rate.
+    Only accessible by Owner/Admin.
+    """
+    try:
+        from django.db import connection
+        from apps.tenants.models import TechnicianWageRate
+        
+        # Check permissions
+        if connection.schema_name == 'public':
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            if membership.role not in ['owner', 'admin']:
+                return error_response(
+                    message="Only owners and admins can delete wage rates",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            connection.set_tenant(membership.tenant)
+        else:
+            try:
+                member = TenantMember.objects.get(user=request.user, is_active=True)
+                if member.role not in ['owner', 'admin']:
+                    return error_response(
+                        message="Only owners and admins can delete wage rates",
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
+            except TenantMember.DoesNotExist:
+                return error_response(
+                    message="You are not a member of this company",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Get and delete wage rate
+        rate = TechnicianWageRate.objects.get(id=rate_id)
+        technician_email = rate.technician.email
+        rate.delete()
+        
+        logger.info(f"Wage rate deleted for technician {technician_email} by {request.user.email}")
+        
+        return success_response(
+            message="Wage rate deleted successfully"
+        )
+        
+    except TechnicianWageRate.DoesNotExist:
+        return error_response(
+            message="Wage rate not found",
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Failed to delete technician wage rate: {str(e)}")
+        return error_response(
+            message="Failed to delete wage rate",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

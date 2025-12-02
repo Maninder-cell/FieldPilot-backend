@@ -411,8 +411,7 @@ class TechnicianWageRate(models.Model):
         'authentication.User',
         on_delete=models.CASCADE,
         related_name='wage_rates',
-        limit_choices_to={'role': 'technician'},
-        help_text="Technician this rate applies to"
+        help_text="Technician this rate applies to (role validated via TenantMember)"
     )
     
     # Wage Rates
@@ -479,11 +478,25 @@ class TechnicianWageRate(models.Model):
         """Validate model data."""
         super().clean()
         
-        # Validate technician role
-        if self.technician and self.technician.role != 'technician':
-            raise ValidationError({
-                'technician': 'Wage rates can only be set for technicians.'
-            })
+        # Validate technician role - check TenantMember instead of User.role
+        if self.technician:
+            from django.db import connection
+            # Only validate role if we're in a tenant context
+            if hasattr(connection, 'tenant') and connection.tenant:
+                try:
+                    member = TenantMember.objects.get(
+                        tenant=connection.tenant,
+                        user=self.technician,
+                        is_active=True
+                    )
+                    if member.role != 'technician':
+                        raise ValidationError({
+                            'technician': 'Wage rates can only be set for technicians.'
+                        })
+                except TenantMember.DoesNotExist:
+                    raise ValidationError({
+                        'technician': 'User is not a member of this tenant.'
+                    })
         
         # Validate effective dates
         if self.effective_to and self.effective_to <= self.effective_from:
