@@ -1195,3 +1195,101 @@ def revoke_invitation(request, invitation_id):
             message="Failed to revoke invitation",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Get or update tenant settings',
+    description='Get or update tenant settings including wage and working hours configuration',
+    request=TenantSettingsSerializer,
+    responses={
+        200: TenantSettingsSerializer,
+        403: {'description': 'Permission denied'},
+        404: {'description': 'Settings not found'},
+    }
+)
+@api_view(['GET', 'PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def tenant_settings(request):
+    """
+    Get or update tenant settings.
+    Works in both public and tenant schemas.
+    """
+    try:
+        from django.db import connection
+        
+        # Get current tenant and check permissions
+        if connection.schema_name == 'public':
+            # In public schema, get from user's membership
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Check permissions for PUT/PATCH
+            if request.method in ['PUT', 'PATCH']:
+                if membership.role not in ['owner', 'admin']:
+                    return error_response(
+                        message="Only owners and admins can update settings",
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
+            
+            # Switch to tenant schema to get settings
+            connection.set_tenant(membership.tenant)
+        else:
+            # In tenant schema, check role from TenantMember
+            if request.method in ['PUT', 'PATCH']:
+                try:
+                    member = TenantMember.objects.get(user=request.user, is_active=True)
+                    if member.role not in ['owner', 'admin']:
+                        return error_response(
+                            message="Only owners and admins can update settings",
+                            status_code=status.HTTP_403_FORBIDDEN
+                        )
+                except TenantMember.DoesNotExist:
+                    return error_response(
+                        message="You are not a member of this company",
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
+        
+        # Get or create tenant settings
+        settings, created = TenantSettings.objects.get_or_create(
+            tenant_id=connection.tenant.id if hasattr(connection, 'tenant') else None
+        )
+        
+        # Handle GET request
+        if request.method == 'GET':
+            serializer = TenantSettingsSerializer(settings)
+            return success_response(
+                data=serializer.data,
+                message="Settings retrieved successfully"
+            )
+        
+        # Handle PUT/PATCH request
+        serializer = TenantSettingsSerializer(settings, data=request.data, partial=True)
+        
+        if not serializer.is_valid():
+            return error_response(
+                message="Invalid settings data",
+                details=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer.save()
+        
+        logger.info(f"Tenant settings updated by {request.user.email}")
+        
+        return success_response(
+            data=serializer.data,
+            message="Settings updated successfully"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to process tenant settings: {str(e)}")
+        return error_response(
+            message="Failed to process settings",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

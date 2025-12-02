@@ -20,6 +20,7 @@ urlpatterns = [
     
     # Onboarding
     path('onboarding/step/', views.complete_onboarding_step, name='complete_onboarding_step'),
+    path('settings/', views.tenant_settings, name='tenant_settings'),
     
     # Members
     path('members/', views.tenant_members, name='tenant_members'),
