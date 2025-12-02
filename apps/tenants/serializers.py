@@ -101,7 +101,9 @@ class TenantSettingsSerializer(serializers.ModelSerializer):
             'logo_url', 'primary_color', 'secondary_color',
             'features_enabled', 'email_notifications', 'sms_notifications',
             'push_notifications', 'timezone', 'language', 'date_format',
-            'business_hours', 'custom_fields', 'integrations'
+            'business_hours', 'custom_fields', 'integrations',
+            'normal_working_hours_per_day', 'default_normal_hourly_rate',
+            'default_overtime_hourly_rate', 'overtime_multiplier', 'currency'
         ]
 
 
@@ -111,3 +113,57 @@ class OnboardingStepSerializer(serializers.Serializer):
     """
     step = serializers.IntegerField(min_value=1, max_value=5)
     data = serializers.JSONField(required=False)
+
+
+class TechnicianWageRateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for technician wage rates.
+    """
+    technician_name = serializers.CharField(source='technician.full_name', read_only=True)
+    technician_email = serializers.EmailField(source='technician.email', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+    
+    class Meta:
+        from .models import TechnicianWageRate
+        model = TechnicianWageRate
+        fields = [
+            'id', 'technician', 'technician_name', 'technician_email',
+            'normal_hourly_rate', 'overtime_hourly_rate',
+            'effective_from', 'effective_to', 'is_active', 'notes',
+            'created_by', 'created_by_name', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def validate_technician(self, value):
+        """Validate that the user is a technician."""
+        if value.role != 'technician':
+            raise serializers.ValidationError("Wage rates can only be set for technicians.")
+        return value
+
+
+class CreateTechnicianWageRateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for creating a new technician wage rate.
+    """
+    class Meta:
+        from .models import TechnicianWageRate
+        model = TechnicianWageRate
+        fields = [
+            'technician', 'normal_hourly_rate', 'overtime_hourly_rate',
+            'effective_from', 'effective_to', 'notes'
+        ]
+    
+    def validate_technician(self, value):
+        """Validate that the user is a technician."""
+        if value.role != 'technician':
+            raise serializers.ValidationError("Wage rates can only be set for technicians.")
+        return value
+    
+    def validate(self, data):
+        """Validate effective dates."""
+        if data.get('effective_to') and data.get('effective_from'):
+            if data['effective_to'] <= data['effective_from']:
+                raise serializers.ValidationError({
+                    'effective_to': 'Effective to date must be after effective from date.'
+                })
+        return data

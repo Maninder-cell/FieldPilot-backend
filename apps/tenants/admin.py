@@ -5,7 +5,7 @@ Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from django.contrib import admin
-from .models import Tenant, TenantMember, TenantSettings
+from .models import Tenant, TenantMember, TenantSettings, TechnicianWageRate
 
 
 @admin.register(Tenant)
@@ -50,3 +50,37 @@ class TenantSettingsAdmin(admin.ModelAdmin):
     list_filter = ['timezone', 'language', 'email_notifications']
     search_fields = ['tenant__name']
     readonly_fields = ['created_at', 'updated_at']
+
+
+@admin.register(TechnicianWageRate)
+class TechnicianWageRateAdmin(admin.ModelAdmin):
+    list_display = ['technician', 'normal_hourly_rate', 'overtime_hourly_rate', 'effective_from', 'effective_to', 'is_active']
+    list_filter = ['is_active', 'effective_from']
+    search_fields = ['technician__email', 'technician__first_name', 'technician__last_name']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    date_hierarchy = 'effective_from'
+    
+    fieldsets = (
+        ('Technician', {
+            'fields': ('technician',)
+        }),
+        ('Rates', {
+            'fields': ('normal_hourly_rate', 'overtime_hourly_rate')
+        }),
+        ('Effective Period', {
+            'fields': ('effective_from', 'effective_to', 'is_active')
+        }),
+        ('Additional Information', {
+            'fields': ('notes', 'created_by')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        })
+    )
+    
+    def save_model(self, request, obj, form, change):
+        """Set created_by to current user if not set."""
+        if not obj.created_by:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)

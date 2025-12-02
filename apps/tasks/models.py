@@ -618,8 +618,10 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
         """
         Calculate total work hours, normal hours, and overtime.
         Called automatically on save when both arrived_at and departed_at are set.
+        Uses tenant-specific normal working hours per day setting.
         """
         from decimal import Decimal, ROUND_HALF_UP
+        from django.db import connection
         
         if not self.arrived_at or not self.departed_at:
             return
@@ -641,10 +643,22 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
         if total_hours > MAX_HOURS:
             total_hours = MAX_HOURS
         
-        # Calculate normal vs overtime (8 hours per day is normal)
-        NORMAL_HOURS_PER_DAY = 8
-        normal_hours = min(total_hours, NORMAL_HOURS_PER_DAY)
-        overtime_hours = max(0, total_hours - NORMAL_HOURS_PER_DAY)
+        # Get tenant-specific normal working hours per day
+        # Default to 8 hours if tenant settings not found
+        normal_hours_per_day = Decimal('8.00')
+        try:
+            from apps.tenants.models import TenantSettings
+            # Get tenant settings from current schema
+            tenant_settings = TenantSettings.objects.first()
+            if tenant_settings:
+                normal_hours_per_day = tenant_settings.normal_working_hours_per_day
+        except Exception:
+            # Fallback to default if any error (e.g., during migrations)
+            pass
+        
+        # Calculate normal vs overtime based on tenant's normal working hours
+        normal_hours = min(total_hours, float(normal_hours_per_day))
+        overtime_hours = max(0, total_hours - float(normal_hours_per_day))
         
         # Update fields with proper Decimal precision (2 decimal places)
         self.total_work_hours = Decimal(str(total_hours)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)

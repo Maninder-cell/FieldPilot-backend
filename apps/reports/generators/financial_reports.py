@@ -77,9 +77,21 @@ class LaborCostReportGenerator(BaseReportGenerator):
     
     def calculate_metrics(self, queryset):
         """Calculate labor costs."""
-        # Get hourly rates from filters or use defaults
-        normal_rate = Decimal(str(self.get_filter_value('normal_hourly_rate', 50)))
-        overtime_rate = Decimal(str(self.get_filter_value('overtime_hourly_rate', 75)))
+        # Get tenant default rates
+        tenant_normal_rate = Decimal('50.00')
+        tenant_overtime_rate = Decimal('75.00')
+        try:
+            from apps.tenants.models import TenantSettings
+            tenant_settings = TenantSettings.objects.first()
+            if tenant_settings:
+                tenant_normal_rate = tenant_settings.default_normal_hourly_rate
+                tenant_overtime_rate = tenant_settings.default_overtime_hourly_rate
+        except Exception:
+            pass
+        
+        # Get hourly rates from filters (if provided, these override everything)
+        filter_normal_rate = self.get_filter_value('normal_hourly_rate', None)
+        filter_overtime_rate = self.get_filter_value('overtime_hourly_rate', None)
         
         # Group by technician
         technician_costs = {}
@@ -89,6 +101,32 @@ class LaborCostReportGenerator(BaseReportGenerator):
         for log in queryset:
             tech_id = str(log.technician.id)
             task_id = str(log.task.id)
+            
+            # Determine rates to use (priority: filter > technician-specific > tenant default)
+            if filter_normal_rate is not None and filter_overtime_rate is not None:
+                # Use filter rates (override everything)
+                normal_rate = Decimal(str(filter_normal_rate))
+                overtime_rate = Decimal(str(filter_overtime_rate))
+            else:
+                # Try to get technician-specific rate for the work date
+                tech_rate = None
+                try:
+                    from apps.tenants.models import TechnicianWageRate
+                    tech_rate = TechnicianWageRate.get_rate_for_date(
+                        log.technician,
+                        log.departed_at.date()
+                    )
+                except Exception:
+                    pass
+                
+                if tech_rate:
+                    # Use technician-specific rate
+                    normal_rate = tech_rate.normal_hourly_rate
+                    overtime_rate = tech_rate.overtime_hourly_rate
+                else:
+                    # Fall back to tenant defaults
+                    normal_rate = tenant_normal_rate
+                    overtime_rate = tenant_overtime_rate
             
             # Calculate costs
             normal_cost = Decimal(str(log.normal_hours)) * normal_rate
@@ -318,9 +356,22 @@ class CustomerBillingReportGenerator(BaseReportGenerator):
     
     def calculate_metrics(self, queryset):
         """Calculate billing for each customer."""
-        # Get hourly rates
-        normal_rate = Decimal(str(self.get_filter_value('normal_hourly_rate', 50)))
-        overtime_rate = Decimal(str(self.get_filter_value('overtime_hourly_rate', 75)))
+        # Get tenant default rates
+        tenant_normal_rate = Decimal('50.00')
+        tenant_overtime_rate = Decimal('75.00')
+        try:
+            from apps.tenants.models import TenantSettings
+            tenant_settings = TenantSettings.objects.first()
+            if tenant_settings:
+                tenant_normal_rate = tenant_settings.default_normal_hourly_rate
+                tenant_overtime_rate = tenant_settings.default_overtime_hourly_rate
+        except Exception:
+            pass
+        
+        # Get hourly rates from filters (if provided, these override everything)
+        filter_normal_rate = self.get_filter_value('normal_hourly_rate', None)
+        filter_overtime_rate = self.get_filter_value('overtime_hourly_rate', None)
+        use_filter_rates = filter_normal_rate is not None and filter_overtime_rate is not None
         
         billing_data = []
         
@@ -333,19 +384,42 @@ class CustomerBillingReportGenerator(BaseReportGenerator):
                 departed_at__lte=self.filters['end_date']
             )
             
-            # Calculate labor costs
-            total_normal_hours = time_logs.aggregate(
-                total=Sum('normal_hours')
-            )['total'] or 0
+            # Calculate labor costs using technician-specific rates
+            labor_cost = Decimal('0.00')
+            total_normal_hours = Decimal('0.00')
+            total_overtime_hours = Decimal('0.00')
             
-            total_overtime_hours = time_logs.aggregate(
-                total=Sum('overtime_hours')
-            )['total'] or 0
-            
-            labor_cost = (
-                Decimal(str(total_normal_hours)) * normal_rate +
-                Decimal(str(total_overtime_hours)) * overtime_rate
-            )
+            for log in time_logs:
+                # Determine rates to use
+                if use_filter_rates:
+                    normal_rate = Decimal(str(filter_normal_rate))
+                    overtime_rate = Decimal(str(filter_overtime_rate))
+                else:
+                    # Try to get technician-specific rate
+                    tech_rate = None
+                    try:
+                        from apps.tenants.models import TechnicianWageRate
+                        tech_rate = TechnicianWageRate.get_rate_for_date(
+                            log.technician,
+                            log.departed_at.date()
+                        )
+                    except Exception:
+                        pass
+                    
+                    if tech_rate:
+                        normal_rate = tech_rate.normal_hourly_rate
+                        overtime_rate = tech_rate.overtime_hourly_rate
+                    else:
+                        normal_rate = tenant_normal_rate
+                        overtime_rate = tenant_overtime_rate
+                
+                # Calculate cost for this log
+                log_normal_cost = Decimal(str(log.normal_hours)) * normal_rate
+                log_overtime_cost = Decimal(str(log.overtime_hours)) * overtime_rate
+                labor_cost += log_normal_cost + log_overtime_cost
+                
+                total_normal_hours += Decimal(str(log.normal_hours))
+                total_overtime_hours += Decimal(str(log.overtime_hours))
             
             # Get tasks for this customer
             tasks = Task.objects.filter(

@@ -468,10 +468,20 @@ class OvertimeReportGenerator(BaseReportGenerator):
     
     def calculate_metrics(self, queryset):
         """Calculate overtime metrics."""
+        # Get tenant default overtime rate
+        tenant_overtime_rate = 0
+        try:
+            from apps.tenants.models import TenantSettings
+            tenant_settings = TenantSettings.objects.first()
+            if tenant_settings:
+                tenant_overtime_rate = float(tenant_settings.default_overtime_hourly_rate)
+        except Exception:
+            pass
+        
         # Group by technician
         technician_overtime = {}
-        hourly_rate = self.get_filter_value('hourly_rate', 0)
-        overtime_multiplier = 1.5  # Standard overtime multiplier
+        hourly_rate = self.get_filter_value('hourly_rate', tenant_overtime_rate)
+        overtime_multiplier = 1.5  # Standard overtime multiplier (not used when rate is provided directly)
         
         for log in queryset:
             tech_id = str(log.technician.id)

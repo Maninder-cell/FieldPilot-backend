@@ -287,6 +287,37 @@ class TenantSettings(models.Model):
     # Integration settings
     integrations = models.JSONField(default=dict)
     
+    # Labor and Wage Settings
+    normal_working_hours_per_day = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=8.00,
+        help_text="Normal working hours per day (e.g., 8.00 for 8 hours)"
+    )
+    default_normal_hourly_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=50.00,
+        help_text="Default hourly rate for normal hours (in tenant's currency)"
+    )
+    default_overtime_hourly_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=75.00,
+        help_text="Default hourly rate for overtime hours (in tenant's currency)"
+    )
+    overtime_multiplier = models.DecimalField(
+        max_digits=4,
+        decimal_places=2,
+        default=1.50,
+        help_text="Overtime rate multiplier (e.g., 1.5 for time-and-a-half)"
+    )
+    currency = models.CharField(
+        max_length=3,
+        default='USD',
+        help_text="Currency code (ISO 4217, e.g., USD, EUR, GBP)"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -368,3 +399,158 @@ class TenantInvitation(models.Model):
             user=user,
             role=self.role
         )
+
+
+class TechnicianWageRate(models.Model):
+    """
+    Technician-specific wage rates with effective date tracking.
+    Allows different rates for different technicians and tracks rate history.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    technician = models.ForeignKey(
+        'authentication.User',
+        on_delete=models.CASCADE,
+        related_name='wage_rates',
+        limit_choices_to={'role': 'technician'},
+        help_text="Technician this rate applies to"
+    )
+    
+    # Wage Rates
+    normal_hourly_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Hourly rate for normal hours"
+    )
+    overtime_hourly_rate = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        help_text="Hourly rate for overtime hours"
+    )
+    
+    # Effective Dates
+    effective_from = models.DateField(
+        db_index=True,
+        help_text="Date when this rate becomes effective"
+    )
+    effective_to = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Date when this rate expires (null = current rate)"
+    )
+    
+    # Metadata
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text="Whether this rate is currently active"
+    )
+    notes = models.TextField(
+        blank=True,
+        help_text="Notes about this rate change"
+    )
+    
+    # Audit
+    created_by = models.ForeignKey(
+        'authentication.User',
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='wage_rates_created',
+        help_text="User who created this rate"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'technician_wage_rates'
+        verbose_name = 'Technician Wage Rate'
+        verbose_name_plural = 'Technician Wage Rates'
+        ordering = ['-effective_from', '-created_at']
+        indexes = [
+            models.Index(fields=['technician', 'effective_from']),
+            models.Index(fields=['technician', 'is_active']),
+            models.Index(fields=['effective_from', 'effective_to']),
+        ]
+    
+    def __str__(self):
+        return f"{self.technician.full_name} - ${self.normal_hourly_rate}/hr (from {self.effective_from})"
+    
+    def clean(self):
+        """Validate model data."""
+        super().clean()
+        
+        # Validate technician role
+        if self.technician and self.technician.role != 'technician':
+            raise ValidationError({
+                'technician': 'Wage rates can only be set for technicians.'
+            })
+        
+        # Validate effective dates
+        if self.effective_to and self.effective_to <= self.effective_from:
+            raise ValidationError({
+                'effective_to': 'Effective to date must be after effective from date.'
+            })
+        
+        # Validate rates are positive
+        if self.normal_hourly_rate <= 0:
+            raise ValidationError({
+                'normal_hourly_rate': 'Normal hourly rate must be greater than zero.'
+            })
+        if self.overtime_hourly_rate <= 0:
+            raise ValidationError({
+                'overtime_hourly_rate': 'Overtime hourly rate must be greater than zero.'
+            })
+    
+    def save(self, *args, **kwargs):
+        """Override save to run validation and manage active rates."""
+        self.full_clean()
+        
+        # If this is a new active rate, deactivate other active rates for this technician
+        if self.is_active and not self.effective_to:
+            TechnicianWageRate.objects.filter(
+                technician=self.technician,
+                is_active=True,
+                effective_to__isnull=True
+            ).exclude(pk=self.pk).update(
+                is_active=False,
+                effective_to=self.effective_from
+            )
+        
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_rate_for_date(cls, technician, date):
+        """
+        Get the wage rate for a technician on a specific date.
+        Returns the rate that was effective on that date, or None if not found.
+        
+        Args:
+            technician: User instance (technician)
+            date: Date to get rate for
+            
+        Returns:
+            TechnicianWageRate instance or None
+        """
+        return cls.objects.filter(
+            technician=technician,
+            effective_from__lte=date,
+        ).filter(
+            models.Q(effective_to__isnull=True) | models.Q(effective_to__gte=date)
+        ).order_by('-effective_from').first()
+    
+    @classmethod
+    def get_current_rate(cls, technician):
+        """
+        Get the current active wage rate for a technician.
+        
+        Args:
+            technician: User instance (technician)
+            
+        Returns:
+            TechnicianWageRate instance or None
+        """
+        return cls.objects.filter(
+            technician=technician,
+            is_active=True,
+            effective_to__isnull=True
+        ).order_by('-effective_from').first()
