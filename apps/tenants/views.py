@@ -10,6 +10,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db import transaction
 from django.utils import timezone
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from drf_spectacular.utils import extend_schema, OpenApiExample
 import logging
 
@@ -1545,7 +1546,7 @@ def get_technician_wage_rate(request, rate_id):
 @extend_schema(
     tags=['Onboarding'],
     summary='Update technician wage rate',
-    description='Update an existing technician wage rate (Owner/Admin only)',
+    description='Create a new wage rate for a technician (preserves history by creating new record)',
     request={'application/json': {
         'type': 'object',
         'properties': {
@@ -1554,7 +1555,6 @@ def get_technician_wage_rate(request, rate_id):
             'effective_from': {'type': 'string', 'format': 'date'},
             'effective_to': {'type': 'string', 'format': 'date', 'nullable': True},
             'notes': {'type': 'string'},
-            'is_active': {'type': 'boolean'},
         }
     }},
     responses={
@@ -1568,13 +1568,15 @@ def get_technician_wage_rate(request, rate_id):
 @permission_classes([IsAuthenticated])
 def update_technician_wage_rate(request, rate_id):
     """
-    Update a technician wage rate.
+    Update a technician wage rate by creating a new rate record.
+    This preserves history - the old rate is marked inactive and a new rate is created.
     Only accessible by Owner/Admin.
     """
     try:
         from django.db import connection
         from apps.tenants.models import TechnicianWageRate
-        from apps.tenants.serializers import TechnicianWageRateSerializer
+        from apps.tenants.serializers import CreateTechnicianWageRateSerializer, TechnicianWageRateSerializer
+        from datetime import datetime
         
         # Check permissions
         if connection.schema_name == 'public':
@@ -1606,10 +1608,22 @@ def update_technician_wage_rate(request, rate_id):
                     status_code=status.HTTP_403_FORBIDDEN
                 )
         
-        # Get and update wage rate
-        rate = TechnicianWageRate.objects.get(id=rate_id)
+        # Get the old rate to preserve technician info
+        old_rate = TechnicianWageRate.objects.get(id=rate_id)
+        technician = old_rate.technician
         
-        serializer = TechnicianWageRateSerializer(rate, data=request.data, partial=True)
+        # Prepare data for new rate
+        new_rate_data = {
+            'technician': technician.id,
+            'normal_hourly_rate': request.data.get('normal_hourly_rate'),
+            'overtime_hourly_rate': request.data.get('overtime_hourly_rate'),
+            'effective_from': request.data.get('effective_from'),
+            'effective_to': request.data.get('effective_to'),
+            'notes': request.data.get('notes', ''),
+        }
+        
+        # Validate the new rate data
+        serializer = CreateTechnicianWageRateSerializer(data=new_rate_data)
         
         if not serializer.is_valid():
             return error_response(
@@ -1618,12 +1632,23 @@ def update_technician_wage_rate(request, rate_id):
                 status_code=status.HTTP_400_BAD_REQUEST
             )
         
-        serializer.save()
-        
-        logger.info(f"Wage rate updated for technician {rate.technician.email} by {request.user.email}")
+        with transaction.atomic():
+            # Deactivate the old rate and set its effective_to date
+            effective_from_date = datetime.strptime(new_rate_data['effective_from'], '%Y-%m-%d').date()
+            old_rate.is_active = False
+            old_rate.effective_to = effective_from_date
+            
+            # Save without validation since we're just deactivating
+            # The validation will fail because effective_to might equal effective_from
+            old_rate.save(update_fields=['is_active', 'effective_to'])
+            
+            # Create the new rate
+            new_rate = serializer.save(created_by=request.user)
+            
+            logger.info(f"New wage rate created for technician {technician.email} by {request.user.email}, old rate deactivated")
         
         return success_response(
-            data=serializer.data,
+            data=TechnicianWageRateSerializer(new_rate).data,
             message="Wage rate updated successfully"
         )
         
@@ -1632,8 +1657,23 @@ def update_technician_wage_rate(request, rate_id):
             message="Wage rate not found",
             status_code=status.HTTP_404_NOT_FOUND
         )
+    except ValidationError as e:
+        # Handle Django model validation errors
+        error_dict = {}
+        if hasattr(e, 'error_dict'):
+            error_dict = {field: [str(err) for err in errors] for field, errors in e.error_dict.items()}
+        elif hasattr(e, 'error_list'):
+            error_dict = {'non_field_errors': [str(err) for err in e.error_list]}
+        else:
+            error_dict = {'error': [str(e)]}
+        
+        return error_response(
+            message="Validation error",
+            details=error_dict,
+            status_code=status.HTTP_400_BAD_REQUEST
+        )
     except Exception as e:
-        logger.error(f"Failed to update technician wage rate: {str(e)}")
+        logger.error(f"Failed to update technician wage rate: {str(e)}", exc_info=True)
         return error_response(
             message="Failed to update wage rate",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -1711,5 +1751,87 @@ def delete_technician_wage_rate(request, rate_id):
         logger.error(f"Failed to delete technician wage rate: {str(e)}")
         return error_response(
             message="Failed to delete wage rate",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Onboarding'],
+    summary='Get technician wage rate history',
+    description='Get all wage rate history for a specific technician (Owner/Admin only)',
+    responses={
+        200: {'description': 'List of wage rate history'},
+        403: {'description': 'Permission denied'},
+        404: {'description': 'Technician not found'},
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_technician_wage_rate_history(request, technician_id):
+    """
+    Get wage rate history for a specific technician.
+    Only accessible by Owner/Admin.
+    """
+    try:
+        from django.db import connection
+        from apps.tenants.models import TechnicianWageRate
+        from apps.tenants.serializers import TechnicianWageRateSerializer
+        from apps.authentication.models import User
+        
+        # Check permissions
+        if connection.schema_name == 'public':
+            membership = request.user.tenant_memberships.filter(is_active=True).first()
+            if not membership:
+                return error_response(
+                    message="No company found",
+                    status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            if membership.role not in ['owner', 'admin']:
+                return error_response(
+                    message="Only owners and admins can view wage rate history",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+            
+            connection.set_tenant(membership.tenant)
+        else:
+            try:
+                member = TenantMember.objects.get(user=request.user, is_active=True)
+                if member.role not in ['owner', 'admin']:
+                    return error_response(
+                        message="Only owners and admins can view wage rate history",
+                        status_code=status.HTTP_403_FORBIDDEN
+                    )
+            except TenantMember.DoesNotExist:
+                return error_response(
+                    message="You are not a member of this company",
+                    status_code=status.HTTP_403_FORBIDDEN
+                )
+        
+        # Get technician
+        try:
+            technician = User.objects.get(id=technician_id)
+        except User.DoesNotExist:
+            return error_response(
+                message="Technician not found",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Get all wage rates for this technician (including historical)
+        rates = TechnicianWageRate.objects.filter(
+            technician=technician
+        ).select_related('technician', 'created_by').order_by('-effective_from', '-created_at')
+        
+        serializer = TechnicianWageRateSerializer(rates, many=True)
+        
+        return success_response(
+            data=serializer.data,
+            message=f"Wage rate history retrieved for {technician.full_name}"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get technician wage rate history: {str(e)}")
+        return error_response(
+            message="Failed to retrieve wage rate history",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )

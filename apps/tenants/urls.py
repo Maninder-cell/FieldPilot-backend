@@ -47,4 +47,5 @@ urlpatterns = [
     path('technicians/wage-rates/<uuid:rate_id>/', views.get_technician_wage_rate, name='get_technician_wage_rate'),
     path('technicians/wage-rates/<uuid:rate_id>/update/', views.update_technician_wage_rate, name='update_technician_wage_rate'),
     path('technicians/wage-rates/<uuid:rate_id>/delete/', views.delete_technician_wage_rate, name='delete_technician_wage_rate'),
+    path('technicians/<uuid:technician_id>/wage-rates/history/', views.get_technician_wage_rate_history, name='get_technician_wage_rate_history'),
 ]

@@ -6,6 +6,7 @@ This source code is proprietary and confidential.
 """
 import uuid
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.text import slugify
 from django_tenants.models import TenantMixin, DomainMixin
@@ -516,7 +517,11 @@ class TechnicianWageRate(models.Model):
     
     def save(self, *args, **kwargs):
         """Override save to run validation and manage active rates."""
-        self.full_clean()
+        # Skip validation if we're only updating specific fields (e.g., deactivating old rates)
+        skip_validation = kwargs.pop('skip_validation', False)
+        
+        if not skip_validation and 'update_fields' not in kwargs:
+            self.full_clean()
         
         # If this is a new active rate, deactivate other active rates for this technician
         if self.is_active and not self.effective_to:
