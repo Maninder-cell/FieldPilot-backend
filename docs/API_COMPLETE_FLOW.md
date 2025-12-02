@@ -74,7 +74,7 @@ Authorization: Bearer <access_token>
 # Returns: tenant_id, trial_ends_at, onboarding_step: 1
 
 # Step 2: Complete Onboarding Step 1
-POST /api/v1/onboarding/onboarding/step/
+POST /api/v1/onboarding/step/
 Authorization: Bearer <access_token>
 {
   "step": 1
@@ -130,7 +130,7 @@ GET /api/v1/billing/plans/
 ]
 
 # Step 2: Complete Onboarding Step 2
-POST /api/v1/onboarding/onboarding/step/
+POST /api/v1/onboarding/step/
 Authorization: Bearer <access_token>
 {
   "step": 2,
@@ -269,7 +269,7 @@ Content-Type: application/json
 
 #### Step 4: Complete Onboarding
 ```bash
-POST /api/v1/onboarding/onboarding/step/
+POST /api/v1/onboarding/step/
 Authorization: Bearer <access_token>
 {
   "step": 3
@@ -326,7 +326,7 @@ GET /api/v1/onboarding/members/
 Authorization: Bearer <access_token>
 
 # Step 3: Complete Onboarding Step 4
-POST /api/v1/onboarding/onboarding/step/
+POST /api/v1/onboarding/step/
 Authorization: Bearer <access_token>
 {
   "step": 4
@@ -344,7 +344,7 @@ Authorization: Bearer <access_token>
 **API Calls:**
 ```bash
 # Complete Final Onboarding Step
-POST /api/v1/onboarding/onboarding/step/
+POST /api/v1/onboarding/step/
 Authorization: Bearer <access_token>
 {
   "step": 5
@@ -521,7 +521,7 @@ Authorization: Bearer <access_token>
 | 2 | Choose Plan | Select subscription plan | GET /api/v1/billing/plans/ | Plan selection UI |
 | 3 | Payment Setup | Save card & create subscription | POST /api/v1/billing/setup-intent/<br>POST /api/v1/billing/subscription/create/ | Stripe.js integration<br>Card element |
 | 4 | Invite Team | Invite team members | POST /api/v1/onboarding/members/invite/ | Email invitation form |
-| 5 | Complete | Finish onboarding | POST /api/v1/onboarding/onboarding/step/ | Success page |
+| 5 | Complete | Finish onboarding | POST /api/v1/onboarding/step/ | Success page |
 
 ## 🎭 User Roles & Permissions
 
@@ -892,7 +892,7 @@ export default PaymentPage;
 6. [ ] Create setup intent via `/api/v1/billing/setup-intent/`
 7. [ ] Use Stripe.js to collect card: `4242 4242 4242 4242`
 8. [ ] Create subscription with payment method via `/api/v1/billing/subscription/create/`
-9. [ ] Complete onboarding via `/api/v1/onboarding/onboarding/step/`
+9. [ ] Complete onboarding via `/api/v1/onboarding/step/`
 
 ### Stripe Test Cards
 - **Success**: `4242 4242 4242 4242`

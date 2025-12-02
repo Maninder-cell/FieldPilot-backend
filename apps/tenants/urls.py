@@ -19,7 +19,7 @@ urlpatterns = [
     path('update/', views.update_tenant, name='update_tenant'),
     
     # Onboarding
-    path('onboarding/step/', views.complete_onboarding_step, name='complete_onboarding_step'),
+    path('step/', views.complete_onboarding_step, name='complete_onboarding_step'),
     path('settings/', views.tenant_settings, name='tenant_settings'),
     
     # Members
