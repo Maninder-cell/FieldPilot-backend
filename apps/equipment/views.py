@@ -122,12 +122,11 @@ def equipment_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can create equipment',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions (owner/admin/manager only)
+        from apps.facilities.views import require_role
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         serializer = CreateEquipmentSerializer(data=request.data)
         
@@ -206,12 +205,11 @@ def equipment_detail(request, equipment_id):
         )
     
     elif request.method in ['PUT', 'PATCH']:
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can update equipment',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions (owner/admin/manager only)
+        from apps.facilities.views import require_role
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         partial = request.method == 'PATCH'
         serializer = UpdateEquipmentSerializer(equipment, data=request.data, partial=partial)
@@ -240,12 +238,11 @@ def equipment_detail(request, equipment_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can delete equipment',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions (owner/admin/manager only)
+        from apps.facilities.views import require_role
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         try:
             # Soft delete

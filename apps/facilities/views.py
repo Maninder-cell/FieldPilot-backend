@@ -652,10 +652,30 @@ def facility_detail(request, facility_id):
         )
     
     elif request.method in ['PUT', 'PATCH']:
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
+        # Check permissions (owner/admin/manager only)
+        # Get tenant role directly since JWT auth happens after middleware
+        from django_tenants.utils import schema_context
+        from apps.tenants.models import TenantMember
+        from django.db import connection
+        
+        tenant_role = None
+        try:
+            tenant = getattr(connection, 'tenant', None)
+            if tenant:
+                with schema_context('public'):
+                    membership = TenantMember.objects.filter(
+                        tenant=tenant,
+                        user=request.user,
+                        is_active=True
+                    ).first()
+                    if membership:
+                        tenant_role = membership.role
+        except Exception as e:
+            logger.error(f"Error getting tenant role: {str(e)}")
+        
+        if tenant_role not in ['owner', 'admin', 'manager']:
             return error_response(
-                message='Only admins and managers can update facilities',
+                message='Only owners, admins and managers can update facilities',
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
@@ -686,10 +706,30 @@ def facility_detail(request, facility_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
+        # Check permissions (owner/admin/manager only)
+        # Get tenant role directly since JWT auth happens after middleware
+        from django_tenants.utils import schema_context
+        from apps.tenants.models import TenantMember
+        from django.db import connection
+        
+        tenant_role = None
+        try:
+            tenant = getattr(connection, 'tenant', None)
+            if tenant:
+                with schema_context('public'):
+                    membership = TenantMember.objects.filter(
+                        tenant=tenant,
+                        user=request.user,
+                        is_active=True
+                    ).first()
+                    if membership:
+                        tenant_role = membership.role
+        except Exception as e:
+            logger.error(f"Error getting tenant role: {str(e)}")
+        
+        if tenant_role not in ['owner', 'admin', 'manager']:
             return error_response(
-                message='Only admins and managers can delete facilities',
+                message='Only owners, admins and managers can delete facilities',
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
@@ -940,12 +980,10 @@ def building_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can create buildings',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions (owner/admin/manager only)
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         serializer = CreateBuildingSerializer(data=request.data)
         
@@ -1022,12 +1060,10 @@ def building_detail(request, building_id):
         )
     
     elif request.method in ['PUT', 'PATCH']:
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can update buildings',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions (owner/admin/manager only)
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         partial = request.method == 'PATCH'
         serializer = UpdateBuildingSerializer(building, data=request.data, partial=partial)
@@ -1056,12 +1092,10 @@ def building_detail(request, building_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can delete buildings',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions (owner/admin/manager only)
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         try:
             # Soft delete (will cascade to equipment)
@@ -1200,12 +1234,10 @@ def location_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can create locations',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions (owner/admin/manager only)
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         serializer = CreateLocationSerializer(data=request.data)
         
@@ -1267,12 +1299,10 @@ def location_detail(request, location_id):
         )
     
     elif request.method in ['PUT', 'PATCH']:
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can update locations',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions (owner/admin/manager only)
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         partial = request.method == 'PATCH'
         serializer = UpdateLocationSerializer(location, data=request.data, partial=partial)
@@ -1301,12 +1331,10 @@ def location_detail(request, location_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can delete locations',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        # Check permissions (owner/admin/manager only)
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         try:
             location.delete()
