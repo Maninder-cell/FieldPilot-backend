@@ -442,16 +442,32 @@ class UpdateBuildingSerializer(serializers.ModelSerializer):
     """
     Serializer for updating building information.
     """
+    facility_id = serializers.UUIDField(required=False, allow_null=False)
     customer_id = serializers.UUIDField(required=False, allow_null=True)
     
     class Meta:
         model = Building
         fields = [
-            'name', 'building_type', 'description',
+            'facility_id', 'name', 'building_type', 'description',
             'floor_count', 'square_footage', 'construction_year', 'address',
             'contact_name', 'contact_email', 'contact_phone', 'operational_status',
             'customer_id', 'notes', 'custom_fields'
         ]
+    
+    def validate_facility_id(self, value):
+        """
+        Validate facility exists and is operational.
+        """
+        if value:
+            try:
+                facility = Facility.objects.get(pk=value)
+                if not facility.is_operational:
+                    raise serializers.ValidationError("Facility must be operational.")
+                self.facility = facility
+                return value
+            except Facility.DoesNotExist:
+                raise serializers.ValidationError("Facility not found.")
+        return value
     
     def validate_customer_id(self, value):
         """
@@ -469,8 +485,13 @@ class UpdateBuildingSerializer(serializers.ModelSerializer):
         return value
     
     def update(self, instance, validated_data):
-        """Update building with customer assignment."""
+        """Update building with facility and customer assignment."""
+        facility_id = validated_data.pop('facility_id', None)
         customer_id = validated_data.pop('customer_id', None)
+        
+        # Update facility if provided
+        if facility_id is not None and hasattr(self, 'facility'):
+            instance.facility = self.facility
         
         # Update customer if provided
         if customer_id is not None:
