@@ -101,16 +101,33 @@ class UpdateEquipmentSerializer(serializers.ModelSerializer):
     """
     Serializer for updating equipment information.
     """
+    building_id = serializers.UUIDField(required=False, allow_null=False)
     customer_id = serializers.UUIDField(required=False, allow_null=True)
     
     class Meta:
         model = Equipment
         fields = [
-            'name', 'equipment_type', 'manufacturer', 'model', 'serial_number', 'description',
+            'building_id', 'name', 'equipment_type', 'manufacturer', 'model', 'serial_number', 'description',
             'purchase_date', 'purchase_price', 'warranty_expiration', 'installation_date',
             'operational_status', 'condition', 'specifications',
             'customer_id', 'notes', 'custom_fields'
         ]
+    
+    def validate_building_id(self, value):
+        """
+        Validate building exists and is operational.
+        """
+        if value:
+            from apps.facilities.models import Building
+            try:
+                building = Building.objects.get(pk=value)
+                if not building.is_operational:
+                    raise serializers.ValidationError("Building must be operational.")
+                self.building = building
+                return value
+            except Building.DoesNotExist:
+                raise serializers.ValidationError("Building not found.")
+        return value
     
     def validate_customer_id(self, value):
         """
@@ -129,8 +146,13 @@ class UpdateEquipmentSerializer(serializers.ModelSerializer):
         return value
     
     def update(self, instance, validated_data):
-        """Update equipment with customer assignment."""
+        """Update equipment with building and customer assignment."""
+        building_id = validated_data.pop('building_id', None)
         customer_id = validated_data.pop('customer_id', None)
+        
+        # Update building if provided
+        if building_id is not None and hasattr(self, 'building'):
+            instance.building = self.building
         
         # Update customer if provided
         if customer_id is not None:
