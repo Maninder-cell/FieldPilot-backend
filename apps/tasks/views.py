@@ -710,10 +710,10 @@ def team_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
+        # Check permissions (admin/manager/owner only)
+        if request.tenant_role not in ['admin', 'manager', 'owner']:
             return error_response(
-                message='Only admins and managers can create teams',
+                message='Only admins, managers, and owners can create teams',
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
@@ -788,10 +788,10 @@ def team_detail(request, team_id):
         )
     
     elif request.method == 'PATCH':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
+        # Check permissions (admin/manager/owner only)
+        if request.tenant_role not in ['admin', 'manager', 'owner']:
             return error_response(
-                message='Only admins and managers can update teams',
+                message='Only admins, managers, and owners can update teams',
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
@@ -821,10 +821,10 @@ def team_detail(request, team_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
+        # Check permissions (admin/manager/owner only)
+        if request.tenant_role not in ['admin', 'manager', 'owner']:
             return error_response(
-                message='Only admins and managers can delete teams',
+                message='Only admins, managers, and owners can delete teams',
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
@@ -858,10 +858,10 @@ def team_add_members(request, team_id):
     """
     Add members to a team.
     """
-    # Check permissions (admin/manager only)
-    if request.tenant_role not in ['admin', 'manager']:
+    # Check permissions (admin/manager/owner only)
+    if request.tenant_role not in ['admin', 'manager', 'owner']:
         return error_response(
-            message='Only admins and managers can add team members',
+            message='Only admins, managers, and owners can add team members',
             status_code=status.HTTP_403_FORBIDDEN
         )
     
@@ -912,10 +912,10 @@ def team_remove_member(request, team_id, member_id):
     """
     Remove a member from a team.
     """
-    # Check permissions (admin/manager only)
-    if request.tenant_role not in ['admin', 'manager']:
+    # Check permissions (admin/manager/owner only)
+    if request.tenant_role not in ['admin', 'manager', 'owner']:
         return error_response(
-            message='Only admins and managers can remove team members',
+            message='Only admins, managers, and owners can remove team members',
             status_code=status.HTTP_403_FORBIDDEN
         )
     
