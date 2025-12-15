@@ -45,9 +45,9 @@ class TenantMembershipMiddleware:
                         # Always query TenantMember from public schema
                         with schema_context('public'):
                             try:
-                                # Get user's membership in current tenant
+                                # Get user's membership in current tenant using tenant ID
                                 membership = TenantMember.objects.get(
-                                    tenant=tenant,
+                                    tenant_id=tenant.id,
                                     user=request.user,
                                     is_active=True
                                 )
@@ -56,11 +56,14 @@ class TenantMembershipMiddleware:
                                 
                                 logger.debug(
                                     f"User {request.user.email} accessing tenant {tenant.name} "
-                                    f"with role {membership.role}"
+                                    f"(ID: {tenant.id}) with role {membership.role}"
                                 )
                             except TenantMember.DoesNotExist:
                                 # User is not a member of this specific tenant
                                 # Try to get user's first active membership as fallback
+                                logger.warning(
+                                    f"User {request.user.email} is not a member of tenant {tenant.name} (ID: {tenant.id})"
+                                )
                                 membership = TenantMember.objects.filter(
                                     user=request.user,
                                     is_active=True
