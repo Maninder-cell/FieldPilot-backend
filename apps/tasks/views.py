@@ -36,6 +36,64 @@ from apps.core.permissions import IsAdminUser
 logger = logging.getLogger(__name__)
 
 
+# Helper Functions
+
+def ensure_tenant_role(request):
+    """
+    Ensure tenant_role is set on request.
+    This is needed because DRF authentication happens after middleware.
+    """
+    if not hasattr(request, 'tenant_role') or request.tenant_role is None:
+        from django.db import connection
+        from apps.tenants.models import TenantMember
+        from django_tenants.utils import schema_context
+        
+        tenant = getattr(connection, 'tenant', None)
+        if tenant and request.user.is_authenticated:
+            try:
+                with schema_context('public'):
+                    membership = TenantMember.objects.filter(
+                        tenant_id=tenant.id,
+                        user=request.user,
+                        is_active=True
+                    ).first()
+                    
+                    if not membership:
+                        # Try user's first active membership
+                        membership = TenantMember.objects.filter(
+                            user=request.user,
+                            is_active=True
+                        ).first()
+                    
+                    if membership:
+                        request.tenant_role = membership.role
+                        request.tenant_membership = membership
+            except Exception as e:
+                logger.error(f"Error getting tenant membership: {str(e)}")
+
+
+def require_role(request, allowed_roles):
+    """
+    Check if user has required role. Returns error response if not authorized.
+    """
+    ensure_tenant_role(request)
+    
+    if not hasattr(request, 'tenant_role') or not request.tenant_role:
+        return error_response(
+            message='You are not a member of this organization',
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    if request.tenant_role not in allowed_roles:
+        roles_str = ', '.join(allowed_roles)
+        return error_response(
+            message=f'This action requires one of these roles: {roles_str}',
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    return None
+
+
 # Task CRUD Endpoints
 
 @extend_schema(
@@ -711,11 +769,9 @@ def team_list_create(request):
     
     elif request.method == 'POST':
         # Check permissions (admin/manager/owner only)
-        if request.tenant_role not in ['admin', 'manager', 'owner']:
-            return error_response(
-                message='Only admins, managers, and owners can create teams',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         serializer = CreateTeamSerializer(data=request.data)
         
@@ -789,11 +845,9 @@ def team_detail(request, team_id):
     
     elif request.method == 'PATCH':
         # Check permissions (admin/manager/owner only)
-        if request.tenant_role not in ['admin', 'manager', 'owner']:
-            return error_response(
-                message='Only admins, managers, and owners can update teams',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         serializer = UpdateTeamSerializer(team, data=request.data, partial=True)
         
@@ -822,11 +876,9 @@ def team_detail(request, team_id):
     
     elif request.method == 'DELETE':
         # Check permissions (admin/manager/owner only)
-        if request.tenant_role not in ['admin', 'manager', 'owner']:
-            return error_response(
-                message='Only admins, managers, and owners can delete teams',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
+        error = require_role(request, ['owner', 'admin', 'manager'])
+        if error:
+            return error
         
         try:
             # Soft delete
