@@ -30,8 +30,11 @@ class TenantMembershipMiddleware:
         request.tenant_membership = None
         request.tenant_role = None
         
+        print(f"[MIDDLEWARE] Request path: {request.path}, Authenticated: {request.user.is_authenticated}")
+        
         # Only process for authenticated users
         if request.user.is_authenticated:
+            print(f"[MIDDLEWARE] User authenticated: {request.user.email if hasattr(request.user, 'email') else request.user}")
             try:
                 # Get current tenant from django-tenants
                 tenant = getattr(connection, 'tenant', None)
@@ -46,6 +49,7 @@ class TenantMembershipMiddleware:
                         with schema_context('public'):
                             try:
                                 # Get user's membership in current tenant using tenant ID
+                                print(f"[MIDDLEWARE DEBUG] Looking for membership: tenant_id={tenant.id}, user={request.user.id}")
                                 membership = TenantMember.objects.get(
                                     tenant_id=tenant.id,
                                     user=request.user,
@@ -53,14 +57,16 @@ class TenantMembershipMiddleware:
                                 )
                                 request.tenant_membership = membership
                                 request.tenant_role = membership.role
+                                print(f"[MIDDLEWARE DEBUG] Found membership: role={membership.role}")
                                 
-                                logger.debug(
+                                logger.info(
                                     f"User {request.user.email} accessing tenant {tenant.name} "
                                     f"(ID: {tenant.id}) with role {membership.role}"
                                 )
                             except TenantMember.DoesNotExist:
                                 # User is not a member of this specific tenant
                                 # Try to get user's first active membership as fallback
+                                print(f"[MIDDLEWARE DEBUG] No membership found for tenant_id={tenant.id}, user={request.user.id}")
                                 logger.warning(
                                     f"User {request.user.email} is not a member of tenant {tenant.name} (ID: {tenant.id})"
                                 )
@@ -72,15 +78,18 @@ class TenantMembershipMiddleware:
                                 if membership:
                                     request.tenant_membership = membership
                                     request.tenant_role = membership.role
-                                    logger.debug(
+                                    print(f"[MIDDLEWARE DEBUG] Using fallback membership: role={membership.role}")
+                                    logger.info(
                                         f"User {request.user.email} using primary tenant "
                                         f"{membership.tenant.name} with role {membership.role}"
                                     )
                                 else:
+                                    print(f"[MIDDLEWARE DEBUG] No active memberships found for user={request.user.id}")
                                     logger.warning(
                                         f"User {request.user.email} has no active tenant memberships"
                                     )
                     except Exception as e:
+                        print(f"[MIDDLEWARE DEBUG] Exception: {str(e)}")
                         logger.error(f"Error querying tenant membership: {str(e)}", exc_info=True)
             except Exception as e:
                 logger.error(f"Error in TenantMembershipMiddleware: {str(e)}", exc_info=True)
