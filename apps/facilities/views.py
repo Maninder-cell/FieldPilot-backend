@@ -22,7 +22,10 @@ from .serializers import (
     LocationSerializer, CreateLocationSerializer, UpdateLocationSerializer
 )
 from apps.core.responses import success_response, error_response
-from apps.core.permissions import IsAdminUser, IsAdminManagerOwner, MethodRolePermission
+from apps.core.permissions import (
+    IsAdminUser, IsAdminManagerOwner, MethodRolePermission, 
+    ensure_tenant_role, method_role_permissions
+)
 from apps.tenants.decorators import check_tenant_permission
 
 logger = logging.getLogger(__name__)
@@ -46,15 +49,14 @@ logger = logging.getLogger(__name__)
 )
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician', 'employee'],
+    POST=['admin', 'manager', 'owner']
+)
 def customer_list_create(request):
     """
     List customers with pagination and filtering, or create a new customer.
     """
-    # Define role permissions for different methods
-    customer_list_create.role_permissions = {
-        'GET': ['admin', 'manager', 'owner', 'technician', 'employee'],
-        'POST': ['admin', 'manager', 'owner'],
-    }
     
     if request.method == 'GET':
         # Get queryset
@@ -136,17 +138,16 @@ def customer_list_create(request):
 )
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician', 'employee'],
+    PUT=['admin', 'manager', 'owner'],
+    PATCH=['admin', 'manager', 'owner'],
+    DELETE=['admin', 'manager', 'owner']
+)
 def customer_detail(request, customer_id):
     """
     Retrieve, update, or delete a customer.
     """
-    # Define role permissions for different methods
-    customer_detail.role_permissions = {
-        'GET': ['admin', 'manager', 'owner', 'technician', 'employee'],
-        'PUT': ['admin', 'manager', 'owner'],
-        'PATCH': ['admin', 'manager', 'owner'],
-        'DELETE': ['admin', 'manager', 'owner'],
-    }
     try:
         customer = Customer.objects.get(pk=customer_id)
     except Customer.DoesNotExist:
@@ -451,19 +452,19 @@ def accept_customer_invitation(request):
 )
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
+    POST=['admin', 'manager', 'owner']
+)
 def facility_list_create(request):
     """
     List facilities with pagination and filtering, or create a new facility.
     """
-    # Define role permissions for different methods
-    facility_list_create.role_permissions = {
-        'GET': ['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
-        'POST': ['admin', 'manager', 'owner'],
-    }
     
     if request.method == 'GET':
         # Get queryset based on user role
-        if request.tenant_role == 'customer':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
             # Customers only see facilities assigned to them
             try:
                 customer = request.user.customer_profile
@@ -557,22 +558,22 @@ def facility_list_create(request):
 )
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
+    PUT=['admin', 'manager', 'owner'],
+    PATCH=['admin', 'manager', 'owner'],
+    DELETE=['admin', 'manager', 'owner']
+)
 def facility_detail(request, facility_id):
     """
     Retrieve, update, or delete a facility.
     """
-    # Define role permissions for different methods
-    facility_detail.role_permissions = {
-        'GET': ['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
-        'PUT': ['admin', 'manager', 'owner'],
-        'PATCH': ['admin', 'manager', 'owner'],
-        'DELETE': ['admin', 'manager', 'owner'],
-    }
     try:
         facility = Facility.objects.get(pk=facility_id)
         
         # Check customer access
-        if request.tenant_role == 'customer':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
             try:
                 customer = request.user.customer_profile
                 if facility.customer != customer:
@@ -599,33 +600,6 @@ def facility_detail(request, facility_id):
         )
     
     elif request.method in ['PUT', 'PATCH']:
-        # Check permissions (owner/admin/manager only)
-        # Get tenant role directly since JWT auth happens after middleware
-        from django_tenants.utils import schema_context
-        from apps.tenants.models import TenantMember
-        from django.db import connection
-        
-        tenant_role = None
-        try:
-            tenant = getattr(connection, 'tenant', None)
-            if tenant:
-                with schema_context('public'):
-                    membership = TenantMember.objects.filter(
-                        tenant=tenant,
-                        user=request.user,
-                        is_active=True
-                    ).first()
-                    if membership:
-                        tenant_role = membership.role
-        except Exception as e:
-            logger.error(f"Error getting tenant role: {str(e)}")
-        
-        if tenant_role not in ['owner', 'admin', 'manager']:
-            return error_response(
-                message='Only owners, admins and managers can update facilities',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-        
         partial = request.method == 'PATCH'
         serializer = UpdateFacilitySerializer(facility, data=request.data, partial=partial)
         
@@ -653,33 +627,6 @@ def facility_detail(request, facility_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (owner/admin/manager only)
-        # Get tenant role directly since JWT auth happens after middleware
-        from django_tenants.utils import schema_context
-        from apps.tenants.models import TenantMember
-        from django.db import connection
-        
-        tenant_role = None
-        try:
-            tenant = getattr(connection, 'tenant', None)
-            if tenant:
-                with schema_context('public'):
-                    membership = TenantMember.objects.filter(
-                        tenant=tenant,
-                        user=request.user,
-                        is_active=True
-                    ).first()
-                    if membership:
-                        tenant_role = membership.role
-        except Exception as e:
-            logger.error(f"Error getting tenant role: {str(e)}")
-        
-        if tenant_role not in ['owner', 'admin', 'manager']:
-            return error_response(
-                message='Only owners, admins and managers can delete facilities',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-        
         try:
             # Soft delete (will cascade to buildings and equipment)
             facility.delete()
@@ -716,7 +663,8 @@ def facility_buildings(request, facility_id):
         facility = Facility.objects.get(pk=facility_id)
         
         # Check customer access
-        if request.tenant_role == 'customer':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
             try:
                 customer = request.user.customer_profile
                 if facility.customer != customer:
@@ -785,7 +733,8 @@ def facility_equipment(request, facility_id):
         facility = Facility.objects.get(pk=facility_id)
         
         # Check customer access
-        if request.tenant_role == 'customer':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
             try:
                 customer = request.user.customer_profile
                 if facility.customer != customer:
@@ -861,18 +810,18 @@ def facility_equipment(request, facility_id):
 )
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
+    POST=['admin', 'manager', 'owner']
+)
 def building_list_create(request):
     """
     List buildings with pagination and filtering, or create a new building.
     """
-    # Define role permissions for different methods
-    building_list_create.role_permissions = {
-        'GET': ['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
-        'POST': ['admin', 'manager', 'owner'],
-    }
     if request.method == 'GET':
         # Get queryset based on user role
-        if request.tenant_role == 'customer':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
             # Customers only see buildings assigned to them or in their facilities
             try:
                 customer = request.user.customer_profile
@@ -972,22 +921,22 @@ def building_list_create(request):
 )
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
+    PUT=['admin', 'manager', 'owner'],
+    PATCH=['admin', 'manager', 'owner'],
+    DELETE=['admin', 'manager', 'owner']
+)
 def building_detail(request, building_id):
     """
     Retrieve, update, or delete a building.
     """
-    # Define role permissions for different methods
-    building_detail.role_permissions = {
-        'GET': ['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
-        'PUT': ['admin', 'manager', 'owner'],
-        'PATCH': ['admin', 'manager', 'owner'],
-        'DELETE': ['admin', 'manager', 'owner'],
-    }
     try:
         building = Building.objects.get(pk=building_id)
         
         # Check customer access
-        if request.tenant_role == 'customer':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
             try:
                 customer = request.user.customer_profile
                 if building.customer != customer and building.facility.customer != customer:
@@ -1041,11 +990,6 @@ def building_detail(request, building_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (owner/admin/manager only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         try:
             # Soft delete (will cascade to equipment)
             building.delete()
@@ -1082,7 +1026,8 @@ def building_equipment(request, building_id):
         building = Building.objects.get(pk=building_id)
         
         # Check customer access
-        if request.tenant_role == 'customer':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
             try:
                 customer = request.user.customer_profile
                 if building.customer != customer and building.facility.customer != customer:
@@ -1183,11 +1128,6 @@ def location_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (owner/admin/manager only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         serializer = CreateLocationSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -1248,11 +1188,6 @@ def location_detail(request, location_id):
         )
     
     elif request.method in ['PUT', 'PATCH']:
-        # Check permissions (owner/admin/manager only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         partial = request.method == 'PATCH'
         serializer = UpdateLocationSerializer(location, data=request.data, partial=partial)
         
@@ -1280,11 +1215,6 @@ def location_detail(request, location_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (owner/admin/manager only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         try:
             location.delete()
             

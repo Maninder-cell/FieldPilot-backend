@@ -11,6 +11,38 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# Store role permissions globally for views
+_VIEW_ROLE_PERMISSIONS = {}
+
+
+def method_role_permissions(**role_map):
+    """
+    Decorator to set role_permissions on a view function.
+    Stores permissions in a global registry that MethodRolePermission can access.
+    
+    Usage:
+        @api_view(['GET', 'POST'])
+        @permission_classes([IsAuthenticated, MethodRolePermission])
+        @method_role_permissions(GET=['admin', 'manager'], POST=['admin'])
+        def my_view(request):
+            ...
+    """
+    def decorator(view_func_or_class):
+        # Get the function name to use as key
+        func_name = getattr(view_func_or_class, '__name__', None)
+        if not func_name and hasattr(view_func_or_class, '__func__'):
+            func_name = view_func_or_class.__func__.__name__
+        
+        if func_name:
+            _VIEW_ROLE_PERMISSIONS[func_name] = role_map
+        
+        # Also set as attribute for direct access
+        view_func_or_class.role_permissions = role_map
+        
+        return view_func_or_class
+    return decorator
+
+
 def ensure_tenant_role(request):
     """
     Ensure tenant_role is set on request.
@@ -228,12 +260,7 @@ class MethodRolePermission(permissions.BasePermission):
         # Try the global registry (for function-based views)
         if not role_map:
             view_name = type(view).__name__
-            # Import the registry from tasks.views
-            try:
-                from apps.tasks.views import _VIEW_ROLE_PERMISSIONS
-                role_map = _VIEW_ROLE_PERMISSIONS.get(view_name, None)
-            except ImportError:
-                pass
+            role_map = _VIEW_ROLE_PERMISSIONS.get(view_name, None)
         
         # For @api_view decorated functions, check the underlying function
         if not role_map and hasattr(view, '_view_func'):
@@ -296,3 +323,10 @@ class IsOwnerOrAdminManager(permissions.BasePermission):
         # Check if user is the owner
         owner_field = getattr(obj, 'uploaded_by', None) or getattr(obj, 'created_by', None)
         return owner_field == request.user
+
+
+class IsCustomerOnly(HasTenantRole):
+    """
+    Permission for customer-only access.
+    """
+    required_roles = ['customer']

@@ -19,6 +19,10 @@ from .serializers import (
     EquipmentListSerializer
 )
 from apps.core.responses import success_response, error_response
+from apps.core.permissions import (
+    IsAdminManagerOwner, MethodRolePermission, 
+    ensure_tenant_role, method_role_permissions
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,14 +49,20 @@ logger = logging.getLogger(__name__)
     }
 )
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
+    POST=['admin', 'manager', 'owner']
+)
 def equipment_list_create(request):
     """
     List equipment with pagination and filtering, or create new equipment.
     """
+    
     if request.method == 'GET':
         # Get queryset based on user role
-        if request.tenant_role == 'customer':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
             # Customers only see equipment assigned to them or in their facilities/buildings
             try:
                 customer = request.user.customer_profile
@@ -122,12 +132,6 @@ def equipment_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (owner/admin/manager only)
-        from apps.facilities.views import require_role
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         serializer = CreateEquipmentSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -167,16 +171,24 @@ def equipment_list_create(request):
     }
 )
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
+    PUT=['admin', 'manager', 'owner'],
+    PATCH=['admin', 'manager', 'owner'],
+    DELETE=['admin', 'manager', 'owner']
+)
 def equipment_detail(request, equipment_id):
     """
     Retrieve, update, or delete equipment.
     """
+    
     try:
         equipment = Equipment.objects.get(pk=equipment_id)
         
         # Check customer access
-        if request.tenant_role == 'customer':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
             try:
                 customer = request.user.customer_profile
                 if (equipment.customer != customer and
@@ -205,12 +217,6 @@ def equipment_detail(request, equipment_id):
         )
     
     elif request.method in ['PUT', 'PATCH']:
-        # Check permissions (owner/admin/manager only)
-        from apps.facilities.views import require_role
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         partial = request.method == 'PATCH'
         serializer = UpdateEquipmentSerializer(equipment, data=request.data, partial=partial)
         
@@ -238,12 +244,6 @@ def equipment_detail(request, equipment_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (owner/admin/manager only)
-        from apps.facilities.views import require_role
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         try:
             # Soft delete
             equipment.delete()
@@ -280,7 +280,8 @@ def equipment_history(request, equipment_id):
         equipment = Equipment.objects.get(pk=equipment_id)
         
         # Check customer access
-        if request.tenant_role == 'customer':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
             try:
                 customer = request.user.customer_profile
                 if (equipment.customer != customer and

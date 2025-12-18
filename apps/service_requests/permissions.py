@@ -5,6 +5,7 @@ Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from rest_framework import permissions
+from apps.core.permissions import ensure_tenant_role
 
 
 class IsCustomer(permissions.BasePermission):
@@ -16,7 +17,8 @@ class IsCustomer(permissions.BasePermission):
     
     def has_permission(self, request, view):
         """Check if user is authenticated and is a customer."""
-        return request.user and request.user.is_authenticated and request.user.role == 'customer'
+        ensure_tenant_role(request)
+        return request.user and request.user.is_authenticated and getattr(request, 'tenant_role', None) == 'customer'
 
 
 class IsAdminOrManager(permissions.BasePermission):
@@ -28,10 +30,11 @@ class IsAdminOrManager(permissions.BasePermission):
     
     def has_permission(self, request, view):
         """Check if user is authenticated and is admin or manager."""
+        ensure_tenant_role(request)
         return (
             request.user and 
             request.user.is_authenticated and 
-            request.user.role in ['admin', 'manager']
+            getattr(request, 'tenant_role', None) in ['admin', 'manager', 'owner']
         )
 
 
@@ -44,8 +47,11 @@ class IsRequestOwner(permissions.BasePermission):
     
     def has_object_permission(self, request, view, obj):
         """Check if user owns the service request."""
-        # Admins and managers can access all requests
-        if request.user.role in ['admin', 'manager']:
+        ensure_tenant_role(request)
+        tenant_role = getattr(request, 'tenant_role', None)
+        
+        # Admins, managers, and owners can access all requests
+        if tenant_role in ['admin', 'manager', 'owner']:
             return True
         
         # Customers can only access their own requests
@@ -61,12 +67,15 @@ class IsRequestOwnerOrAdmin(permissions.BasePermission):
     
     def has_object_permission(self, request, view, obj):
         """Check if user owns the request or is admin/manager."""
-        # Admins and managers can access all requests
-        if request.user.role in ['admin', 'manager']:
+        ensure_tenant_role(request)
+        tenant_role = getattr(request, 'tenant_role', None)
+        
+        # Admins, managers, and owners can access all requests
+        if tenant_role in ['admin', 'manager', 'owner']:
             return True
         
         # Customers can only access their own requests
-        if request.user.role == 'customer':
+        if tenant_role == 'customer':
             return obj.customer == request.user
         
         return False
@@ -81,12 +90,15 @@ class CanModifyRequest(permissions.BasePermission):
     
     def has_object_permission(self, request, view, obj):
         """Check if user can modify the request."""
-        # Admins and managers can always modify
-        if request.user.role in ['admin', 'manager']:
+        ensure_tenant_role(request)
+        tenant_role = getattr(request, 'tenant_role', None)
+        
+        # Admins, managers, and owners can always modify
+        if tenant_role in ['admin', 'manager', 'owner']:
             return True
         
         # Customers can only modify their own requests if not yet reviewed
-        if request.user.role == 'customer':
+        if tenant_role == 'customer':
             return obj.customer == request.user and obj.can_be_modified
         
         return False
@@ -101,8 +113,9 @@ class CanViewInternalNotes(permissions.BasePermission):
     
     def has_permission(self, request, view):
         """Check if user can view internal notes."""
+        ensure_tenant_role(request)
         return (
             request.user and 
             request.user.is_authenticated and 
-            request.user.role in ['admin', 'manager']
+            getattr(request, 'tenant_role', None) in ['admin', 'manager', 'owner']
         )

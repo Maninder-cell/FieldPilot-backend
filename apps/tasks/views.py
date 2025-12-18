@@ -34,41 +34,10 @@ from .serializers import (
 from apps.core.responses import success_response, error_response
 from apps.core.permissions import (
     IsAdminUser, IsAdminManagerOwner, IsTechnicianOnly, MethodRolePermission,
-    IsOwnerOrAdminManager
+    IsOwnerOrAdminManager, ensure_tenant_role, method_role_permissions
 )
 
 logger = logging.getLogger(__name__)
-
-
-# Store role permissions globally for views
-_VIEW_ROLE_PERMISSIONS = {}
-
-def method_role_permissions(**role_map):
-    """
-    Decorator to set role_permissions on a view function.
-    Stores permissions in a global registry that MethodRolePermission can access.
-    
-    Usage:
-        @api_view(['GET', 'POST'])
-        @permission_classes([IsAuthenticated, MethodRolePermission])
-        @method_role_permissions(GET=['admin', 'manager'], POST=['admin'])
-        def my_view(request):
-            ...
-    """
-    def decorator(view_func_or_class):
-        # Get the function name to use as key
-        func_name = getattr(view_func_or_class, '__name__', None)
-        if not func_name and hasattr(view_func_or_class, '__func__'):
-            func_name = view_func_or_class.__func__.__name__
-        
-        if func_name:
-            _VIEW_ROLE_PERMISSIONS[func_name] = role_map
-        
-        # Also set as attribute for direct access
-        view_func_or_class.role_permissions = role_map
-        
-        return view_func_or_class
-    return decorator
 
 
 # Task CRUD Endpoints
@@ -104,7 +73,8 @@ def task_list_create(request):
     """
     if request.method == 'GET':
         # Get queryset based on user role
-        if request.tenant_role == 'technician':
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'technician':
             # Technicians see tasks assigned to them or their teams
             queryset = Task.objects.filter(
                 Q(assignments__assignee=request.user) |
@@ -276,7 +246,8 @@ def task_detail(request, task_id):
         )
     
     # Check access permissions
-    if request.tenant_role == 'technician':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) == 'technician':
         # Technicians can only access tasks assigned to them
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
@@ -619,7 +590,8 @@ def task_history(request, task_id):
         )
     
     # Check access permissions
-    if request.tenant_role == 'technician':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -1401,7 +1373,8 @@ def task_time_logs(request, task_id):
         )
     
     # Check access permissions
-    if request.tenant_role == 'technician':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -1450,7 +1423,8 @@ def task_comments(request, task_id):
         )
     
     # Check access permissions
-    if request.tenant_role == 'technician':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -1548,8 +1522,9 @@ def comment_detail(request, comment_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Check permissions (only author can update/delete)
-    if comment.author != request.user and request.tenant_role not in ['admin', 'manager']:
+    # Check permissions (only author can update/delete, or admin/manager/owner)
+    ensure_tenant_role(request)
+    if comment.author != request.user and getattr(request, 'tenant_role', None) not in ['admin', 'manager', 'owner']:
         return error_response(
             message='You can only modify your own comments',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1625,7 +1600,8 @@ def task_attachments(request, task_id):
         )
     
     # Check access permissions
-    if request.tenant_role == 'technician':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -1767,7 +1743,8 @@ def attachment_download(request, attachment_id):
     
     # Check access permissions
     task = attachment.task
-    if request.tenant_role == 'technician':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -1958,7 +1935,8 @@ def task_materials(request, task_id):
         )
     
     # Check access permissions
-    if request.tenant_role == 'technician':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) == 'technician':
         is_assigned = TaskAssignment.objects.filter(
             Q(task=task, assignee=request.user) |
             Q(task=task, team__members=request.user)
@@ -2010,7 +1988,8 @@ def work_hours_report(request):
     from .utils import WorkHoursCalculator
     
     # Check permissions (admin/manager can see all, technicians see only their own)
-    if request.tenant_role == 'technician':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) == 'technician':
         technician_id = str(request.user.id)
     else:
         technician_id = request.query_params.get('technician')

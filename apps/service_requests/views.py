@@ -25,9 +25,10 @@ from .serializers import (
     UploadAttachmentSerializer, RequestActionSerializer
 )
 from apps.core.responses import success_response, error_response
-from apps.core.permissions import IsAdminUser
+from apps.core.permissions import IsAdminUser, IsAdminManagerOwner, IsCustomerOnly, ensure_tenant_role
 from apps.equipment.models import Equipment
 from apps.tasks.models import Task, TaskAssignment, TaskAttachment
+from .permissions import IsRequestOwnerOrAdmin
 
 logger = logging.getLogger(__name__)
 
@@ -52,19 +53,13 @@ logger = logging.getLogger(__name__)
     }
 )
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsCustomerOnly])
 def service_request_list_create(request):
     """
     List customer's service requests or create a new one.
     Task 4.1 & 4.2: Request submission and listing
     """
     if request.method == 'GET':
-        # Only customers can use this endpoint for listing
-        if request.tenant_role != 'customer':
-            return error_response(
-                message='This endpoint is for customers only. Admins should use /admin/ endpoint.',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
         
         # Get customer's requests only
         queryset = ServiceRequest.objects.filter(customer=request.user)
@@ -96,13 +91,6 @@ def service_request_list_create(request):
         return success_response(data=serializer.data)
     
     elif request.method == 'POST':
-        # Only customers can create requests
-        if request.tenant_role != 'customer':
-            return error_response(
-                message='Only customers can create service requests.',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-        
         serializer = CreateServiceRequestSerializer(
             data=request.data,
             context={'customer': request.user}
@@ -175,7 +163,7 @@ def service_request_list_create(request):
     responses={200: CustomerServiceRequestSerializer}
 )
 @api_view(['GET', 'PATCH', 'DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsRequestOwnerOrAdmin])
 def service_request_detail(request, request_id):
     """
     Get, update, or delete a service request.
@@ -189,8 +177,8 @@ def service_request_detail(request, request_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Check permissions - customer can only access their own requests
-    if request.tenant_role == 'customer' and service_request.customer != request.user:
+    # Check object-level permission
+    if not IsRequestOwnerOrAdmin().has_object_permission(request, None, service_request):
         return error_response(
             message='You can only access your own service requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -198,7 +186,8 @@ def service_request_detail(request, request_id):
     
     if request.method == 'GET':
         # Use appropriate serializer based on user role
-        if request.tenant_role in ['admin', 'manager']:
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) in ['admin', 'manager', 'owner']:
             serializer = ServiceRequestSerializer(service_request, context={'request': request})
         else:
             serializer = CustomerServiceRequestSerializer(service_request, context={'request': request})
@@ -308,18 +297,12 @@ def service_request_detail(request, request_id):
     responses={200: ServiceRequestSerializer(many=True)}
 )
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def admin_service_request_list(request):
     """
-    List all service requests (Admin/Manager only).
+    List all service requests (Admin/Manager/Owner only).
     Task 6.1: Admin request listing
     """
-    # Only admin/manager can access
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can access this endpoint',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     # Get all requests
     queryset = ServiceRequest.objects.all()
@@ -362,18 +345,12 @@ def admin_service_request_list(request):
     responses={200: ServiceRequestSerializer}
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def mark_under_review(request, request_id):
     """
     Mark a service request as under review.
     Task 6.2: Request review endpoint
     """
-    # Only admin/manager can access
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can review requests',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         service_request = ServiceRequest.objects.get(pk=request_id)
@@ -417,18 +394,12 @@ def mark_under_review(request, request_id):
     responses={200: ServiceRequestSerializer}
 )
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def update_internal_notes(request, request_id):
     """
     Update internal notes for a service request.
     Task 6.3: Internal notes endpoint
     """
-    # Only admin/manager can access
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can update internal notes',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         service_request = ServiceRequest.objects.get(pk=request_id)
@@ -476,18 +447,12 @@ def update_internal_notes(request, request_id):
     responses={200: ServiceRequestSerializer}
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def accept_request(request, request_id):
     """
     Accept a service request.
     Task 7.1: Request acceptance endpoint
     """
-    # Only admin/manager can access
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can accept requests',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         service_request = ServiceRequest.objects.get(pk=request_id)
@@ -551,18 +516,12 @@ def accept_request(request, request_id):
     responses={200: ServiceRequestSerializer}
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def reject_request(request, request_id):
     """
     Reject a service request.
     Task 7.2: Request rejection endpoint
     """
-    # Only admin/manager can access
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can reject requests',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         service_request = ServiceRequest.objects.get(pk=request_id)
@@ -623,18 +582,12 @@ def reject_request(request, request_id):
     responses={200: ServiceRequestSerializer}
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def convert_to_task(request, request_id):
     """
     Convert a service request to a task.
     Task 8.2: Convert-to-task endpoint
     """
-    # Only admin/manager can access
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can convert requests to tasks',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         service_request = ServiceRequest.objects.get(pk=request_id)
@@ -736,7 +689,7 @@ def convert_to_task(request, request_id):
     responses={200: RequestActionSerializer(many=True)}
 )
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsRequestOwnerOrAdmin])
 def request_timeline(request, request_id):
     """
     Get request timeline (all actions).
@@ -750,8 +703,8 @@ def request_timeline(request, request_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Check permissions
-    if request.tenant_role == 'customer' and service_request.customer != request.user:
+    # Check object-level permission
+    if not IsRequestOwnerOrAdmin().has_object_permission(request, None, service_request):
         return error_response(
             message='You can only view timeline for your own requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -777,7 +730,7 @@ def request_timeline(request, request_id):
     }
 )
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsRequestOwnerOrAdmin])
 def request_comments(request, request_id):
     """
     List or add comments to a service request.
@@ -791,8 +744,8 @@ def request_comments(request, request_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Check permissions
-    if request.tenant_role == 'customer' and service_request.customer != request.user:
+    # Check object-level permission
+    if not IsRequestOwnerOrAdmin().has_object_permission(request, None, service_request):
         return error_response(
             message='You can only access comments for your own requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -800,7 +753,8 @@ def request_comments(request, request_id):
     
     if request.method == 'GET':
         # Get comments (filter internal for customers)
-        if request.tenant_role in ['admin', 'manager']:
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) in ['admin', 'manager', 'owner']:
             comments = service_request.comments.all()
         else:
             comments = service_request.comments.filter(is_internal=False)
@@ -865,7 +819,7 @@ def request_comments(request, request_id):
     }
 )
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsRequestOwnerOrAdmin])
 def request_attachments(request, request_id):
     """
     List or upload attachments to a service request.
@@ -879,8 +833,8 @@ def request_attachments(request, request_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Check permissions
-    if request.tenant_role == 'customer' and service_request.customer != request.user:
+    # Check object-level permission
+    if not IsRequestOwnerOrAdmin().has_object_permission(request, None, service_request):
         return error_response(
             message='You can only access attachments for your own requests',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1067,18 +1021,12 @@ def submit_feedback(request, request_id):
     }
 )
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def service_request_reports(request):
     """
     Get service request reports and analytics.
     Task 17.1: Admin reports endpoint
     """
-    # Only admin/manager can access
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can access reports',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     from .reports import ServiceRequestReports
     from datetime import datetime
@@ -1213,18 +1161,12 @@ def service_request_reports(request):
     }
 )
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def admin_dashboard_analytics(request):
     """
     Get admin dashboard analytics.
     Task 17.2: Dashboard analytics
     """
-    # Only admin/manager can access
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can access analytics',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     from .reports import ServiceRequestReports
     
@@ -1268,18 +1210,12 @@ def admin_dashboard_analytics(request):
     responses={200: RequestCommentSerializer}
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def request_clarification(request, request_id):
     """
     Request clarification from customer.
     Task 10.2: Clarification request feature
     """
-    # Only admin/manager can request clarification
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can request clarification',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         service_request = ServiceRequest.objects.get(pk=request_id)
