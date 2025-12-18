@@ -24,6 +24,7 @@ from .serializers import (
     AssignTaskSerializer, UpdateTaskStatusSerializer, UpdateWorkStatusSerializer,
     TechnicianTeamSerializer, TechnicianTeamListSerializer,
     CreateTeamSerializer, UpdateTeamSerializer, AddTeamMembersSerializer,
+    TechnicianListSerializer,
     TimeLogSerializer, TravelLogSerializer, ArrivalLogSerializer,
     DepartureLogSerializer, LunchStartSerializer, LunchEndSerializer,
     TaskCommentSerializer, CreateCommentSerializer, UpdateCommentSerializer,
@@ -2151,3 +2152,100 @@ def work_hours_report(request):
         data=data,
         message='Work hours report retrieved successfully'
     )
+
+
+
+@extend_schema(
+    tags=['Teams'],
+    summary='List technicians for team selection',
+    description='Get paginated list of technician users with name search filtering. Used for selecting technicians to add to teams.',
+    parameters=[
+        OpenApiParameter('page', int, description='Page number'),
+        OpenApiParameter('page_size', int, description='Items per page (default: 10)'),
+        OpenApiParameter('search', str, description='Search by first name, last name, or email'),
+    ],
+    responses={
+        200: TechnicianListSerializer(many=True),
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def technician_list(request):
+    """
+    List all technicians with pagination and name search filtering.
+    Only returns users with 'technician' role in the current tenant.
+    """
+    try:
+        # Get current tenant from connection
+        from django.db import connection
+        from apps.tenants.models import TenantMember
+        
+        tenant = getattr(connection, 'tenant', None)
+        
+        if not tenant:
+            return error_response(
+                message='Tenant context not found',
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get all technician members for this tenant
+        from django_tenants.utils import schema_context
+        with schema_context('public'):
+            technician_members = TenantMember.objects.filter(
+                tenant=tenant,
+                role='technician',
+                is_active=True
+            ).select_related('user')
+        
+        # Get user IDs
+        technician_user_ids = [member.user_id for member in technician_members]
+        
+        # Query users who are technicians
+        from apps.authentication.models import User
+        queryset = User.objects.filter(
+            id__in=technician_user_ids,
+            is_active=True
+        )
+        
+        # Apply search filter
+        search = request.query_params.get('search', '').strip()
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search)
+            )
+        
+        # Order by name
+        queryset = queryset.order_by('first_name', 'last_name')
+        
+        # Attach tenant member data to each user for serializer
+        member_dict = {member.user_id: member for member in technician_members}
+        for user in queryset:
+            user.tenant_member = member_dict.get(user.id)
+        
+        # Paginate
+        paginator = PageNumberPagination()
+        paginator.page_size = int(request.query_params.get('page_size', 10))
+        page = paginator.paginate_queryset(queryset, request)
+        
+        if page is not None:
+            serializer = TechnicianListSerializer(page, many=True)
+            return paginator.get_paginated_response({
+                'success': True,
+                'data': serializer.data,
+                'message': 'Technicians retrieved successfully'
+            })
+        
+        serializer = TechnicianListSerializer(queryset, many=True)
+        return success_response(
+            data=serializer.data,
+            message='Technicians retrieved successfully'
+        )
+    
+    except Exception as e:
+        logger.error(f"Failed to retrieve technicians: {str(e)}", exc_info=True)
+        return error_response(
+            message='Failed to retrieve technicians',
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

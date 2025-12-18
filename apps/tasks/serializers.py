@@ -456,6 +456,43 @@ class AddTeamMembersSerializer(serializers.Serializer):
         return value
 
 
+class TechnicianListSerializer(serializers.Serializer):
+    """
+    Serializer for listing technicians for team selection.
+    """
+    id = serializers.UUIDField(read_only=True)
+    email = serializers.EmailField(read_only=True)
+    first_name = serializers.CharField(read_only=True)
+    last_name = serializers.CharField(read_only=True)
+    full_name = serializers.CharField(read_only=True)
+    avatar_url = serializers.URLField(read_only=True)
+    employee_id = serializers.SerializerMethodField()
+    department = serializers.SerializerMethodField()
+    job_title = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
+    is_active = serializers.BooleanField(read_only=True)
+    
+    def get_employee_id(self, obj):
+        """Get employee_id from TenantMember."""
+        tenant_member = getattr(obj, 'tenant_member', None)
+        return tenant_member.employee_id if tenant_member else ''
+    
+    def get_department(self, obj):
+        """Get department from TenantMember."""
+        tenant_member = getattr(obj, 'tenant_member', None)
+        return tenant_member.department if tenant_member else ''
+    
+    def get_job_title(self, obj):
+        """Get job_title from TenantMember."""
+        tenant_member = getattr(obj, 'tenant_member', None)
+        return tenant_member.job_title if tenant_member else ''
+    
+    def get_phone(self, obj):
+        """Get phone from TenantMember."""
+        tenant_member = getattr(obj, 'tenant_member', None)
+        return tenant_member.phone if tenant_member else ''
+
+
 
 # Time Tracking Serializers
 

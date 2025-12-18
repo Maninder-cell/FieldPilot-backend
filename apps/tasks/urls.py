@@ -47,6 +47,7 @@ urlpatterns = [
     path('teams/<uuid:team_id>/', views.team_detail, name='team-detail'),
     path('teams/<uuid:team_id>/members/', views.team_add_members, name='team-add-members'),
     path('teams/<uuid:team_id>/members/<uuid:member_id>/', views.team_remove_member, name='team-remove-member'),
+    path('teams/technicians/', views.technician_list, name='technician-list'),
     
     # Reports
     path('reports/work-hours/', views.work_hours_report, name='work-hours-report'),
