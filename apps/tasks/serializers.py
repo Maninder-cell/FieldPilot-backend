@@ -172,6 +172,10 @@ class CreateTaskSerializer(serializers.Serializer):
         # Validate assignees are technicians
         if assignee_ids:
             from apps.authentication.models import User
+            from apps.tenants.models import TenantMember
+            from django.db import connection
+            from django_tenants.utils import schema_context
+            
             assignees = User.objects.filter(pk__in=assignee_ids)
             
             if assignees.count() != len(assignee_ids):
@@ -179,11 +183,21 @@ class CreateTaskSerializer(serializers.Serializer):
                     'assignee_ids': 'One or more assignees not found.'
                 })
             
-            non_technicians = assignees.exclude(role='technician')
-            if non_technicians.exists():
-                raise serializers.ValidationError({
-                    'assignee_ids': 'All assignees must be technicians.'
-                })
+            # Check if all assignees are technicians in the current tenant
+            tenant = getattr(connection, 'tenant', None)
+            if tenant:
+                with schema_context('public'):
+                    for assignee in assignees:
+                        membership = TenantMember.objects.filter(
+                            tenant_id=tenant.id,
+                            user=assignee,
+                            is_active=True
+                        ).first()
+                        
+                        if not membership or membership.role != 'technician':
+                            raise serializers.ValidationError({
+                                'assignee_ids': f'User {assignee.email} is not a technician in this tenant.'
+                            })
             
             self.assignees = list(assignees)
         
@@ -268,12 +282,33 @@ class AssignTaskSerializer(serializers.Serializer):
         # Validate assignees
         if assignee_ids:
             from apps.authentication.models import User
-            assignees = User.objects.filter(pk__in=assignee_ids, role='technician')
+            from apps.tenants.models import TenantMember
+            from django.db import connection
+            from django_tenants.utils import schema_context
+            
+            assignees = User.objects.filter(pk__in=assignee_ids)
             
             if assignees.count() != len(assignee_ids):
                 raise serializers.ValidationError({
-                    'assignee_ids': 'One or more assignees not found or not technicians.'
+                    'assignee_ids': 'One or more assignees not found.'
                 })
+            
+            # Check if all assignees are technicians in the current tenant
+            tenant = getattr(connection, 'tenant', None)
+            if tenant:
+                with schema_context('public'):
+                    for assignee in assignees:
+                        membership = TenantMember.objects.filter(
+                            tenant_id=tenant.id,
+                            user=assignee,
+                            is_active=True,
+                            role='technician'
+                        ).first()
+                        
+                        if not membership:
+                            raise serializers.ValidationError({
+                                'assignee_ids': f'User {assignee.email} is not a technician in this tenant.'
+                            })
             
             self.assignees = list(assignees)
         
@@ -401,12 +436,33 @@ class CreateTeamSerializer(serializers.Serializer):
             return value
         
         from apps.authentication.models import User
-        members = User.objects.filter(pk__in=value, role='technician', is_active=True)
+        from apps.tenants.models import TenantMember
+        from django.db import connection
+        from django_tenants.utils import schema_context
+        
+        members = User.objects.filter(pk__in=value, is_active=True)
         
         if members.count() != len(value):
             raise serializers.ValidationError(
-                "One or more members not found or not active technicians."
+                "One or more members not found or not active."
             )
+        
+        # Check if all members are technicians in the current tenant
+        tenant = getattr(connection, 'tenant', None)
+        if tenant:
+            with schema_context('public'):
+                for member in members:
+                    membership = TenantMember.objects.filter(
+                        tenant_id=tenant.id,
+                        user=member,
+                        is_active=True,
+                        role='technician'
+                    ).first()
+                    
+                    if not membership:
+                        raise serializers.ValidationError(
+                            f"User {member.email} is not a technician in this tenant."
+                        )
         
         self.members = list(members)
         return value
@@ -445,12 +501,33 @@ class AddTeamMembersSerializer(serializers.Serializer):
     def validate_member_ids(self, value):
         """Validate members are technicians."""
         from apps.authentication.models import User
-        members = User.objects.filter(pk__in=value, role='technician', is_active=True)
+        from apps.tenants.models import TenantMember
+        from django.db import connection
+        from django_tenants.utils import schema_context
+        
+        members = User.objects.filter(pk__in=value, is_active=True)
         
         if members.count() != len(value):
             raise serializers.ValidationError(
-                "One or more members not found or not active technicians."
+                "One or more members not found or not active."
             )
+        
+        # Check if all members are technicians in the current tenant
+        tenant = getattr(connection, 'tenant', None)
+        if tenant:
+            with schema_context('public'):
+                for member in members:
+                    membership = TenantMember.objects.filter(
+                        tenant_id=tenant.id,
+                        user=member,
+                        is_active=True,
+                        role='technician'
+                    ).first()
+                    
+                    if not membership:
+                        raise serializers.ValidationError(
+                            f"User {member.email} is not a technician in this tenant."
+                        )
         
         self.members = list(members)
         return value

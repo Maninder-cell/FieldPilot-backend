@@ -234,7 +234,6 @@ class TechnicianTeam(UUIDPrimaryKeyMixin, SoftDeleteModel, AuditMixin):
     members = models.ManyToManyField(
         'authentication.User',
         related_name='technician_teams',
-        limit_choices_to={'role': 'technician'},
         help_text="Team members (technicians only)"
     )
     
@@ -313,7 +312,6 @@ class TaskAssignment(UUIDPrimaryKeyMixin, TimestampMixin):
         null=True,
         blank=True,
         related_name='task_assignments',
-        limit_choices_to={'role': 'technician'},
         help_text="Individual technician assigned"
     )
     team = models.ForeignKey(
@@ -391,11 +389,26 @@ class TaskAssignment(UUIDPrimaryKeyMixin, TimestampMixin):
                 "Must assign to either an individual technician or a team."
             )
         
-        # Validate assignee is a technician
-        if self.assignee and self.assignee.role != 'technician':
-            raise ValidationError({
-                'assignee': 'Only technicians can be assigned to tasks.'
-            })
+        # Validate assignee is a technician (check TenantMember role)
+        if self.assignee:
+            from apps.tenants.models import TenantMember
+            from django.db import connection
+            from django_tenants.utils import schema_context
+            
+            tenant = getattr(connection, 'tenant', None)
+            if tenant:
+                with schema_context('public'):
+                    membership = TenantMember.objects.filter(
+                        tenant_id=tenant.id,
+                        user=self.assignee,
+                        is_active=True,
+                        role='technician'
+                    ).first()
+                    
+                    if not membership:
+                        raise ValidationError({
+                            'assignee': 'Only technicians can be assigned to tasks.'
+                        })
         
         # Validate team is active
         if self.team and not self.team.is_active:
@@ -439,7 +452,6 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
         'authentication.User',
         on_delete=models.CASCADE,
         related_name='time_logs',
-        limit_choices_to={'role': 'technician'},
         help_text="Technician performing the work"
     )
     
@@ -536,11 +548,26 @@ class TimeLog(UUIDPrimaryKeyMixin, models.Model):
         """
         super().clean()
         
-        # Validate technician role
-        if self.technician and self.technician.role != 'technician':
-            raise ValidationError({
-                'technician': 'Only technicians can have time logs.'
-            })
+        # Validate technician role (check TenantMember role)
+        if self.technician:
+            from apps.tenants.models import TenantMember
+            from django.db import connection
+            from django_tenants.utils import schema_context
+            
+            tenant = getattr(connection, 'tenant', None)
+            if tenant:
+                with schema_context('public'):
+                    membership = TenantMember.objects.filter(
+                        tenant_id=tenant.id,
+                        user=self.technician,
+                        is_active=True,
+                        role='technician'
+                    ).first()
+                    
+                    if not membership:
+                        raise ValidationError({
+                            'technician': 'Only technicians can have time logs.'
+                        })
         
         # Validate time sequence
         if self.travel_started_at and self.arrived_at:

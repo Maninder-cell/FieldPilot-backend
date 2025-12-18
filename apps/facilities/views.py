@@ -22,64 +22,10 @@ from .serializers import (
     LocationSerializer, CreateLocationSerializer, UpdateLocationSerializer
 )
 from apps.core.responses import success_response, error_response
-from apps.core.permissions import IsAdminUser
+from apps.core.permissions import IsAdminUser, IsAdminManagerOwner, MethodRolePermission
 from apps.tenants.decorators import check_tenant_permission
 
 logger = logging.getLogger(__name__)
-
-
-def require_role(request, allowed_roles):
-    """
-    Helper to check tenant role and return error if not authorized.
-    
-    Note: This should be called AFTER DRF's permission_classes have run,
-    which means the user is already authenticated at this point.
-    """
-    # If tenant_role is not set, try to set it now (in case middleware didn't run)
-    if not hasattr(request, 'tenant_role') or request.tenant_role is None:
-        # Try to get tenant membership
-        from django.db import connection
-        from apps.tenants.models import TenantMember
-        from django_tenants.utils import schema_context
-        
-        tenant = getattr(connection, 'tenant', None)
-        if tenant and request.user.is_authenticated:
-            try:
-                with schema_context('public'):
-                    membership = TenantMember.objects.filter(
-                        tenant=tenant,
-                        user=request.user,
-                        is_active=True
-                    ).first()
-                    
-                    if not membership:
-                        # Try user's first active membership
-                        membership = TenantMember.objects.filter(
-                            user=request.user,
-                            is_active=True
-                        ).first()
-                    
-                    if membership:
-                        request.tenant_role = membership.role
-                        request.tenant_membership = membership
-            except Exception as e:
-                logger.error(f"Error getting tenant membership in require_role: {str(e)}")
-    
-    # Now check if we have a role
-    if not hasattr(request, 'tenant_role') or not request.tenant_role:
-        return error_response(
-            message='You are not a member of this organization',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
-    
-    if request.tenant_role not in allowed_roles:
-        roles_str = ', '.join(allowed_roles)
-        return error_response(
-            message=f'This action requires one of these roles: {roles_str}',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
-    
-    return None
 
 
 @extend_schema(
@@ -99,11 +45,17 @@ def require_role(request, allowed_roles):
     }
 )
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
 def customer_list_create(request):
     """
     List customers with pagination and filtering, or create a new customer.
     """
+    # Define role permissions for different methods
+    customer_list_create.role_permissions = {
+        'GET': ['admin', 'manager', 'owner', 'technician', 'employee'],
+        'POST': ['admin', 'manager', 'owner'],
+    }
+    
     if request.method == 'GET':
         # Get queryset
         queryset = Customer.objects.all()
@@ -144,11 +96,6 @@ def customer_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (admin/manager only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         serializer = CreateCustomerSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -188,11 +135,18 @@ def customer_list_create(request):
     }
 )
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
 def customer_detail(request, customer_id):
     """
     Retrieve, update, or delete a customer.
     """
+    # Define role permissions for different methods
+    customer_detail.role_permissions = {
+        'GET': ['admin', 'manager', 'owner', 'technician', 'employee'],
+        'PUT': ['admin', 'manager', 'owner'],
+        'PATCH': ['admin', 'manager', 'owner'],
+        'DELETE': ['admin', 'manager', 'owner'],
+    }
     try:
         customer = Customer.objects.get(pk=customer_id)
     except Customer.DoesNotExist:
@@ -209,11 +163,6 @@ def customer_detail(request, customer_id):
         )
     
     elif request.method in ['PUT', 'PATCH']:
-        # Check permissions (admin/manager only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         partial = request.method == 'PATCH'
         serializer = UpdateCustomerSerializer(customer, data=request.data, partial=partial)
         
@@ -241,11 +190,6 @@ def customer_detail(request, customer_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (admin/manager only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         try:
             # Soft delete
             customer.delete()
@@ -274,16 +218,11 @@ def customer_detail(request, customer_id):
     }
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def customer_invite(request):
     """
     Send an invitation to a customer.
     """
-    # Check permissions (admin/manager only)
-    error = require_role(request, ['owner', 'admin', 'manager'])
-    if error:
-        return error
-    
     serializer = InviteCustomerSerializer(data=request.data)
     
     if not serializer.is_valid():
@@ -511,11 +450,17 @@ def accept_customer_invitation(request):
     }
 )
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
 def facility_list_create(request):
     """
     List facilities with pagination and filtering, or create a new facility.
     """
+    # Define role permissions for different methods
+    facility_list_create.role_permissions = {
+        'GET': ['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
+        'POST': ['admin', 'manager', 'owner'],
+    }
+    
     if request.method == 'GET':
         # Get queryset based on user role
         if request.tenant_role == 'customer':
@@ -572,11 +517,6 @@ def facility_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (admin/manager only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         serializer = CreateFacilitySerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -616,11 +556,18 @@ def facility_list_create(request):
     }
 )
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
 def facility_detail(request, facility_id):
     """
     Retrieve, update, or delete a facility.
     """
+    # Define role permissions for different methods
+    facility_detail.role_permissions = {
+        'GET': ['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
+        'PUT': ['admin', 'manager', 'owner'],
+        'PATCH': ['admin', 'manager', 'owner'],
+        'DELETE': ['admin', 'manager', 'owner'],
+    }
     try:
         facility = Facility.objects.get(pk=facility_id)
         
@@ -913,11 +860,16 @@ def facility_equipment(request, facility_id):
     }
 )
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
 def building_list_create(request):
     """
     List buildings with pagination and filtering, or create a new building.
     """
+    # Define role permissions for different methods
+    building_list_create.role_permissions = {
+        'GET': ['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
+        'POST': ['admin', 'manager', 'owner'],
+    }
     if request.method == 'GET':
         # Get queryset based on user role
         if request.tenant_role == 'customer':
@@ -980,11 +932,6 @@ def building_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (owner/admin/manager only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         serializer = CreateBuildingSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -1024,11 +971,18 @@ def building_list_create(request):
     }
 )
 @api_view(['GET', 'PUT', 'PATCH', 'DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
 def building_detail(request, building_id):
     """
     Retrieve, update, or delete a building.
     """
+    # Define role permissions for different methods
+    building_detail.role_permissions = {
+        'GET': ['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
+        'PUT': ['admin', 'manager', 'owner'],
+        'PATCH': ['admin', 'manager', 'owner'],
+        'DELETE': ['admin', 'manager', 'owner'],
+    }
     try:
         building = Building.objects.get(pk=building_id)
         
@@ -1060,11 +1014,6 @@ def building_detail(request, building_id):
         )
     
     elif request.method in ['PUT', 'PATCH']:
-        # Check permissions (owner/admin/manager only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         partial = request.method == 'PATCH'
         serializer = UpdateBuildingSerializer(building, data=request.data, partial=partial)
         

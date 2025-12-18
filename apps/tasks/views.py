@@ -32,67 +32,43 @@ from .serializers import (
     MaterialLogSerializer, LogMaterialSerializer, TaskHistorySerializer
 )
 from apps.core.responses import success_response, error_response
-from apps.core.permissions import IsAdminUser
+from apps.core.permissions import (
+    IsAdminUser, IsAdminManagerOwner, IsTechnicianOnly, MethodRolePermission,
+    IsOwnerOrAdminManager
+)
 
 logger = logging.getLogger(__name__)
 
 
-# Helper Functions
+# Store role permissions globally for views
+_VIEW_ROLE_PERMISSIONS = {}
 
-def ensure_tenant_role(request):
+def method_role_permissions(**role_map):
     """
-    Ensure tenant_role is set on request.
-    This is needed because DRF authentication happens after middleware.
+    Decorator to set role_permissions on a view function.
+    Stores permissions in a global registry that MethodRolePermission can access.
+    
+    Usage:
+        @api_view(['GET', 'POST'])
+        @permission_classes([IsAuthenticated, MethodRolePermission])
+        @method_role_permissions(GET=['admin', 'manager'], POST=['admin'])
+        def my_view(request):
+            ...
     """
-    if not hasattr(request, 'tenant_role') or request.tenant_role is None:
-        from django.db import connection
-        from apps.tenants.models import TenantMember
-        from django_tenants.utils import schema_context
+    def decorator(view_func_or_class):
+        # Get the function name to use as key
+        func_name = getattr(view_func_or_class, '__name__', None)
+        if not func_name and hasattr(view_func_or_class, '__func__'):
+            func_name = view_func_or_class.__func__.__name__
         
-        tenant = getattr(connection, 'tenant', None)
-        if tenant and request.user.is_authenticated:
-            try:
-                with schema_context('public'):
-                    membership = TenantMember.objects.filter(
-                        tenant_id=tenant.id,
-                        user=request.user,
-                        is_active=True
-                    ).first()
-                    
-                    if not membership:
-                        # Try user's first active membership
-                        membership = TenantMember.objects.filter(
-                            user=request.user,
-                            is_active=True
-                        ).first()
-                    
-                    if membership:
-                        request.tenant_role = membership.role
-                        request.tenant_membership = membership
-            except Exception as e:
-                logger.error(f"Error getting tenant membership: {str(e)}")
-
-
-def require_role(request, allowed_roles):
-    """
-    Check if user has required role. Returns error response if not authorized.
-    """
-    ensure_tenant_role(request)
-    
-    if not hasattr(request, 'tenant_role') or not request.tenant_role:
-        return error_response(
-            message='You are not a member of this organization',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
-    
-    if request.tenant_role not in allowed_roles:
-        roles_str = ', '.join(allowed_roles)
-        return error_response(
-            message=f'This action requires one of these roles: {roles_str}',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
-    
-    return None
+        if func_name:
+            _VIEW_ROLE_PERMISSIONS[func_name] = role_map
+        
+        # Also set as attribute for direct access
+        view_func_or_class.role_permissions = role_map
+        
+        return view_func_or_class
+    return decorator
 
 
 # Task CRUD Endpoints
@@ -117,7 +93,11 @@ def require_role(request, allowed_roles):
     }
 )
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician'],
+    POST=['admin', 'manager', 'owner']
+)
 def task_list_create(request):
     """
     List tasks with pagination and filtering, or create a new task.
@@ -188,13 +168,6 @@ def task_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can create tasks',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-        
         serializer = CreateTaskSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -284,7 +257,12 @@ def task_list_create(request):
     }
 )
 @api_view(['GET', 'PATCH', 'DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician'],
+    PATCH=['admin', 'manager', 'owner'],
+    DELETE=['admin', 'manager', 'owner']
+)
 def task_detail(request, task_id):
     """
     Retrieve, update, or delete a task.
@@ -319,13 +297,6 @@ def task_detail(request, task_id):
         )
     
     elif request.method == 'PATCH':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can update tasks',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-        
         serializer = UpdateTaskSerializer(task, data=request.data, partial=True)
         
         if not serializer.is_valid():
@@ -376,13 +347,6 @@ def task_detail(request, task_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (admin/manager only)
-        if request.tenant_role not in ['admin', 'manager']:
-            return error_response(
-                message='Only admins and managers can delete tasks',
-                status_code=status.HTTP_403_FORBIDDEN
-            )
-        
         try:
             # Soft delete
             task.delete()
@@ -400,7 +364,6 @@ def task_detail(request, task_id):
             )
 
 
-
 # Task Assignment and Status Endpoints
 
 @extend_schema(
@@ -411,17 +374,11 @@ def task_detail(request, task_id):
     responses={200: TaskSerializer}
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def task_assign(request, task_id):
     """
     Assign task to technicians or teams.
     """
-    # Check permissions (admin/manager only)
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can assign tasks',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         task = Task.objects.get(pk=task_id)
@@ -495,17 +452,11 @@ def task_assign(request, task_id):
     responses={200: TaskSerializer}
 )
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def task_update_status(request, task_id):
     """
     Update task administrative status.
     """
-    # Check permissions (admin/manager only)
-    if request.tenant_role not in ['admin', 'manager']:
-        return error_response(
-            message='Only admins and managers can update task status',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         task = Task.objects.get(pk=task_id)
@@ -572,17 +523,11 @@ def task_update_status(request, task_id):
     responses={200: TaskSerializer}
 )
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsTechnicianOnly])
 def task_update_work_status(request, task_id):
     """
     Update work status for technician's assignment.
     """
-    # Check permissions (technician only)
-    if request.tenant_role != 'technician':
-        return error_response(
-            message='Only technicians can update work status',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         task = Task.objects.get(pk=task_id)
@@ -728,7 +673,11 @@ def task_history(request, task_id):
     }
 )
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician'],
+    POST=['admin', 'manager', 'owner']
+)
 def team_list_create(request):
     """
     List teams with pagination and filtering, or create a new team.
@@ -769,11 +718,6 @@ def team_list_create(request):
         )
     
     elif request.method == 'POST':
-        # Check permissions (admin/manager/owner only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         serializer = CreateTeamSerializer(data=request.data)
         
         if not serializer.is_valid():
@@ -824,7 +768,12 @@ def team_list_create(request):
     }
 )
 @api_view(['GET', 'PATCH', 'DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'technician'],
+    PATCH=['admin', 'manager', 'owner'],
+    DELETE=['admin', 'manager', 'owner']
+)
 def team_detail(request, team_id):
     """
     Retrieve, update, or delete a team.
@@ -845,11 +794,6 @@ def team_detail(request, team_id):
         )
     
     elif request.method == 'PATCH':
-        # Check permissions (admin/manager/owner only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         serializer = UpdateTeamSerializer(team, data=request.data, partial=True)
         
         if not serializer.is_valid():
@@ -876,11 +820,6 @@ def team_detail(request, team_id):
             )
     
     elif request.method == 'DELETE':
-        # Check permissions (admin/manager/owner only)
-        error = require_role(request, ['owner', 'admin', 'manager'])
-        if error:
-            return error
-        
         try:
             # Soft delete
             team.delete()
@@ -906,17 +845,11 @@ def team_detail(request, team_id):
     responses={200: TechnicianTeamSerializer}
 )
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def team_add_members(request, team_id):
     """
     Add members to a team.
     """
-    # Check permissions (admin/manager/owner only)
-    if request.tenant_role not in ['admin', 'manager', 'owner']:
-        return error_response(
-            message='Only admins, managers, and owners can add team members',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         team = TechnicianTeam.objects.get(pk=team_id)
@@ -960,17 +893,11 @@ def team_add_members(request, team_id):
     responses={200: TechnicianTeamSerializer}
 )
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsAdminManagerOwner])
 def team_remove_member(request, team_id, member_id):
     """
     Remove a member from a team.
     """
-    # Check permissions (admin/manager/owner only)
-    if request.tenant_role not in ['admin', 'manager', 'owner']:
-        return error_response(
-            message='Only admins, managers, and owners can remove team members',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
     
     try:
         team = TechnicianTeam.objects.get(pk=team_id)
@@ -1776,7 +1703,7 @@ def task_attachments(request, task_id):
     responses={200: {'description': 'Attachment deleted'}}
 )
 @api_view(['DELETE'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsOwnerOrAdminManager])
 def attachment_delete(request, attachment_id):
     """
     Delete an attachment.
@@ -1789,8 +1716,9 @@ def attachment_delete(request, attachment_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Check permissions (only uploader or admin/manager can delete)
-    if attachment.uploaded_by != request.user and request.tenant_role not in ['admin', 'manager']:
+    # Check object-level permission
+    permission = IsOwnerOrAdminManager()
+    if not permission.has_object_permission(request, None, attachment):
         return error_response(
             message='You can only delete your own attachments',
             status_code=status.HTTP_403_FORBIDDEN
