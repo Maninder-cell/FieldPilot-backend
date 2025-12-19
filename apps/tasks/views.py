@@ -2120,14 +2120,14 @@ def technician_list(request):
         team_id = request.query_params.get('team_id', '').strip()
         if team_id:
             try:
-                from apps.tasks.models import Team
-                team = Team.objects.get(pk=team_id)
+                from apps.tasks.models import TechnicianTeam
+                team = TechnicianTeam.objects.get(pk=team_id)
                 # Get IDs of users who are already members of this team
                 existing_member_ids = list(team.members.values_list('id', flat=True))
                 # Exclude them from the queryset
                 if existing_member_ids:
                     queryset = queryset.exclude(id__in=existing_member_ids)
-            except Team.DoesNotExist:
+            except TechnicianTeam.DoesNotExist:
                 logger.warning(f"Team with ID {team_id} not found, returning all technicians")
             except Exception as e:
                 logger.error(f"Error filtering team members: {str(e)}", exc_info=True)
