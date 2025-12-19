@@ -41,6 +41,7 @@ urlpatterns = [
     path('api/v1/tasks/', include('apps.tasks.urls')),
     path('api/v1/service-requests/', include('apps.service_requests.urls')),
     path('api/v1/reports/', include('apps.reports.urls')),
+    path('api/v1/files/', include('apps.files.urls')),
     
     # Health check
     path('health/', include('apps.core.urls')),
