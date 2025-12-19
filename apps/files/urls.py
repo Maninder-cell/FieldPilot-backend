@@ -20,4 +20,10 @@ urlpatterns = [
     path('shares/', views.file_share_list_create, name='file-share-list-create'),
     path('shares/<uuid:share_id>/', views.file_share_delete, name='file-share-delete'),
     path('shared/<str:share_token>/', views.shared_file_access, name='shared-file-access'),
+    
+    # Storage management
+    path('storage/stats/', views.storage_stats, name='storage-stats'),
+    path('storage/breakdown/', views.storage_breakdown, name='storage-breakdown'),
+    path('storage/largest/', views.largest_files, name='largest-files'),
+    path('storage/cleanup/', views.cleanup_storage, name='cleanup-storage'),
 ]

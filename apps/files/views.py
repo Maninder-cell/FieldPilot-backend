@@ -21,6 +21,7 @@ from .serializers import (
 )
 from apps.core.responses import success_response, error_response
 from apps.core.permissions import ensure_tenant_role
+from .storage import StorageManager, StorageQuotaExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +112,28 @@ def file_list_create(request):
             )
         
         try:
+            uploaded_file = serializer.validated_data['file']
+            
+            # Check storage quota before upload
+            from django.db import connection
+            tenant = connection.tenant
+            
+            try:
+                StorageManager.validate_file_upload(tenant, uploaded_file.size)
+            except StorageQuotaExceeded as e:
+                storage_stats = StorageManager.get_storage_stats(tenant)
+                return error_response(
+                    message=str(e),
+                    details={
+                        'storage_used_gb': storage_stats['usage_gb'],
+                        'storage_limit_gb': storage_stats['limit_gb'],
+                        'percentage_used': storage_stats['percentage_used'],
+                        'remaining_gb': storage_stats['remaining_gb'],
+                    },
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE
+                )
+            
             with transaction.atomic():
-                uploaded_file = serializer.validated_data['file']
                 
                 # Determine if file is an image
                 is_image = uploaded_file.content_type.startswith('image/')
@@ -509,3 +530,195 @@ def shared_file_access(request, share_token):
             'expires_at': file_share.expires_at,
         }
     )
+
+
+
+# Storage Management Views
+
+@extend_schema(
+    tags=['Attachments - Storage'],
+    summary='Get storage statistics',
+    description='Get storage usage and quota information for the current tenant',
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'success': {'type': 'boolean'},
+                'data': {
+                    'type': 'object',
+                    'properties': {
+                        'usage_bytes': {'type': 'integer'},
+                        'usage_mb': {'type': 'number'},
+                        'usage_gb': {'type': 'number'},
+                        'limit_bytes': {'type': 'integer', 'nullable': True},
+                        'limit_gb': {'type': 'number', 'nullable': True},
+                        'is_unlimited': {'type': 'boolean'},
+                        'percentage_used': {'type': 'number'},
+                        'remaining_bytes': {'type': 'integer', 'nullable': True},
+                        'remaining_gb': {'type': 'number', 'nullable': True},
+                        'is_quota_exceeded': {'type': 'boolean'},
+                        'can_upload': {'type': 'boolean'},
+                        'file_count': {'type': 'integer'},
+                        'subscription_plan': {'type': 'string'},
+                    }
+                }
+            }
+        }
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def storage_stats(request):
+    """
+    Get storage usage statistics for the current tenant.
+    """
+    try:
+        from django.db import connection
+        from apps.files.models import UserFile
+        
+        tenant = connection.tenant
+        stats = StorageManager.get_storage_stats(tenant)
+        
+        # Add file count
+        file_count = UserFile.objects.filter(deleted_at__isnull=True).count()
+        stats['file_count'] = file_count
+        
+        # Add subscription plan info
+        try:
+            subscription = tenant.subscription
+            stats['subscription_plan'] = subscription.plan.name if subscription else 'No subscription'
+        except:
+            stats['subscription_plan'] = 'No subscription'
+        
+        return success_response(data=stats)
+    except Exception as e:
+        logger.error(f"Failed to get storage stats: {str(e)}", exc_info=True)
+        return error_response(
+            message='Failed to retrieve storage statistics',
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Attachments - Storage'],
+    summary='Get storage breakdown by file type',
+    description='Get storage usage breakdown by file type',
+    responses={200: {'description': 'Storage breakdown by file type'}}
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def storage_breakdown(request):
+    """
+    Get storage usage breakdown by file type.
+    """
+    try:
+        from django.db import connection
+        
+        tenant = connection.tenant
+        breakdown = StorageManager.get_file_count_by_type(tenant)
+        
+        return success_response(data=breakdown)
+    except Exception as e:
+        logger.error(f"Failed to get storage breakdown: {str(e)}", exc_info=True)
+        return error_response(
+            message='Failed to retrieve storage breakdown',
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Attachments - Storage'],
+    summary='Get largest files',
+    description='Get list of largest files consuming storage',
+    parameters=[
+        OpenApiParameter('limit', int, description='Number of files to return (default: 10)'),
+    ],
+    responses={200: UserFileSerializer(many=True)}
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def largest_files(request):
+    """
+    Get largest files consuming storage.
+    """
+    try:
+        from django.db import connection
+        
+        tenant = connection.tenant
+        limit = int(request.query_params.get('limit', 10))
+        limit = min(limit, 100)  # Cap at 100
+        
+        files = StorageManager.get_largest_files(tenant, limit)
+        serializer = UserFileSerializer(files, many=True, context={'request': request})
+        
+        return success_response(data=serializer.data)
+    except Exception as e:
+        logger.error(f"Failed to get largest files: {str(e)}", exc_info=True)
+        return error_response(
+            message='Failed to retrieve largest files',
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Attachments - Storage'],
+    summary='Cleanup old deleted files',
+    description='Permanently delete soft-deleted files older than specified days (Admin only)',
+    parameters=[
+        OpenApiParameter('days_old', int, description='Delete files older than this many days (default: 30)'),
+    ],
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'success': {'type': 'boolean'},
+                'data': {
+                    'type': 'object',
+                    'properties': {
+                        'files_deleted': {'type': 'integer'},
+                        'bytes_freed': {'type': 'integer'},
+                        'mb_freed': {'type': 'number'},
+                        'gb_freed': {'type': 'number'},
+                    }
+                }
+            }
+        }
+    }
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def cleanup_storage(request):
+    """
+    Cleanup old deleted files (Admin/Manager/Owner only).
+    """
+    # Check permissions
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) not in ['admin', 'manager', 'owner']:
+        return error_response(
+            message='Only admins, managers, and owners can cleanup storage',
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        from django.db import connection
+        
+        tenant = connection.tenant
+        days_old = int(request.query_params.get('days_old', 30))
+        
+        count, bytes_freed = StorageManager.cleanup_deleted_files(tenant, days_old)
+        
+        return success_response(
+            data={
+                'files_deleted': count,
+                'bytes_freed': bytes_freed,
+                'mb_freed': round(bytes_freed / (1024 * 1024), 2),
+                'gb_freed': round(bytes_freed / (1024 * 1024 * 1024), 2),
+            },
+            message=f'Cleaned up {count} files, freed {round(bytes_freed / (1024 * 1024), 2)}MB'
+        )
+    except Exception as e:
+        logger.error(f"Failed to cleanup storage: {str(e)}", exc_info=True)
+        return error_response(
+            message='Failed to cleanup storage',
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

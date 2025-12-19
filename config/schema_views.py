@@ -144,6 +144,7 @@ class TenantSchemaView(SpectacularAPIView):
             'Comments': '💬 Task comments and communication',
             'Attachments': '📎 File and attachment management - upload, manage, and attach files to tasks/service requests',
             'Attachments - Sharing': '🔗 File sharing with users and public link generation',
+            'Attachments - Storage': '💾 Storage quota management, usage tracking, and cleanup',
             'Materials': '📦 Material tracking for tasks (needed vs received)',
             'Reports': '📊 Work hours reports and analytics',
             'Service Requests': '🎫 Customer service request submission and issue reporting',
