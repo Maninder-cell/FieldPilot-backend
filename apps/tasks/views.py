@@ -2065,11 +2065,12 @@ def work_hours_report(request):
 @extend_schema(
     tags=['Teams'],
     summary='List technicians for team selection',
-    description='Get paginated list of technician users with name search filtering. Used for selecting technicians to add to teams.',
+    description='Get paginated list of technician users with name search filtering. Used for selecting technicians to add to teams. Optionally exclude members of a specific team.',
     parameters=[
         OpenApiParameter('page', int, description='Page number'),
         OpenApiParameter('page_size', int, description='Items per page (default: 10)'),
         OpenApiParameter('search', str, description='Search by first name, last name, or email'),
+        OpenApiParameter('team_id', str, description='Optional: Team ID to exclude existing members from results'),
     ],
     responses={
         200: TechnicianListSerializer(many=True),
@@ -2081,6 +2082,7 @@ def technician_list(request):
     """
     List all technicians with pagination and name search filtering.
     Only returns users with 'technician' role in the current tenant.
+    Optionally excludes members of a specific team.
     """
     try:
         # Get current tenant from connection
@@ -2113,6 +2115,23 @@ def technician_list(request):
             id__in=technician_user_ids,
             is_active=True
         )
+        
+        # Exclude members of a specific team if team_id is provided
+        team_id = request.query_params.get('team_id', '').strip()
+        if team_id:
+            try:
+                from apps.tasks.models import Team
+                team = Team.objects.get(pk=team_id)
+                # Get IDs of users who are already members of this team
+                existing_member_ids = list(team.members.values_list('id', flat=True))
+                # Exclude them from the queryset
+                if existing_member_ids:
+                    queryset = queryset.exclude(id__in=existing_member_ids)
+            except Team.DoesNotExist:
+                logger.warning(f"Team with ID {team_id} not found, returning all technicians")
+            except Exception as e:
+                logger.error(f"Error filtering team members: {str(e)}", exc_info=True)
+                # Continue without filtering if there's an error
         
         # Apply search filter
         search = request.query_params.get('search', '').strip()
