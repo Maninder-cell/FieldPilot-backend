@@ -900,8 +900,8 @@ class TaskAttachment(UUIDPrimaryKeyMixin, models.Model):
         """
         super().clean()
         
-        # Validate file size (10MB max)
-        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
+        # Validate file size (20MB max)
+        MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB in bytes
         if self.file_size > MAX_FILE_SIZE:
             raise ValidationError({
                 'file': f'File size must not exceed {MAX_FILE_SIZE / (1024 * 1024)}MB.'

@@ -370,21 +370,27 @@ def task_assign(request, task_id):
     
     try:
         with transaction.atomic():
-            # Create assignments
+            # Get new assignments
             assignees = getattr(serializer, 'assignees', [])
+            teams = getattr(serializer, 'teams', [])
+            
+            # Delete all existing assignments
+            task.assignments.all().delete()
+            
+            # Create new assignments for technicians
             for assignee in assignees:
-                TaskAssignment.objects.get_or_create(
+                TaskAssignment.objects.create(
                     task=task,
                     assignee=assignee,
-                    defaults={'assigned_by': request.user}
+                    assigned_by=request.user
                 )
             
-            teams = getattr(serializer, 'teams', [])
+            # Create new assignments for teams
             for team in teams:
-                TaskAssignment.objects.get_or_create(
+                TaskAssignment.objects.create(
                     task=task,
                     team=team,
-                    defaults={'assigned_by': request.user}
+                    assigned_by=request.user
                 )
             
             # Log history

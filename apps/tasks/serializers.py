@@ -839,8 +839,8 @@ class UploadAttachmentSerializer(serializers.Serializer):
     
     def validate_file(self, value):
         """Validate file upload."""
-        # Validate file size (10MB max)
-        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+        # Validate file size (20MB max)
+        MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
         if value.size > MAX_FILE_SIZE:
             raise serializers.ValidationError(
                 f"File size must not exceed {MAX_FILE_SIZE / (1024 * 1024)}MB."
@@ -848,12 +848,14 @@ class UploadAttachmentSerializer(serializers.Serializer):
         
         # Validate file type
         ALLOWED_TYPES = [
-            'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+            'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
             'application/pdf',
             'application/msword',
             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             'application/vnd.ms-excel',
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
             'text/plain',
             'text/csv',
         ]
@@ -862,7 +864,7 @@ class UploadAttachmentSerializer(serializers.Serializer):
         if content_type not in ALLOWED_TYPES:
             raise serializers.ValidationError(
                 f"File type '{content_type}' is not allowed. "
-                f"Allowed types: images, PDF, Word, Excel, text files."
+                f"Allowed types: images, PDF, Word, Excel, PowerPoint, text files."
             )
         
         return value
