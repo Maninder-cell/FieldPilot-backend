@@ -926,10 +926,11 @@ def task_travel(request, task_id):
     """
     Log travel started for a task.
     """
-    # Check permissions (technician only)
-    if request.tenant_role != 'technician':
+    # Check permissions (staff members can log time)
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) not in ['technician', 'admin', 'manager', 'employee', 'owner']:
         return error_response(
-            message='Only technicians can log travel',
+            message='Only staff members can log travel',
             status_code=status.HTTP_403_FORBIDDEN
         )
     
@@ -1025,10 +1026,11 @@ def task_arrive(request, task_id):
     """
     Log arrival at site for a task.
     """
-    # Check permissions (technician only)
-    if request.tenant_role != 'technician':
+    # Check permissions (staff members can log time)
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) not in ['technician', 'admin', 'manager', 'employee', 'owner']:
         return error_response(
-            message='Only technicians can log arrival',
+            message='Only staff members can log arrival',
             status_code=status.HTTP_403_FORBIDDEN
         )
     
@@ -1106,10 +1108,11 @@ def task_depart(request, task_id):
     """
     Log departure from site for a task.
     """
-    # Check permissions (technician only)
-    if request.tenant_role != 'technician':
+    # Check permissions (staff members can log time)
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) not in ['technician', 'admin', 'manager', 'employee', 'owner']:
         return error_response(
-            message='Only technicians can log departure',
+            message='Only staff members can log departure',
             status_code=status.HTTP_403_FORBIDDEN
         )
     
@@ -1195,8 +1198,9 @@ def task_lunch_start(request, task_id):
     """
     Log lunch break start for a task.
     """
-    # Check permissions (technician only)
-    if request.tenant_role != 'technician':
+    # Check permissions (staff members can log time)
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) not in ['technician', 'admin', 'manager', 'employee', 'owner']:
         return error_response(
             message='Only technicians can log lunch',
             status_code=status.HTTP_403_FORBIDDEN
@@ -1276,10 +1280,11 @@ def task_lunch_end(request, task_id):
     """
     Log lunch break end for a task.
     """
-    # Check permissions (technician only)
-    if request.tenant_role != 'technician':
+    # Check permissions (staff members can log time)
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) not in ['technician', 'admin', 'manager', 'employee', 'owner']:
         return error_response(
-            message='Only technicians can log lunch',
+            message='Only staff members can log lunch',
             status_code=status.HTTP_403_FORBIDDEN
         )
     
