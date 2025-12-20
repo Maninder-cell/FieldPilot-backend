@@ -42,6 +42,8 @@ class TaskListSerializer(serializers.ModelSerializer):
     equipment_number = serializers.CharField(source='equipment.equipment_number', read_only=True)
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
     assignment_count = serializers.SerializerMethodField()
+    assignees = serializers.SerializerMethodField()
+    teams = serializers.SerializerMethodField()
     is_active = serializers.ReadOnlyField()
     
     class Meta:
@@ -49,12 +51,37 @@ class TaskListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'task_number', 'title', 'status', 'priority',
             'equipment_name', 'equipment_number', 'created_by_name',
-            'assignment_count', 'is_active', 'scheduled_start',
-            'is_scheduled', 'created_at', 'updated_at'
+            'assignment_count', 'assignees', 'teams', 'is_active', 
+            'scheduled_start', 'is_scheduled', 'created_at', 'updated_at'
         ]
     
     def get_assignment_count(self, obj):
         return obj.assignments.count()
+    
+    def get_assignees(self, obj):
+        """Get list of assigned technicians."""
+        assignees = obj.assignments.filter(assignee__isnull=False).select_related('assignee')
+        return [
+            {
+                'id': str(assignment.assignee.id),
+                'name': assignment.assignee.full_name,
+                'email': assignment.assignee.email,
+                'work_status': assignment.work_status,
+            }
+            for assignment in assignees
+        ]
+    
+    def get_teams(self, obj):
+        """Get list of assigned teams."""
+        teams = obj.assignments.filter(team__isnull=False).select_related('team')
+        return [
+            {
+                'id': str(assignment.team.id),
+                'name': assignment.team.name,
+                'work_status': assignment.work_status,
+            }
+            for assignment in teams
+        ]
 
 
 class TaskSerializer(serializers.ModelSerializer):
