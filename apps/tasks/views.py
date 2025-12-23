@@ -1450,8 +1450,9 @@ def task_comments(request, task_id):
     if request.method == 'GET':
         comments = TaskComment.objects.filter(task=task).order_by('created_at')
         
-        # Paginate
+        # Paginate with custom page size
         paginator = PageNumberPagination()
+        paginator.page_size = 3  # Show 3 comments per page
         page = paginator.paginate_queryset(comments, request)
         
         if page is not None:
