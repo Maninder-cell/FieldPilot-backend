@@ -85,15 +85,77 @@ def customer_list_create(request):
         
         if page is not None:
             serializer = CustomerSerializer(page, many=True)
+            data = serializer.data
+            
+            # Enrich with invitation information
+            customer_ids = [customer['id'] for customer in data]
+            invitations = CustomerInvitation.objects.filter(
+                customer_id__in=customer_ids
+            ).order_by('-created_at')
+            
+            # Create a mapping of customer_id to invitation info (most recent invitation)
+            invitation_map = {}
+            for inv in invitations:
+                customer_id_str = str(inv.customer_id)
+                if customer_id_str not in invitation_map:
+                    invitation_map[customer_id_str] = {
+                        'id': str(inv.id),
+                        'status': inv.status,
+                        'invited_at': inv.created_at.isoformat(),
+                        'invited_by': inv.invited_by.email if inv.invited_by else None,
+                        'expires_at': inv.expires_at.isoformat(),
+                        'accepted_at': inv.accepted_at.isoformat() if inv.accepted_at else None,
+                        'is_valid': inv.is_valid() if inv.status == 'pending' else False
+                    }
+            
+            # Add invitation info to each customer
+            for customer_data in data:
+                customer_id = customer_data['id']
+                if customer_id in invitation_map:
+                    customer_data['invitation'] = invitation_map[customer_id]
+                else:
+                    customer_data['invitation'] = None
+            
             return paginator.get_paginated_response({
                 'success': True,
-                'data': serializer.data,
+                'data': data,
                 'message': 'Customers retrieved successfully'
             })
         
         serializer = CustomerSerializer(queryset, many=True)
+        data = serializer.data
+        
+        # Enrich with invitation information for non-paginated response
+        customer_ids = [customer['id'] for customer in data]
+        invitations = CustomerInvitation.objects.filter(
+            customer_id__in=customer_ids
+        ).order_by('-created_at')
+        
+        # Create a mapping of customer_id to invitation info (most recent invitation)
+        invitation_map = {}
+        for inv in invitations:
+            customer_id_str = str(inv.customer_id)
+            if customer_id_str not in invitation_map:
+                invitation_map[customer_id_str] = {
+                    'id': str(inv.id),
+                    'status': inv.status,
+                    'invited_at': inv.created_at.isoformat(),
+                    'invited_by': inv.invited_by.email if inv.invited_by else None,
+                    'expires_at': inv.expires_at.isoformat(),
+                    'accepted_at': inv.accepted_at.isoformat() if inv.accepted_at else None,
+                    'is_valid': inv.is_valid() if inv.status == 'pending' else False
+                }
+        
+        # Add invitation info to each customer
+        for customer_data in data:
+            customer_id = customer_data['id']
+            if customer_id in invitation_map:
+                customer_data['invitation'] = invitation_map[customer_id]
+            else:
+                customer_data['invitation'] = None
+        
         return success_response(
-            data=serializer.data,
+            data=data,
             message='Customers retrieved successfully'
         )
     
