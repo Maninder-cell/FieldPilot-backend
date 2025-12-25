@@ -191,11 +191,10 @@ class IsAdminUser(permissions.BasePermission):
     """
     
     def has_permission(self, request, view):
-        return (
-            request.user and 
-            request.user.is_authenticated and 
-            request.user.role == 'admin'
-        )
+        if not (request.user and request.user.is_authenticated):
+            return False
+        ensure_tenant_role(request)
+        return getattr(request, 'tenant_role', None) == 'admin'
 
 
 class IsManagerOrAdmin(permissions.BasePermission):
@@ -204,11 +203,10 @@ class IsManagerOrAdmin(permissions.BasePermission):
     """
     
     def has_permission(self, request, view):
-        return (
-            request.user and 
-            request.user.is_authenticated and 
-            request.user.role in ['admin', 'manager']
-        )
+        if not (request.user and request.user.is_authenticated):
+            return False
+        ensure_tenant_role(request)
+        return getattr(request, 'tenant_role', None) in ['admin', 'manager', 'owner']
 
 
 class IsTechnicianOrAbove(HasTenantRole):

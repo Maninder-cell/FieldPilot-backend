@@ -17,6 +17,7 @@ from .models import ServiceRequest
 from apps.equipment.models import Equipment
 from apps.tasks.models import Task
 from apps.core.responses import success_response, error_response
+from apps.core.permissions import ensure_tenant_role
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,8 @@ def customer_equipment_list(request):
     Task 12.1: Customer equipment endpoints
     """
     # Only customers can access
-    if request.user.role != 'customer':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) != 'customer':
         return error_response(
             message='This endpoint is for customers only',
             status_code=status.HTTP_403_FORBIDDEN
@@ -193,7 +195,8 @@ def customer_equipment_detail(request, equipment_id):
     Task 12.1: Customer equipment endpoints
     """
     # Only customers can access
-    if request.user.role != 'customer':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) != 'customer':
         return error_response(
             message='This endpoint is for customers only',
             status_code=status.HTTP_403_FORBIDDEN
@@ -305,7 +308,8 @@ def customer_equipment_history(request, equipment_id):
     Task 12.2: Equipment service history endpoint
     """
     # Only customers can access
-    if request.user.role != 'customer':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) != 'customer':
         return error_response(
             message='This endpoint is for customers only',
             status_code=status.HTTP_403_FORBIDDEN
@@ -431,7 +435,8 @@ def customer_equipment_upcoming(request, equipment_id):
     Task 12.3: Upcoming services endpoint
     """
     # Only customers can access
-    if request.user.role != 'customer':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) != 'customer':
         return error_response(
             message='This endpoint is for customers only',
             status_code=status.HTTP_403_FORBIDDEN
@@ -574,7 +579,8 @@ def customer_dashboard(request):
     Task 13.1: Dashboard metrics endpoint
     """
     # Only customers can access
-    if request.user.role != 'customer':
+    ensure_tenant_role(request)
+    if getattr(request, 'tenant_role', None) != 'customer':
         return error_response(
             message='This endpoint is for customers only',
             status_code=status.HTTP_403_FORBIDDEN

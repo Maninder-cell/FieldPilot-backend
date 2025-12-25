@@ -5,6 +5,7 @@ Copyright (c) 2025 FieldRino. All rights reserved.
 This source code is proprietary and confidential.
 """
 from rest_framework.permissions import BasePermission
+from apps.core.permissions import ensure_tenant_role
 
 
 class IsAdminOrManager(BasePermission):
@@ -16,10 +17,12 @@ class IsAdminOrManager(BasePermission):
         """
         Check if user has admin or manager role.
         """
-        return (
-            request.user and
-            request.user.is_authenticated and
-            request.user.role in ['admin', 'manager']
-        )
+        if not (request.user and request.user.is_authenticated):
+            return False
+        
+        # Ensure tenant role is set
+        ensure_tenant_role(request)
+        
+        return getattr(request, 'tenant_role', None) in ['admin', 'manager', 'owner']
     
     message = 'Only administrators and managers can access reports.'
