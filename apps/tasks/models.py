@@ -123,6 +123,12 @@ class Task(UUIDPrimaryKeyMixin, SoftDeleteModel, AuditMixin):
         blank=True,
         help_text="Scheduled end date/time"
     )
+    due_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Task due date/time"
+    )
     is_scheduled = models.BooleanField(
         default=False,
         db_index=True,
@@ -159,6 +165,7 @@ class Task(UUIDPrimaryKeyMixin, SoftDeleteModel, AuditMixin):
             models.Index(fields=['status', 'priority']),
             models.Index(fields=['equipment', 'status']),
             models.Index(fields=['scheduled_start']),
+            models.Index(fields=['due_date']),
             models.Index(fields=['created_at']),
             models.Index(fields=['is_scheduled']),
         ]

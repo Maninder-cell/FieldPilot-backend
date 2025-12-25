@@ -52,7 +52,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             'id', 'task_number', 'title', 'status', 'priority',
             'equipment_name', 'equipment_number', 'created_by_name',
             'assignment_count', 'assignees', 'teams', 'is_active', 
-            'scheduled_start', 'is_scheduled', 'created_at', 'updated_at'
+            'scheduled_start', 'due_date', 'is_scheduled', 'created_at', 'updated_at'
         ]
     
     def get_assignment_count(self, obj):
@@ -106,7 +106,7 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'task_number', 'title', 'description',
             'equipment', 'status', 'priority',
-            'scheduled_start', 'scheduled_end', 'is_scheduled',
+            'scheduled_start', 'scheduled_end', 'due_date', 'is_scheduled',
             'materials_needed', 'materials_received',
             'notes', 'custom_fields',
             'assignments', 'comments_count', 'attachments_count',
@@ -157,6 +157,7 @@ class CreateTaskSerializer(serializers.Serializer):
     # Scheduling
     scheduled_start = serializers.DateTimeField(required=False, allow_null=True)
     scheduled_end = serializers.DateTimeField(required=False, allow_null=True)
+    due_date = serializers.DateTimeField(required=False, allow_null=True)
     
     # Materials
     materials_needed = serializers.ListField(required=False, allow_empty=True)
@@ -250,7 +251,7 @@ class UpdateTaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'title', 'description', 'priority', 'status',
-            'scheduled_start', 'scheduled_end',
+            'scheduled_start', 'scheduled_end', 'due_date',
             'materials_needed', 'materials_received',
             'notes', 'custom_fields'
         ]
