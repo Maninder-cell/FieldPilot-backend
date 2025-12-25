@@ -16,7 +16,6 @@ class UserFileSerializer(serializers.ModelSerializer):
     file_size_mb = serializers.ReadOnlyField()
     file_extension = serializers.ReadOnlyField()
     is_attached = serializers.ReadOnlyField()
-    task_number = serializers.CharField(source='task.task_number', read_only=True, allow_null=True)
     service_request_number = serializers.CharField(source='service_request.request_number', read_only=True, allow_null=True)
     
     class Meta:
@@ -24,7 +23,7 @@ class UserFileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'file', 'file_url', 'filename', 'file_size', 'file_size_mb',
             'file_type', 'file_extension', 'title', 'description', 'tags',
-            'uploaded_by', 'uploaded_by_name', 'task', 'task_number',
+            'uploaded_by', 'uploaded_by_name',
             'service_request', 'service_request_number', 'is_image', 'is_public',
             'is_attached', 'created_at', 'updated_at'
         ]

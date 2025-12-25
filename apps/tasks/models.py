@@ -844,7 +844,8 @@ class TaskComment(UUIDPrimaryKeyMixin, models.Model):
 
 class TaskAttachment(UUIDPrimaryKeyMixin, models.Model):
     """
-    File attachments for tasks (images, documents, etc.).
+    Linking table for task attachments.
+    Links UserFile records to tasks with a OneToOne relationship.
     """
     
     # Relationships
@@ -854,34 +855,13 @@ class TaskAttachment(UUIDPrimaryKeyMixin, models.Model):
         related_name='attachments',
         help_text="Task this attachment belongs to"
     )
-    uploaded_by = models.ForeignKey(
-        'authentication.User',
-        on_delete=models.SET_NULL,
+    user_file = models.OneToOneField(
+        'files.UserFile',
+        on_delete=models.CASCADE,
+        related_name='task_attachment',
         null=True,
-        related_name='task_attachments',
-        help_text="User who uploaded the file"
-    )
-    
-    # File Information
-    file = models.FileField(
-        upload_to='task_attachments/%Y/%m/',
-        help_text="Uploaded file"
-    )
-    filename = models.CharField(
-        max_length=255,
-        help_text="Original filename"
-    )
-    file_size = models.IntegerField(
-        help_text="File size in bytes"
-    )
-    file_type = models.CharField(
-        max_length=100,
-        help_text="MIME type"
-    )
-    is_image = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text="Whether file is an image"
+        blank=True,
+        help_text="UserFile record for this attachment"
     )
     
     # Timestamps
@@ -894,36 +874,42 @@ class TaskAttachment(UUIDPrimaryKeyMixin, models.Model):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['task', 'created_at']),
-            models.Index(fields=['uploaded_by']),
-            models.Index(fields=['is_image']),
+            models.Index(fields=['user_file']),
         ]
+        unique_together = [['task', 'user_file']]
     
     def __str__(self):
-        return f"{self.filename} - {self.task.task_number}"
+        return f"{self.user_file.filename} - {self.task.task_number}"
     
-    def clean(self):
-        """
-        Validate model data.
-        """
-        super().clean()
-        
-        # Validate file size (20MB max)
-        MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB in bytes
-        if self.file_size > MAX_FILE_SIZE:
-            raise ValidationError({
-                'file': f'File size must not exceed {MAX_FILE_SIZE / (1024 * 1024)}MB.'
-            })
-        
-        # Set is_image flag based on MIME type
-        if self.file_type and self.file_type.startswith('image/'):
-            self.is_image = True
+    @property
+    def filename(self):
+        """Get filename from UserFile."""
+        return self.user_file.filename
     
-    def save(self, *args, **kwargs):
-        """
-        Override save to run validation.
-        """
-        self.full_clean()
-        super().save(*args, **kwargs)
+    @property
+    def file_size(self):
+        """Get file size from UserFile."""
+        return self.user_file.file_size
+    
+    @property
+    def file_type(self):
+        """Get file type from UserFile."""
+        return self.user_file.file_type
+    
+    @property
+    def is_image(self):
+        """Get is_image from UserFile."""
+        return self.user_file.is_image
+    
+    @property
+    def uploaded_by(self):
+        """Get uploaded_by from UserFile."""
+        return self.user_file.uploaded_by
+    
+    @property
+    def file(self):
+        """Get file from UserFile."""
+        return self.user_file.file
 
 
 class TaskHistory(UUIDPrimaryKeyMixin, models.Model):

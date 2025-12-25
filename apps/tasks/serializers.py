@@ -122,7 +122,8 @@ class TaskSerializer(serializers.ModelSerializer):
         return obj.comments.count()
     
     def get_attachments_count(self, obj):
-        return obj.attachments.count()
+        # Count TaskAttachment records with non-deleted UserFiles
+        return obj.attachments.filter(user_file__deleted_at__isnull=True).count()
 
 
 class CreateTaskSerializer(serializers.Serializer):
@@ -801,10 +802,15 @@ class UpdateCommentSerializer(serializers.ModelSerializer):
 
 class TaskAttachmentSerializer(serializers.ModelSerializer):
     """
-    Serializer for TaskAttachment with metadata.
+    Serializer for TaskAttachment with metadata from linked UserFile.
     """
-    uploaded_by = UserSerializer(read_only=True)
-    uploaded_by_name = serializers.CharField(source='uploaded_by.full_name', read_only=True)
+    # Get data from linked UserFile
+    filename = serializers.CharField(source='user_file.filename', read_only=True)
+    file_size = serializers.IntegerField(source='user_file.file_size', read_only=True)
+    file_type = serializers.CharField(source='user_file.file_type', read_only=True)
+    is_image = serializers.BooleanField(source='user_file.is_image', read_only=True)
+    uploaded_by = UserSerializer(source='user_file.uploaded_by', read_only=True)
+    uploaded_by_name = serializers.CharField(source='user_file.uploaded_by.full_name', read_only=True)
     task_number = serializers.CharField(source='task.task_number', read_only=True)
     file_url = serializers.SerializerMethodField()
     file_size_mb = serializers.SerializerMethodField()
@@ -813,23 +819,25 @@ class TaskAttachmentSerializer(serializers.ModelSerializer):
         model = TaskAttachment
         fields = [
             'id', 'task', 'task_number', 'uploaded_by', 'uploaded_by_name',
-            'file', 'file_url', 'filename', 'file_size', 'file_size_mb',
+            'file_url', 'filename', 'file_size', 'file_size_mb',
             'file_type', 'is_image', 'created_at'
         ]
-        read_only_fields = ['id', 'file_size', 'file_type', 'is_image', 'created_at']
+        read_only_fields = ['id', 'created_at']
     
     def get_file_url(self, obj):
-        """Get file URL."""
-        if obj.file:
+        """Get file URL from UserFile."""
+        if obj.user_file and obj.user_file.file:
             request = self.context.get('request')
             if request:
-                return request.build_absolute_uri(obj.file.url)
-            return obj.file.url
+                return request.build_absolute_uri(obj.user_file.file.url)
+            return obj.user_file.file.url
         return None
     
     def get_file_size_mb(self, obj):
-        """Get file size in MB."""
-        return round(obj.file_size / (1024 * 1024), 2)
+        """Get file size in MB from UserFile."""
+        if obj.user_file:
+            return round(obj.user_file.file_size / (1024 * 1024), 2)
+        return 0
 
 
 class UploadAttachmentSerializer(serializers.Serializer):

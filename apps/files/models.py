@@ -66,15 +66,7 @@ class UserFile(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteModel):
         help_text="User who uploaded the file"
     )
     
-    # Optional attachments to entities
-    task = models.ForeignKey(
-        'tasks.Task',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='user_files',
-        help_text="Optional task attachment"
-    )
+    # Optional attachment to service request
     service_request = models.ForeignKey(
         'service_requests.ServiceRequest',
         on_delete=models.SET_NULL,
@@ -101,7 +93,6 @@ class UserFile(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteModel):
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['uploaded_by', '-created_at']),
-            models.Index(fields=['task']),
             models.Index(fields=['service_request']),
             models.Index(fields=['file_type']),
             models.Index(fields=['is_image']),
@@ -123,12 +114,22 @@ class UserFile(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteModel):
     @property
     def is_attached(self):
         """Check if file is attached to any entity."""
-        return bool(self.task or self.service_request)
+        return bool(self.service_request or hasattr(self, 'task_attachment'))
     
     def attach_to_task(self, task):
-        """Attach file to a task."""
-        self.task = task
-        self.save(update_fields=['task', 'updated_at'])
+        """Attach file to a task by creating TaskAttachment record."""
+        from apps.tasks.models import TaskAttachment
+        TaskAttachment.objects.get_or_create(
+            task=task,
+            user_file=self
+        )
+        self.save(update_fields=['updated_at'])
+    
+    def detach_from_task(self):
+        """Detach file from task by deleting TaskAttachment record."""
+        if hasattr(self, 'task_attachment'):
+            self.task_attachment.delete()
+        self.save(update_fields=['updated_at'])
     
     def attach_to_service_request(self, service_request):
         """Attach file to a service request."""
@@ -137,9 +138,12 @@ class UserFile(UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteModel):
     
     def detach(self):
         """Detach file from all entities."""
-        self.task = None
+        # Detach from task
+        if hasattr(self, 'task_attachment'):
+            self.task_attachment.delete()
+        # Detach from service request
         self.service_request = None
-        self.save(update_fields=['task', 'service_request', 'updated_at'])
+        self.save(update_fields=['service_request', 'updated_at'])
     
     def delete(self, *args, **kwargs):
         """Override delete to remove file from storage."""

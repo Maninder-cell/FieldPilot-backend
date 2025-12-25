@@ -1626,7 +1626,12 @@ def task_attachments(request, task_id):
             )
     
     if request.method == 'GET':
-        attachments = TaskAttachment.objects.filter(task=task).order_by('-created_at')
+        # Get TaskAttachment records (only non-deleted UserFiles)
+        attachments = TaskAttachment.objects.filter(
+            task=task,
+            user_file__deleted_at__isnull=True
+        ).select_related('user_file').order_by('-created_at')
+        
         serializer = TaskAttachmentSerializer(attachments, many=True, context={'request': request})
         
         return success_response(
@@ -1646,15 +1651,27 @@ def task_attachments(request, task_id):
         
         try:
             with transaction.atomic():
+                from apps.files.models import UserFile
+                
                 uploaded_file = serializer.validated_data['file']
                 
-                attachment = TaskAttachment.objects.create(
-                    task=task,
-                    uploaded_by=request.user,
+                # Determine if file is an image
+                is_image = uploaded_file.content_type.startswith('image/')
+                
+                # Create UserFile record first
+                user_file = UserFile.objects.create(
                     file=uploaded_file,
                     filename=uploaded_file.name,
                     file_size=uploaded_file.size,
-                    file_type=uploaded_file.content_type
+                    file_type=uploaded_file.content_type,
+                    is_image=is_image,
+                    uploaded_by=request.user
+                )
+                
+                # Create TaskAttachment linking record
+                attachment = TaskAttachment.objects.create(
+                    task=task,
+                    user_file=user_file
                 )
                 
                 # Log history
@@ -1663,9 +1680,9 @@ def task_attachments(request, task_id):
                     action='file_uploaded',
                     user=request.user,
                     details={
-                        'filename': attachment.filename,
-                        'file_size': attachment.file_size,
-                        'file_type': attachment.file_type
+                        'filename': user_file.filename,
+                        'file_size': user_file.file_size,
+                        'file_type': user_file.file_type
                     }
                 )
                 

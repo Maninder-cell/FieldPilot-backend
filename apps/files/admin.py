@@ -14,7 +14,7 @@ class UserFileAdmin(admin.ModelAdmin):
     list_filter = ['is_image', 'is_public', 'file_type', 'created_at']
     search_fields = ['filename', 'title', 'description', 'uploaded_by__email']
     readonly_fields = ['id', 'file_size', 'file_type', 'is_image', 'created_at', 'updated_at']
-    raw_id_fields = ['uploaded_by', 'task', 'service_request']
+    raw_id_fields = ['uploaded_by', 'service_request']
     
     fieldsets = (
         ('File Information', {
@@ -27,7 +27,7 @@ class UserFileAdmin(admin.ModelAdmin):
             'fields': ('uploaded_by',)
         }),
         ('Attachments', {
-            'fields': ('task', 'service_request')
+            'fields': ('service_request',)
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at', 'deleted_at')

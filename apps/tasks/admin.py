@@ -62,9 +62,10 @@ class TaskCommentAdmin(admin.ModelAdmin):
 @admin.register(TaskAttachment)
 class TaskAttachmentAdmin(admin.ModelAdmin):
     list_display = ['task', 'filename', 'file_type', 'file_size', 'uploaded_by', 'created_at']
-    list_filter = ['is_image', 'created_at']
-    search_fields = ['task__task_number', 'filename', 'uploaded_by__email']
+    list_filter = ['created_at']
+    search_fields = ['task__task_number', 'user_file__filename']
     readonly_fields = ['created_at']
+    raw_id_fields = ['task', 'user_file']
 
 
 @admin.register(TaskHistory)
