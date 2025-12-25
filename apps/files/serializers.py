@@ -16,6 +16,8 @@ class UserFileSerializer(serializers.ModelSerializer):
     file_size_mb = serializers.ReadOnlyField()
     file_extension = serializers.ReadOnlyField()
     is_attached = serializers.ReadOnlyField()
+    task = serializers.SerializerMethodField()
+    task_number = serializers.SerializerMethodField()
     service_request_number = serializers.CharField(source='service_request.request_number', read_only=True, allow_null=True)
     
     class Meta:
@@ -24,13 +26,32 @@ class UserFileSerializer(serializers.ModelSerializer):
             'id', 'file', 'file_url', 'filename', 'file_size', 'file_size_mb',
             'file_type', 'file_extension', 'title', 'description', 'tags',
             'uploaded_by', 'uploaded_by_name',
-            'service_request', 'service_request_number', 'is_image', 'is_public',
-            'is_attached', 'created_at', 'updated_at'
+            'task', 'task_number', 'service_request', 'service_request_number', 
+            'is_image', 'is_public', 'is_attached', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'uploaded_by', 'uploaded_by_name', 'file_size', 'file_type',
             'is_image', 'created_at', 'updated_at'
         ]
+    
+    def get_file_url(self, obj):
+        """Get file URL."""
+        request = self.context.get('request')
+        if obj.file and request:
+            return request.build_absolute_uri(obj.file.url)
+        return None
+    
+    def get_task(self, obj):
+        """Get task ID if file is attached to a task."""
+        if hasattr(obj, 'task_attachment') and obj.task_attachment:
+            return str(obj.task_attachment.task.id)
+        return None
+    
+    def get_task_number(self, obj):
+        """Get task number if file is attached to a task."""
+        if hasattr(obj, 'task_attachment') and obj.task_attachment:
+            return obj.task_attachment.task.task_number
+        return None
     
     def get_file_url(self, obj):
         """Get file URL."""
