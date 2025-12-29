@@ -1730,11 +1730,15 @@ def attachment_delete(request, attachment_id):
         )
     
     try:
-        # Delete file from storage without saving the model
-        if attachment.file:
-            attachment.file.delete(save=False)
+        # Try to delete file from storage if it exists
+        try:
+            if attachment.file and attachment.file.name:
+                attachment.file.delete(save=False)
+        except Exception as file_error:
+            # Log file deletion error but continue with database deletion
+            logger.warning(f"Failed to delete file for attachment {attachment.id}: {str(file_error)}")
         
-        # Delete the database record
+        # Always delete the database record, even if file deletion failed
         attachment.delete()
         
         logger.info(f"Attachment deleted: {attachment.id} by {request.user.email}")
