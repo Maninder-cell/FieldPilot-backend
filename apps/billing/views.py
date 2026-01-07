@@ -920,16 +920,38 @@ def create_setup_intent(request):
         user = request.user
         customer_id = None
         
+        # First check if we already created a customer in this session
+        if 'pending_stripe_customer_id' in request.session:
+            customer_id = request.session['pending_stripe_customer_id']
+            logger.info(f"Reusing customer from session: {customer_id}")
+            
+            # Verify it still exists in Stripe
+            try:
+                stripe.Customer.retrieve(customer_id)
+            except stripe.error.InvalidRequestError:
+                # Customer doesn't exist, clear it
+                logger.warning(f"Session customer {customer_id} not found in Stripe")
+                del request.session['pending_stripe_customer_id']
+                customer_id = None
+        
         # Check if tenant already has a Stripe customer
-        if hasattr(tenant, 'subscription') and tenant.subscription and tenant.subscription.stripe_customer_id:
-            # Reuse existing customer
+        if not customer_id and hasattr(tenant, 'subscription') and tenant.subscription and tenant.subscription.stripe_customer_id:
             customer_id = tenant.subscription.stripe_customer_id
-            logger.info(f"Reusing existing Stripe customer: {customer_id}")
-        else:
-            # Create a new Stripe customer and store it in session for reuse
+            logger.info(f"Reusing existing Stripe customer from subscription: {customer_id}")
+            
+            # Verify it exists in Stripe
+            try:
+                stripe.Customer.retrieve(customer_id)
+            except stripe.error.InvalidRequestError:
+                # Customer doesn't exist, need to create new one
+                logger.warning(f"Subscription customer {customer_id} not found in Stripe")
+                customer_id = None
+        
+        # Create a new customer if we don't have a valid one
+        if not customer_id:
             customer = StripeService.get_or_create_customer(tenant, user)
             customer_id = customer.id
-            # Store customer_id in session so create_subscription can reuse it
+            # Store customer_id in session so subsequent calls can reuse it
             request.session['pending_stripe_customer_id'] = customer_id
             logger.info(f"Created new Stripe customer: {customer_id}")
         

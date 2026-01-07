@@ -172,6 +172,7 @@ class StripeService:
     def get_or_create_customer(tenant, user) -> 'stripe.Customer':
         """
         Get existing Stripe customer or create a new one for the tenant.
+        Searches Stripe by email to avoid creating duplicates.
         
         Args:
             tenant: Tenant model instance
@@ -186,11 +187,26 @@ class StripeService:
         # Check if tenant already has a subscription with customer ID
         if hasattr(tenant, 'subscription') and tenant.subscription and tenant.subscription.stripe_customer_id:
             customer_id = tenant.subscription.stripe_customer_id
-            logger.info(f"Retrieving existing Stripe customer: {customer_id}")
-            return stripe.Customer.retrieve(customer_id)
+            logger.info(f"Retrieving existing Stripe customer from subscription: {customer_id}")
+            try:
+                return stripe.Customer.retrieve(customer_id)
+            except stripe.error.InvalidRequestError as e:
+                if "No such customer" in str(e):
+                    logger.warning(f"Customer {customer_id} not found in Stripe, will search or create new one")
+                else:
+                    raise
+        
+        # Search for existing customer by email to avoid duplicates
+        logger.info(f"Searching for existing Stripe customer with email: {user.email}")
+        existing_customers = stripe.Customer.list(email=user.email, limit=1)
+        
+        if existing_customers.data:
+            customer = existing_customers.data[0]
+            logger.info(f"Found existing Stripe customer: {customer.id} for email {user.email}")
+            return customer
         
         # Create new customer
-        logger.info(f"Creating Stripe customer for tenant: {tenant.name}")
+        logger.info(f"Creating new Stripe customer for tenant: {tenant.name}")
         
         customer = stripe.Customer.create(
             email=user.email,
