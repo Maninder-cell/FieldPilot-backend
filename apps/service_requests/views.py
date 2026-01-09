@@ -25,7 +25,7 @@ from .serializers import (
     UploadAttachmentSerializer, RequestActionSerializer
 )
 from apps.core.responses import success_response, error_response
-from apps.core.permissions import IsAdminUser, IsAdminManagerOwner, IsCustomerOnly, ensure_tenant_role
+from apps.core.permissions import IsAdminUser, IsAdminManagerOwner, IsCustomerOnly, ensure_tenant_role, MethodRolePermission, method_role_permissions
 from apps.equipment.models import Equipment
 from apps.tasks.models import Task, TaskAssignment, TaskAttachment
 from .permissions import IsRequestOwnerOrAdmin
@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
         OpenApiParameter('status', str, description='Filter by status'),
         OpenApiParameter('priority', str, description='Filter by priority'),
         OpenApiParameter('request_type', str, description='Filter by request type'),
+        OpenApiParameter('search', str, description='Search by title, description, or request number'),
     ],
     request=CreateServiceRequestSerializer,
     responses={
@@ -53,7 +54,11 @@ logger = logging.getLogger(__name__)
     }
 )
 @api_view(['GET', 'POST'])
-@permission_classes([IsAuthenticated, IsCustomerOnly])
+@permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    GET=['admin', 'manager', 'owner', 'customer'],
+    POST=['admin', 'manager', 'owner', 'customer']
+)
 def service_request_list_create(request):
     """
     List customer's service requests or create a new one.
@@ -61,8 +66,14 @@ def service_request_list_create(request):
     """
     if request.method == 'GET':
         
-        # Get customer's requests only
-        queryset = ServiceRequest.objects.filter(customer=request.user)
+        # Get queryset based on user role
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) == 'customer':
+            # Customers see only their own requests
+            queryset = ServiceRequest.objects.filter(customer=request.user)
+        else:
+            # Admin/Manager/Owner see all requests
+            queryset = ServiceRequest.objects.all()
         
         # Apply filters
         status_filter = request.query_params.get('status')
@@ -76,6 +87,18 @@ def service_request_list_create(request):
         request_type_filter = request.query_params.get('request_type')
         if request_type_filter:
             queryset = queryset.filter(request_type=request_type_filter)
+        
+        # Apply search
+        search = request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) |
+                Q(description__icontains=search) |
+                Q(request_number__icontains=search)
+            )
+        
+        # Order by created_at descending
+        queryset = queryset.order_by('-created_at')
         
         # Pagination
         paginator = PageNumberPagination()
@@ -93,7 +116,7 @@ def service_request_list_create(request):
     elif request.method == 'POST':
         serializer = CreateServiceRequestSerializer(
             data=request.data,
-            context={'customer': request.user}
+            context={'customer': request.user, 'request': request}
         )
         
         if not serializer.is_valid():

@@ -236,6 +236,7 @@ class CustomerServiceRequestSerializer(serializers.ModelSerializer):
     Customer-facing serializer for service requests.
     Excludes internal fields like internal_notes and estimated_cost.
     """
+    customer = serializers.SerializerMethodField()
     equipment = EquipmentSerializer(read_only=True)
     facility = FacilitySerializer(read_only=True)
     converted_task = serializers.SerializerMethodField()
@@ -254,7 +255,7 @@ class CustomerServiceRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = ServiceRequest
         fields = [
-            'id', 'request_number', 'equipment', 'facility',
+            'id', 'request_number', 'customer', 'equipment', 'facility',
             'converted_task', 'request_type', 'request_type_display',
             'title', 'description', 'priority', 'priority_display',
             'issue_type', 'issue_type_display', 'severity', 'severity_display',
@@ -269,6 +270,16 @@ class CustomerServiceRequestSerializer(serializers.ModelSerializer):
             'estimated_timeline', 'rejection_reason', 'created_at',
             'updated_at', 'completed_at', 'feedback_submitted_at'
         ]
+    
+    def get_customer(self, obj):
+        """Get customer user details."""
+        if obj.customer:
+            return {
+                'id': str(obj.customer.id),
+                'full_name': obj.customer.full_name,
+                'email': obj.customer.email,
+            }
+        return None
     
     def get_converted_task(self, obj):
         """Get converted task details (customer view)."""
@@ -328,25 +339,34 @@ class CreateServiceRequestSerializer(serializers.Serializer):
         return data
     
     def validate_equipment_id(self, value):
-        """Validate equipment exists and belongs to customer."""
+        """Validate equipment exists and belongs to customer (only for customer role)."""
         from apps.equipment.models import Equipment
+        from apps.core.permissions import ensure_tenant_role
         
         try:
             equipment = Equipment.objects.get(pk=value)
         except Equipment.DoesNotExist:
             raise serializers.ValidationError('Equipment not found.')
         
-        # Check if equipment belongs to customer
-        # customer in context is a User object, equipment.customer is a Customer object
-        customer_user = self.context.get('customer')
-        if customer_user:
-            # Check if equipment has a customer assigned
-            if not equipment.customer:
-                raise serializers.ValidationError('This equipment is not assigned to any customer.')
+        # Get the user and request from context
+        user = self.context.get('customer')
+        request = self.context.get('request')
+        
+        if user and request:
+            # Check user's role
+            ensure_tenant_role(request)
+            user_role = getattr(request, 'tenant_role', None)
             
-            # Check if the equipment's customer is linked to the current user
-            if equipment.customer.user != customer_user:
-                raise serializers.ValidationError('You can only create requests for your own equipment.')
+            # Only validate customer ownership for customer users
+            # Admin/Manager/Owner can create requests for any equipment
+            if user_role == 'customer':
+                # Check if equipment has a customer assigned
+                if not equipment.customer:
+                    raise serializers.ValidationError('This equipment is not assigned to any customer.')
+                
+                # Check if the equipment's customer is linked to the current user
+                if equipment.customer.user != user:
+                    raise serializers.ValidationError('You can only create requests for your own equipment.')
         
         return value
 

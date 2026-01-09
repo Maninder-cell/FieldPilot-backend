@@ -237,11 +237,8 @@ class ServiceRequest(UUIDPrimaryKeyMixin, models.Model):
         """Validate model data."""
         super().clean()
         
-        # Validate customer role
-        if self.customer and self.customer.role != 'customer':
-            raise ValidationError({
-                'customer': 'Only users with customer role can submit requests.'
-            })
+        # Note: Customer field can be any user (customer, admin, manager, owner)
+        # Admin/Manager/Owner can create service requests on behalf of customers
         
         # Validate issue-specific fields
         if self.request_type == 'issue':
