@@ -279,6 +279,16 @@ def task_detail(request, task_id):
         
         try:
             with transaction.atomic():
+                # Extract assignment data before saving
+                assignee_ids = serializer.validated_data.pop('assignee_ids', None)
+                team_ids = serializer.validated_data.pop('team_ids', None)
+                
+                # Filter out None values if present
+                if assignee_ids is not None:
+                    assignee_ids = [aid for aid in assignee_ids if aid is not None]
+                if team_ids is not None:
+                    team_ids = [tid for tid in team_ids if tid is not None]
+                
                 # Track changes for history
                 changes = {}
                 for field in serializer.validated_data:
@@ -288,6 +298,66 @@ def task_detail(request, task_id):
                         changes[field] = {'old': old_value, 'new': new_value}
                 
                 task = serializer.save(updated_by=request.user)
+                
+                # Handle assignment updates if provided
+                if assignee_ids is not None or team_ids is not None:
+                    logger.info(f"Updating assignments - assignee_ids: {assignee_ids}, team_ids: {team_ids}")
+                    
+                    # Update technician assignments if assignee_ids is provided
+                    if assignee_ids is not None:
+                        # Remove existing technician assignments
+                        deleted_count = TaskAssignment.objects.filter(task=task, assignee__isnull=False).delete()[0]
+                        logger.info(f"Deleted {deleted_count} technician assignments")
+                        
+                        # Create new technician assignments
+                        if assignee_ids:
+                            from django.contrib.auth import get_user_model
+                            User = get_user_model()
+                            for assignee_id in assignee_ids:
+                                try:
+                                    assignee = User.objects.get(pk=assignee_id)
+                                    TaskAssignment.objects.create(
+                                        task=task,
+                                        assignee=assignee,
+                                        assigned_by=request.user
+                                    )
+                                    logger.info(f"Created technician assignment for {assignee.full_name}")
+                                except User.DoesNotExist:
+                                    logger.warning(f"User {assignee_id} not found for task assignment")
+                    
+                    # Update team assignments if team_ids is provided
+                    if team_ids is not None:
+                        # Remove existing team assignments
+                        deleted_count = TaskAssignment.objects.filter(task=task, team__isnull=False).delete()[0]
+                        logger.info(f"Deleted {deleted_count} team assignments")
+                        
+                        # Create new team assignments
+                        if team_ids:
+                            from apps.tasks.models import TechnicianTeam
+                            for team_id in team_ids:
+                                try:
+                                    team = TechnicianTeam.objects.get(pk=team_id)
+                                    TaskAssignment.objects.create(
+                                        task=task,
+                                        team=team,
+                                        assigned_by=request.user
+                                    )
+                                    logger.info(f"Created team assignment for {team.name}")
+                                except TechnicianTeam.DoesNotExist:
+                                    logger.warning(f"Team {team_id} not found for task assignment")
+                                except Exception as e:
+                                    logger.error(f"Failed to create team assignment: {str(e)}", exc_info=True)
+                    
+                    # Log assignment change
+                    TaskHistory.log_action(
+                        task=task,
+                        action='assigned',
+                        user=request.user,
+                        details={
+                            'assignee_count': len(assignee_ids) if assignee_ids else 0,
+                            'team_count': len(team_ids) if team_ids else 0
+                        }
+                    )
                 
                 # Log history for each change
                 for field, values in changes.items():

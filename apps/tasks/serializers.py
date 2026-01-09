@@ -248,13 +248,26 @@ class UpdateTaskSerializer(serializers.ModelSerializer):
     """
     Serializer for updating task information.
     """
+    assignee_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=True,
+        write_only=True
+    )
+    team_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        allow_empty=True,
+        write_only=True
+    )
+    
     class Meta:
         model = Task
         fields = [
             'title', 'description', 'priority', 'status',
             'scheduled_start', 'scheduled_end', 'due_date',
             'materials_needed', 'materials_received',
-            'notes', 'custom_fields'
+            'notes', 'custom_fields', 'assignee_ids', 'team_ids'
         ]
     
     def validate(self, data):
