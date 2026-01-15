@@ -255,6 +255,15 @@ class MethodRolePermission(permissions.BasePermission):
         # Try to get from the view instance first
         role_map = getattr(view, 'role_permissions', None)
         
+        # For @api_view decorated functions, check the underlying function
+        if not role_map and hasattr(view, 'cls'):
+            # DRF wraps @api_view functions in a class
+            # The actual function is stored in cls.{method_name}
+            method_name = request.method.lower()
+            handler = getattr(view.cls, method_name, None)
+            if handler:
+                role_map = getattr(handler, 'role_permissions', None)
+        
         # Try the global registry (for function-based views)
         if not role_map:
             view_name = type(view).__name__
@@ -276,7 +285,7 @@ class MethodRolePermission(permissions.BasePermission):
         
         has_perm = tenant_role in allowed_roles
         if not has_perm:
-            logger.warning(f"Permission denied: tenant_role '{tenant_role}' not in allowed_roles {allowed_roles} for method {request.method}")
+            logger.warning(f"Permission denied: tenant_role '{tenant_role}' not in allowed_roles {allowed_roles} for method {request.method} (view: {type(view).__name__}, role_map: {role_map})")
         
         return has_perm
 

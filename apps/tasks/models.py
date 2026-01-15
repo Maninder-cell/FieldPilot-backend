@@ -111,6 +111,22 @@ class Task(UUIDPrimaryKeyMixin, SoftDeleteModel, AuditMixin):
         help_text="Task priority"
     )
     
+    # Work Status (updated by technicians and managers)
+    WORK_STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('in_progress', 'In Progress'),
+        ('on_hold', 'On Hold'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    work_status = models.CharField(
+        max_length=20,
+        choices=WORK_STATUS_CHOICES,
+        default='open',
+        db_index=True,
+        help_text="Work status of the task"
+    )
+    
     # Scheduling
     scheduled_start = models.DateTimeField(
         null=True,
@@ -163,6 +179,7 @@ class Task(UUIDPrimaryKeyMixin, SoftDeleteModel, AuditMixin):
         indexes = [
             models.Index(fields=['task_number']),
             models.Index(fields=['status', 'priority']),
+            models.Index(fields=['work_status']),
             models.Index(fields=['equipment', 'status']),
             models.Index(fields=['scheduled_start']),
             models.Index(fields=['due_date']),
@@ -302,7 +319,6 @@ class TechnicianTeam(UUIDPrimaryKeyMixin, SoftDeleteModel, AuditMixin):
 class TaskAssignment(UUIDPrimaryKeyMixin, TimestampMixin):
     """
     Assignment of a task to a technician or team.
-    Tracks individual work status per assignee.
     Either assignee OR team must be set, not both.
     """
     
@@ -330,21 +346,6 @@ class TaskAssignment(UUIDPrimaryKeyMixin, TimestampMixin):
         help_text="Team assigned"
     )
     
-    # Work Status (updated by technician)
-    WORK_STATUS_CHOICES = [
-        ('open', 'Open'),
-        ('hold', 'Hold'),
-        ('in_progress', 'In-Progress'),
-        ('done', 'Done'),
-    ]
-    work_status = models.CharField(
-        max_length=20,
-        choices=WORK_STATUS_CHOICES,
-        default='open',
-        db_index=True,
-        help_text="Work status (updated by technician)"
-    )
-    
     # Assignment Metadata
     assigned_by = models.ForeignKey(
         'authentication.User',
@@ -363,8 +364,6 @@ class TaskAssignment(UUIDPrimaryKeyMixin, TimestampMixin):
         indexes = [
             models.Index(fields=['task', 'assignee']),
             models.Index(fields=['task', 'team']),
-            models.Index(fields=['work_status']),
-            models.Index(fields=['assignee', 'work_status']),
         ]
         # Ensure a task is not assigned to the same technician/team multiple times
         unique_together = [

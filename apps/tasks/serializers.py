@@ -29,7 +29,7 @@ class TaskAssignmentSerializer(serializers.ModelSerializer):
         model = TaskAssignment
         fields = [
             'id', 'task', 'assignee', 'team', 'team_name', 'assignee_name',
-            'work_status', 'assigned_by', 'assigned_at'
+            'assigned_by', 'assigned_at'
         ]
         read_only_fields = ['id', 'assigned_by', 'assigned_at']
 
@@ -49,7 +49,7 @@ class TaskListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Task
         fields = [
-            'id', 'task_number', 'title', 'status', 'priority',
+            'id', 'task_number', 'title', 'status', 'priority', 'work_status',
             'equipment_name', 'equipment_number', 'created_by_name',
             'assignment_count', 'assignees', 'teams', 'is_active', 
             'scheduled_start', 'due_date', 'is_scheduled', 'created_at', 'updated_at'
@@ -66,7 +66,6 @@ class TaskListSerializer(serializers.ModelSerializer):
                 'id': str(assignment.assignee.id),
                 'name': assignment.assignee.full_name,
                 'email': assignment.assignee.email,
-                'work_status': assignment.work_status,
             }
             for assignment in assignees
         ]
@@ -78,7 +77,6 @@ class TaskListSerializer(serializers.ModelSerializer):
             {
                 'id': str(assignment.team.id),
                 'name': assignment.team.name,
-                'work_status': assignment.work_status,
             }
             for assignment in teams
         ]
@@ -105,7 +103,7 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'task_number', 'title', 'description',
-            'equipment', 'status', 'priority',
+            'equipment', 'status', 'priority', 'work_status',
             'scheduled_start', 'scheduled_end', 'due_date', 'is_scheduled',
             'materials_needed', 'materials_received',
             'notes', 'custom_fields',
@@ -391,27 +389,12 @@ class UpdateTaskStatusSerializer(serializers.Serializer):
 
 class UpdateWorkStatusSerializer(serializers.Serializer):
     """
-    Serializer for updating work status by technician.
+    Serializer for updating work status of a task.
     """
     work_status = serializers.ChoiceField(
-        choices=TaskAssignment.WORK_STATUS_CHOICES,
+        choices=Task.WORK_STATUS_CHOICES,
         required=True
     )
-    
-    def validate_work_status(self, value):
-        """Validate work status transition."""
-        assignment = self.context.get('assignment')
-        if not assignment:
-            return value
-        
-        from .utils import TaskStatusValidator
-        try:
-            TaskStatusValidator.validate_work_status_transition(assignment, value)
-        except DjangoValidationError as e:
-            raise serializers.ValidationError(str(e))
-        
-        return value
-
 
 
 # Team Management Serializers

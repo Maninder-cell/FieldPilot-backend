@@ -37,8 +37,8 @@ class TechnicianTeamAdmin(admin.ModelAdmin):
 
 @admin.register(TaskAssignment)
 class TaskAssignmentAdmin(admin.ModelAdmin):
-    list_display = ['task', 'assignee', 'team', 'work_status', 'assigned_at']
-    list_filter = ['work_status', 'assigned_at']
+    list_display = ['task', 'assignee', 'team', 'assigned_at']
+    list_filter = ['assigned_at']
     search_fields = ['task__task_number', 'assignee__email']
     readonly_fields = ['assigned_at', 'created_at', 'updated_at']
 

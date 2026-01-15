@@ -372,7 +372,8 @@ def task_detail(request, task_id):
                 
                 # Reset work status if reopened
                 if 'status' in changes and changes['status']['new'] == 'reopened':
-                    TaskAssignment.objects.filter(task=task).update(work_status='open')
+                    task.work_status = 'open'
+                    task.save(update_fields=['work_status'])
                 
                 logger.info(f"Task updated: {task.task_number} by {request.user.email}")
                 
@@ -529,11 +530,12 @@ def task_update_status(request, task_id):
             
             task.status = new_status
             task.updated_by = request.user
-            task.save()
             
             # Reset work status if reopened
             if new_status == 'reopened':
-                TaskAssignment.objects.filter(task=task).update(work_status='open')
+                task.work_status = 'open'
+            
+            task.save()
             
             # Log history
             TaskHistory.log_action(
@@ -570,10 +572,15 @@ def task_update_status(request, task_id):
     responses={200: TaskSerializer}
 )
 @api_view(['PATCH'])
-@permission_classes([IsAuthenticated, IsTechnicianOnly])
+@permission_classes([IsAuthenticated, MethodRolePermission])
+@method_role_permissions(
+    PATCH=['admin', 'manager', 'owner', 'technician']
+)
 def task_update_work_status(request, task_id):
     """
-    Update work status for technician's assignment.
+    Update work status for the task.
+    Allowed roles: admin, manager, owner, technician
+    All roles can update the task's work status.
     """
     
     try:
@@ -584,37 +591,27 @@ def task_update_work_status(request, task_id):
             status_code=status.HTTP_404_NOT_FOUND
         )
     
-    # Get technician's assignment
-    try:
-        assignment = TaskAssignment.objects.get(
-            task=task,
-            assignee=request.user
-        )
-    except TaskAssignment.DoesNotExist:
+    # Validate work_status value
+    work_status = request.data.get('work_status')
+    if not work_status:
         return error_response(
-            message='You are not assigned to this task',
-            status_code=status.HTTP_403_FORBIDDEN
+            message='work_status is required',
+            status_code=status.HTTP_400_BAD_REQUEST
         )
     
-    serializer = UpdateWorkStatusSerializer(
-        data=request.data,
-        context={'assignment': assignment}
-    )
-    
-    if not serializer.is_valid():
+    # Check if work_status is valid
+    valid_statuses = [choice[0] for choice in Task.WORK_STATUS_CHOICES]
+    if work_status not in valid_statuses:
         return error_response(
-            message='Invalid work status data',
-            details=serializer.errors,
+            message=f'Invalid work_status. Must be one of: {", ".join(valid_statuses)}',
             status_code=status.HTTP_400_BAD_REQUEST
         )
     
     try:
         with transaction.atomic():
-            old_work_status = assignment.work_status
-            new_work_status = serializer.validated_data['work_status']
-            
-            assignment.work_status = new_work_status
-            assignment.save()
+            old_work_status = task.work_status
+            task.work_status = work_status
+            task.save()
             
             # Log history
             TaskHistory.log_action(
@@ -623,8 +620,8 @@ def task_update_work_status(request, task_id):
                 user=request.user,
                 field_name='work_status',
                 old_value=old_work_status,
-                new_value=new_work_status,
-                details={'assignee': request.user.full_name}
+                new_value=work_status,
+                details={'updated_by': request.user.full_name}
             )
             
             logger.info(f"Work status updated: {task.task_number} by {request.user.email}")
