@@ -193,16 +193,19 @@ class Subscription(models.Model):
         return limits_exceeded
     
     def update_usage_counts(self):
-        """Update current usage counts."""
+        """
+        Update current usage counts.
+        Note: Customers are excluded from user count as they don't count against subscription limits.
+        """
         try:
             # User model is in SHARED_APPS (public schema), so we need to count via TenantMember
             from apps.tenants.models import TenantMember
             
-            # Count active tenant members (users belong to tenant via TenantMember)
+            # Count active tenant members (excluding customers - they don't count against limits)
             self.current_users_count = TenantMember.objects.filter(
                 tenant=self.tenant,
                 is_active=True
-            ).count()
+            ).exclude(role='customer').count()
             
             # Equipment is in TENANT_APPS (tenant schema), so we need to switch schema context
             if hasattr(self.tenant, 'schema_name'):

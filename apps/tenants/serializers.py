@@ -84,11 +84,30 @@ class TenantMemberSerializer(serializers.ModelSerializer):
 class InviteMemberSerializer(serializers.Serializer):
     """
     Serializer for inviting members to tenant.
+    Note: Customer role is not allowed here - customers are managed separately in Organization Portal.
     """
+    # Exclude 'customer' role from team management invitations
+    TEAM_ROLE_CHOICES = [
+        ('owner', 'Owner'),
+        ('admin', 'Admin'),
+        ('manager', 'Manager'),
+        ('employee', 'Employee'),
+        ('technician', 'Technician'),
+    ]
+    
     email = serializers.EmailField()
-    role = serializers.ChoiceField(choices=TenantMember.ROLE_CHOICES)
+    role = serializers.ChoiceField(choices=TEAM_ROLE_CHOICES)
     first_name = serializers.CharField(max_length=100, required=False)
     last_name = serializers.CharField(max_length=100, required=False)
+    
+    def validate_role(self, value):
+        """Ensure customer role cannot be invited through team management."""
+        if value == 'customer':
+            raise serializers.ValidationError(
+                "Customer role cannot be assigned through team management. "
+                "Customers are managed separately in the Organization Portal."
+            )
+        return value
 
 
 class TenantSettingsSerializer(serializers.ModelSerializer):

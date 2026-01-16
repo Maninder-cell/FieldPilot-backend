@@ -337,7 +337,8 @@ def complete_onboarding_step(request):
 @public_schema_only
 def tenant_members(request):
     """
-    Get tenant members.
+    Get tenant members (excluding customers).
+    Customers are managed separately in the Organization Portal.
     
     Note: Only accessible from public schema (localhost).
     """
@@ -350,7 +351,8 @@ def tenant_members(request):
                 status_code=status.HTTP_404_NOT_FOUND
             )
         
-        members = membership.tenant.members.filter(is_active=True)
+        # Exclude customers from team management - they're managed in Organization Portal
+        members = membership.tenant.members.filter(is_active=True).exclude(role='customer')
         serializer = TenantMemberSerializer(members, many=True)
         
         return success_response(
@@ -417,6 +419,13 @@ def invite_member(request):
         
         email = serializer.validated_data['email']
         role = serializer.validated_data['role']
+        
+        # Additional validation: Ensure customer role is not used
+        if role == 'customer':
+            return error_response(
+                message="Customer role cannot be assigned through team management. Customers are managed separately in the Organization Portal.",
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
         
         # Check if user already exists
         try:
