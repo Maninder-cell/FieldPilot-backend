@@ -277,17 +277,84 @@ class UserSerializer(serializers.ModelSerializer):
     and should be accessed via TenantMember, not User model.
     """
     full_name = serializers.ReadOnlyField()
+    # Add tenant-specific fields from TenantMember
+    role = serializers.SerializerMethodField()
+    employee_id = serializers.SerializerMethodField()
+    department = serializers.SerializerMethodField()
+    job_title = serializers.SerializerMethodField()
+    phone = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             'id', 'email', 'first_name', 'last_name', 'full_name',
             'avatar_url', 'is_active', 'is_verified', 'two_factor_enabled',
+            'role', 'employee_id', 'department', 'job_title', 'phone',
             'created_at', 'last_login_at'
         ]
         read_only_fields = [
             'id', 'is_verified', 'created_at', 'last_login_at'
         ]
+    
+    def get_role(self, obj):
+        """Get role from current tenant membership."""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            from apps.tenants.models import TenantMember
+            membership = TenantMember.objects.filter(
+                user=obj,
+                is_active=True
+            ).first()
+            return membership.role if membership else None
+        return None
+    
+    def get_employee_id(self, obj):
+        """Get employee_id from current tenant membership."""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            from apps.tenants.models import TenantMember
+            membership = TenantMember.objects.filter(
+                user=obj,
+                is_active=True
+            ).first()
+            return membership.employee_id if membership else ''
+        return ''
+    
+    def get_department(self, obj):
+        """Get department from current tenant membership."""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            from apps.tenants.models import TenantMember
+            membership = TenantMember.objects.filter(
+                user=obj,
+                is_active=True
+            ).first()
+            return membership.department if membership else ''
+        return ''
+    
+    def get_job_title(self, obj):
+        """Get job_title from current tenant membership."""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            from apps.tenants.models import TenantMember
+            membership = TenantMember.objects.filter(
+                user=obj,
+                is_active=True
+            ).first()
+            return membership.job_title if membership else ''
+        return ''
+    
+    def get_phone(self, obj):
+        """Get phone from current tenant membership."""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user'):
+            from apps.tenants.models import TenantMember
+            membership = TenantMember.objects.filter(
+                user=obj,
+                is_active=True
+            ).first()
+            return membership.phone if membership else ''
+        return ''
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
@@ -333,21 +400,37 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         ]
     
     def update(self, instance, validated_data):
-        """Update both user and profile."""
-        # Extract user fields
-        user_fields = {
-            'first_name', 'last_name', 'phone', 'avatar_url',
-            'department', 'job_title'
-        }
+        """Update user, profile, and tenant membership."""
+        from apps.tenants.models import TenantMember
         
-        user_data = {k: v for k, v in validated_data.items() if k in user_fields}
-        profile_data = {k: v for k, v in validated_data.items() if k not in user_fields}
+        # Extract user fields (only first_name, last_name, avatar_url are on User model)
+        user_only_fields = {'first_name', 'last_name', 'avatar_url'}
+        # Tenant-specific fields go to TenantMember
+        tenant_fields = {'phone', 'department', 'job_title'}
+        
+        user_data = {k: v for k, v in validated_data.items() if k in user_only_fields}
+        tenant_data = {k: v for k, v in validated_data.items() if k in tenant_fields}
+        profile_data = {k: v for k, v in validated_data.items() 
+                       if k not in user_only_fields and k not in tenant_fields}
         
         # Update user
         if user_data:
             for attr, value in user_data.items():
                 setattr(instance.user, attr, value)
             instance.user.save()
+        
+        # Update tenant membership if tenant-specific fields are provided
+        if tenant_data:
+            request = self.context.get('request')
+            if request and hasattr(request, 'user'):
+                membership = TenantMember.objects.filter(
+                    user=instance.user,
+                    is_active=True
+                ).first()
+                if membership:
+                    for attr, value in tenant_data.items():
+                        setattr(membership, attr, value)
+                    membership.save()
         
         # Update profile
         if profile_data:

@@ -680,7 +680,7 @@ def profile(request):
         user = request.user
         profile, created = UserProfile.objects.get_or_create(user=user)
         
-        serializer = UserProfileSerializer(profile)
+        serializer = UserProfileSerializer(profile, context={'request': request})
         
         return success_response(
             data=serializer.data,
@@ -718,7 +718,12 @@ def update_profile(request):
         user = request.user
         profile, created = UserProfile.objects.get_or_create(user=user)
         
-        serializer = UpdateProfileSerializer(profile, data=request.data, partial=True)
+        serializer = UpdateProfileSerializer(
+            profile, 
+            data=request.data, 
+            partial=True,
+            context={'request': request}
+        )
         
         if not serializer.is_valid():
             return error_response(
@@ -729,8 +734,8 @@ def update_profile(request):
         
         serializer.save()
         
-        # Return updated profile
-        updated_profile = UserProfileSerializer(profile).data
+        # Return updated profile with request context
+        updated_profile = UserProfileSerializer(profile, context={'request': request}).data
         
         logger.info(f"Profile updated: {user.email}")
         
