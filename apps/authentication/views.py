@@ -250,15 +250,60 @@ def login(request):
         # Generate tokens
         tokens = get_tokens_for_user(user)
         
+        # Get tenant membership information
+        from apps.tenants.models import TenantMember
+        tenant_membership = None
+        tenant_data = None
+        
+        try:
+            # Get the user's tenant membership (assuming user has one active membership)
+            membership = TenantMember.objects.filter(
+                user=user,
+                is_active=True
+            ).select_related('tenant').first()
+            
+            if membership:
+                tenant_membership = {
+                    'role': membership.role,
+                    'employee_id': membership.employee_id,
+                    'department': membership.department,
+                    'job_title': membership.job_title,
+                }
+                tenant_data = {
+                    'id': str(membership.tenant.id),
+                    'name': membership.tenant.name,
+                    'slug': membership.tenant.slug,
+                    'domain': membership.tenant.domain,
+                }
+        except Exception as e:
+            logger.warning(f"Could not fetch tenant membership for {user.email}: {str(e)}")
+        
+        # Update last login
+        user.last_login_at = timezone.now()
+        user.save(update_fields=['last_login_at'])
+        
         logger.info(f"User logged in: {user.email}")
         
+        # Pass membership as context to UserSerializer
+        serializer_context = {}
+        if membership:
+            serializer_context['membership'] = membership
+        
+        response_data = {
+            'user': UserSerializer(user, context=serializer_context).data,
+            'tokens': tokens,
+            'token_type': 'Bearer',
+            'expires_in': 900  # 15 minutes for access token
+        }
+        
+        # Add tenant information if available
+        if tenant_membership:
+            response_data['tenant_membership'] = tenant_membership
+        if tenant_data:
+            response_data['tenant'] = tenant_data
+        
         return success_response(
-            data={
-                'user': UserSerializer(user).data,
-                'tokens': tokens,
-                'token_type': 'Bearer',
-                'expires_in': 900  # 15 minutes for access token
-            },
+            data=response_data,
             message="Login successful"
         )
         
@@ -268,6 +313,7 @@ def login(request):
             message="Login failed. Please try again.",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
 
 
 @extend_schema(

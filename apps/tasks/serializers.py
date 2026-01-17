@@ -177,14 +177,10 @@ class CreateTaskSerializer(serializers.Serializer):
     
     def validate(self, data):
         """Validate task data."""
-        # Ensure at least one assignee or team
+        # Assignments are now optional - tasks can be created without assignees
         assignee_ids = data.get('assignee_ids', [])
         team_ids = data.get('team_ids', [])
         
-        if not assignee_ids and not team_ids:
-            raise serializers.ValidationError(
-                "At least one assignee or team is required."
-            )
         
         # Validate scheduled dates
         scheduled_start = data.get('scheduled_start')

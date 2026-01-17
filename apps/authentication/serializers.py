@@ -298,6 +298,12 @@ class UserSerializer(serializers.ModelSerializer):
     
     def get_role(self, obj):
         """Get role from current tenant membership."""
+        # First check if membership is passed in context (e.g., during login)
+        membership = self.context.get('membership')
+        if membership:
+            return membership.role
+        
+        # Otherwise, try to get from request (for authenticated requests)
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             from apps.tenants.models import TenantMember
@@ -310,6 +316,12 @@ class UserSerializer(serializers.ModelSerializer):
     
     def get_employee_id(self, obj):
         """Get employee_id from current tenant membership."""
+        # First check if membership is passed in context (e.g., during login)
+        membership = self.context.get('membership')
+        if membership:
+            return membership.employee_id
+        
+        # Otherwise, try to get from request (for authenticated requests)
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             from apps.tenants.models import TenantMember
@@ -322,6 +334,12 @@ class UserSerializer(serializers.ModelSerializer):
     
     def get_department(self, obj):
         """Get department from current tenant membership."""
+        # First check if membership is passed in context (e.g., during login)
+        membership = self.context.get('membership')
+        if membership:
+            return membership.department
+        
+        # Otherwise, try to get from request (for authenticated requests)
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             from apps.tenants.models import TenantMember
@@ -334,6 +352,12 @@ class UserSerializer(serializers.ModelSerializer):
     
     def get_job_title(self, obj):
         """Get job_title from current tenant membership."""
+        # First check if membership is passed in context (e.g., during login)
+        membership = self.context.get('membership')
+        if membership:
+            return membership.job_title
+        
+        # Otherwise, try to get from request (for authenticated requests)
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             from apps.tenants.models import TenantMember
@@ -346,6 +370,12 @@ class UserSerializer(serializers.ModelSerializer):
     
     def get_phone(self, obj):
         """Get phone from current tenant membership."""
+        # First check if membership is passed in context (e.g., during login)
+        membership = self.context.get('membership')
+        if membership:
+            return membership.phone
+        
+        # Otherwise, try to get from request (for authenticated requests)
         request = self.context.get('request')
         if request and hasattr(request, 'user'):
             from apps.tenants.models import TenantMember
@@ -382,10 +412,10 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
     # User fields
     first_name = serializers.CharField(max_length=100)
     last_name = serializers.CharField(max_length=100)
-    phone = serializers.CharField(max_length=20, required=False)
-    avatar_url = serializers.URLField(required=False)
-    department = serializers.CharField(max_length=100, required=False)
-    job_title = serializers.CharField(max_length=100, required=False)
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    avatar_url = serializers.URLField(required=False, allow_blank=True)
+    department = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    job_title = serializers.CharField(max_length=100, required=False, allow_blank=True)
     
     class Meta:
         model = UserProfile
