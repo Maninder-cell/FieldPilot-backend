@@ -2103,7 +2103,7 @@ def work_hours_report(request):
     # Get technician
     try:
         from apps.authentication.models import User
-        technician = User.objects.get(pk=technician_id, role='technician')
+        technician = User.objects.get(pk=technician_id)
     except User.DoesNotExist:
         return error_response(
             message='Technician not found',
