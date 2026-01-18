@@ -99,6 +99,10 @@ def task_list_create(request):
         if priority_filter:
             queryset = queryset.filter(priority=priority_filter)
         
+        work_status_filter = request.query_params.get('work_status')
+        if work_status_filter:
+            queryset = queryset.filter(work_status=work_status_filter)
+        
         equipment_filter = request.query_params.get('equipment')
         if equipment_filter:
             queryset = queryset.filter(equipment_id=equipment_filter)
@@ -2118,7 +2122,9 @@ def work_hours_report(request):
         if start_date:
             start_date = datetime.strptime(start_date, '%Y-%m-%d')
         if end_date:
+            # Set end_date to end of day (23:59:59) to include all hours on that day
             end_date = datetime.strptime(end_date, '%Y-%m-%d')
+            end_date = end_date.replace(hour=23, minute=59, second=59, microsecond=999999)
     except ValueError:
         return error_response(
             message='Invalid date format. Use YYYY-MM-DD',
