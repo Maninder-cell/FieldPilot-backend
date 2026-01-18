@@ -51,4 +51,5 @@ urlpatterns = [
     
     # Reports
     path('reports/work-hours/', views.work_hours_report, name='work-hours-report'),
+    path('reports/dashboard/', views.technician_dashboard, name='technician-dashboard'),
 ]

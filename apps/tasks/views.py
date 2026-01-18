@@ -2281,3 +2281,266 @@ def technician_list(request):
             message='Failed to retrieve technicians',
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@extend_schema(
+    tags=['Tasks'],
+    summary='Get technician dashboard data',
+    description='Get comprehensive dashboard data for the logged-in technician including stats, current task, upcoming tasks, weekly hours, and recent activity.',
+    responses={
+        200: {
+            'description': 'Dashboard data retrieved successfully',
+            'content': {
+                'application/json': {
+                    'example': {
+                        'success': True,
+                        'data': {
+                            'stats': {
+                                'today_tasks': 5,
+                                'active_tasks': 1,
+                                'completed_today': 2,
+                                'hours_today': 4.5,
+                                'hours_this_week': 27.0,
+                                'completion_rate': 80
+                            },
+                            'current_task': {
+                                'id': '...',
+                                'task_number': 'TASK-0042',
+                                'title': 'HVAC Maintenance',
+                                'priority': 'high'
+                            },
+                            'today_tasks': [],
+                            'weekly_hours': [],
+                            'priority_breakdown': {'high': 2, 'medium': 2, 'low': 1},
+                            'recent_activity': []
+                        }
+                    }
+                }
+            }
+        }
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def technician_dashboard(request):
+    """
+    Get comprehensive dashboard data for technician.
+    Returns stats, current task, upcoming tasks, weekly hours, and recent activity.
+    """
+    from datetime import datetime, timedelta
+    from django.db.models import Sum, Count, Q
+    from .utils import WorkHoursCalculator
+    
+    try:
+        # Ensure user is a technician
+        ensure_tenant_role(request)
+        if getattr(request, 'tenant_role', None) != 'technician':
+            return error_response(
+                message='Only technicians can access this endpoint',
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        technician = request.user
+        now = timezone.now()
+        today = now.date()
+        week_start = today - timedelta(days=today.weekday())  # Monday
+        week_end = week_start + timedelta(days=6)  # Sunday
+        
+        # Get today's date range (timezone-aware)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+        
+        # 1. Calculate Stats
+        # Get all tasks assigned to technician
+        assigned_tasks = Task.objects.filter(
+            assignments__assignee=technician
+        ).distinct()
+        
+        # Today's tasks (due today or in progress)
+        today_tasks = assigned_tasks.filter(
+            Q(due_date=today) | Q(work_status='in_progress')
+        ).distinct()
+        
+        today_tasks_count = today_tasks.count()
+        
+        # Active tasks (currently in progress)
+        active_tasks_count = assigned_tasks.filter(work_status='in_progress').count()
+        
+        # Completed today
+        completed_today = TimeLog.objects.filter(
+            technician=technician,
+            departed_at__gte=today_start,
+            departed_at__lte=today_end
+        ).count()
+        
+        # Hours today
+        today_hours = TimeLog.objects.filter(
+            technician=technician,
+            departed_at__gte=today_start,
+            departed_at__lte=today_end
+        ).aggregate(
+            total=Sum('total_work_hours')
+        )['total'] or 0
+        
+        # Calculate week start and end datetime objects
+        week_start_dt = now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=now.weekday())
+        week_end_dt = week_start_dt + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
+        
+        # Hours this week - use datetime objects for proper filtering
+        week_hours_data = WorkHoursCalculator.aggregate_hours_by_technician(
+            technician=technician,
+            start_date=week_start_dt,
+            end_date=week_end_dt
+        )
+        hours_this_week = week_hours_data.get('total_hours', 0)
+        
+        # Completion rate (tasks completed vs total assigned this week)
+        week_completed = TimeLog.objects.filter(
+            technician=technician,
+            departed_at__gte=week_start_dt,
+            departed_at__lte=week_end_dt
+        ).values('task').distinct().count()
+        
+        week_total = assigned_tasks.filter(
+            created_at__gte=week_start_dt
+        ).count()
+        
+        completion_rate = int((week_completed / week_total * 100)) if week_total > 0 else 0
+        
+        # 2. Get Current Task (most recent active task)
+        current_task_data = None
+        current_log = TimeLog.objects.filter(
+            technician=technician,
+            departed_at__isnull=True
+        ).select_related('task').order_by('-created_at').first()
+        
+        if current_log:
+            task = current_log.task
+            duration_minutes = 0
+            if current_log.arrived_at:
+                duration = timezone.now() - current_log.arrived_at
+                duration_minutes = int(duration.total_seconds() / 60)
+            
+            current_task_data = {
+                'id': str(task.id),
+                'task_number': task.task_number,
+                'title': task.title,
+                'priority': task.priority,
+                'started_at': current_log.arrived_at.isoformat() if current_log.arrived_at else None,
+                'duration_minutes': duration_minutes,
+                'equipment': task.equipment.name if task.equipment else None,
+                'location': None,  # Location not available in current schema
+            }
+        
+        # 3. Get Today's Tasks (upcoming and pending)
+        today_tasks_list = []
+        for task in today_tasks.select_related('equipment')[:5]:
+            today_tasks_list.append({
+                'id': str(task.id),
+                'task_number': task.task_number,
+                'title': task.title,
+                'priority': task.priority,
+                'status': task.status,
+                'work_status': task.work_status,
+                'due_date': task.due_date.isoformat() if task.due_date else None,
+                'equipment': task.equipment.name if task.equipment else None,
+                'location': None,  # Location not available in current schema
+            })
+        
+        # 4. Get Weekly Hours Breakdown
+        weekly_hours = []
+        for i in range(7):
+            day_date = week_start + timedelta(days=i)
+            # Create timezone-aware datetime for the day
+            day_start = week_start_dt + timedelta(days=i)
+            day_end = day_start.replace(hour=23, minute=59, second=59, microsecond=999999)
+            
+            day_hours = TimeLog.objects.filter(
+                technician=technician,
+                departed_at__gte=day_start,
+                departed_at__lte=day_end
+            ).aggregate(total=Sum('total_work_hours'))['total'] or 0
+            
+            percentage = int((float(day_hours) / 8.0 * 100)) if day_hours > 0 else 0
+            
+            weekly_hours.append({
+                'day': day_date.strftime('%a'),
+                'date': day_date.isoformat(),
+                'hours': float(day_hours),
+                'percentage': min(percentage, 100),
+                'is_today': day_date == today
+            })
+        
+        # 5. Get Priority Breakdown
+        priority_breakdown = {
+            'high': today_tasks.filter(priority='high').count(),
+            'medium': today_tasks.filter(priority='medium').count(),
+            'low': today_tasks.filter(priority='low').count(),
+        }
+        
+        # 6. Get Recent Activity (last 5 actions)
+        recent_activity = []
+        recent_logs = TimeLog.objects.filter(
+            technician=technician
+        ).select_related('task').order_by('-updated_at')[:5]
+        
+        for log in recent_logs:
+            if log.departed_at:
+                recent_activity.append({
+                    'time': log.departed_at.strftime('%I:%M %p'),
+                    'action': f'Completed {log.task.task_number}',
+                    'timestamp': log.departed_at.isoformat()
+                })
+            elif log.lunch_ended_at:
+                recent_activity.append({
+                    'time': log.lunch_ended_at.strftime('%I:%M %p'),
+                    'action': f'Ended lunch break',
+                    'timestamp': log.lunch_ended_at.isoformat()
+                })
+            elif log.lunch_started_at:
+                recent_activity.append({
+                    'time': log.lunch_started_at.strftime('%I:%M %p'),
+                    'action': f'Started lunch break',
+                    'timestamp': log.lunch_started_at.isoformat()
+                })
+            elif log.arrived_at:
+                recent_activity.append({
+                    'time': log.arrived_at.strftime('%I:%M %p'),
+                    'action': f'Arrived at {log.task.task_number}',
+                    'timestamp': log.arrived_at.isoformat()
+                })
+            elif log.travel_started_at:
+                recent_activity.append({
+                    'time': log.travel_started_at.strftime('%I:%M %p'),
+                    'action': f'Started travel to {log.task.task_number}',
+                    'timestamp': log.travel_started_at.isoformat()
+                })
+        
+        # Build response
+        dashboard_data = {
+            'stats': {
+                'today_tasks': today_tasks_count,
+                'active_tasks': active_tasks_count,
+                'completed_today': completed_today,
+                'hours_today': float(today_hours),
+                'hours_this_week': float(hours_this_week),
+                'completion_rate': completion_rate
+            },
+            'current_task': current_task_data,
+            'today_tasks': today_tasks_list,
+            'weekly_hours': weekly_hours,
+            'priority_breakdown': priority_breakdown,
+            'recent_activity': recent_activity[:5]  # Limit to 5
+        }
+        
+        return success_response(
+            data=dashboard_data,
+            message='Dashboard data retrieved successfully'
+        )
+    
+    except Exception as e:
+        logger.error(f"Failed to retrieve dashboard data: {str(e)}", exc_info=True)
+        return error_response(
+            message='Failed to retrieve dashboard data',
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
