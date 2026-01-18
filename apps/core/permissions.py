@@ -47,6 +47,7 @@ def ensure_tenant_role(request):
     """
     Ensure tenant_role is set on request.
     This is needed because DRF authentication happens after middleware.
+    Checks both TenantMember (for staff) and Customer (for customers).
     """
     if not hasattr(request, 'tenant_role') or request.tenant_role is None:
         from django.db import connection
@@ -64,6 +65,7 @@ def ensure_tenant_role(request):
             return
         
         try:
+            # Check TenantMember in public schema
             with schema_context('public'):
                 # First try to find membership for current tenant
                 membership = TenantMember.objects.filter(
@@ -86,8 +88,21 @@ def ensure_tenant_role(request):
                     request.tenant_role = membership.role
                     request.tenant_membership = membership
                     logger.info(f"Set tenant_role={membership.role} for user {request.user.email}")
-                else:
-                    logger.warning(f"No active membership found for user {request.user.email}")
+            
+            # If no membership found, check if user is a customer in the current tenant schema
+            if not hasattr(request, 'tenant_role') or request.tenant_role is None:
+                try:
+                    from apps.facilities.models import Customer
+                    # Query in the current tenant schema (not public)
+                    customer = Customer.objects.filter(user=request.user).first()
+                    if customer:
+                        request.tenant_role = 'customer'
+                        request.customer_profile = customer
+                        logger.info(f"Set tenant_role=customer for user {request.user.email}")
+                    else:
+                        logger.warning(f"No active membership or customer profile found for user {request.user.email}")
+                except Exception as customer_error:
+                    logger.warning(f"Error checking customer profile: {str(customer_error)}")
         except Exception as e:
             logger.error(f"Error getting tenant membership: {str(e)}", exc_info=True)
 

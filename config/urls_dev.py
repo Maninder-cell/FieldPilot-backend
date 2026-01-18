@@ -13,6 +13,7 @@ from django.views.generic import RedirectView
 from drf_spectacular.views import SpectacularSwaggerView, SpectacularRedocView
 from config.schema_views import PublicSchemaView, TenantSchemaView
 from apps.core.views import swagger_landing
+from apps.facilities import views as facilities_views
 
 urlpatterns = [
     # API Documentation Landing Page
@@ -36,6 +37,12 @@ urlpatterns = [
     path('api/v1/auth/', include('apps.authentication.urls')),
     path('api/v1/onboarding/', include('apps.tenants.urls')),
     path('api/v1/billing/', include('apps.billing.urls')),
+    
+    # Customer invitation endpoints (public - no tenant required)
+    path('api/v1/customers/invitations/verify/', facilities_views.verify_customer_invitation, name='verify-customer-invitation-public'),
+    path('api/v1/customers/invitations/accept/', facilities_views.accept_customer_invitation, name='accept-customer-invitation-public'),
+    
+    # Tenant-specific endpoints
     path('api/v1/', include('apps.facilities.urls')),
     path('api/v1/', include('apps.equipment.urls')),
     path('api/v1/tasks/', include('apps.tasks.urls')),

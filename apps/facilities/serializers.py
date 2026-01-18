@@ -70,6 +70,20 @@ class UpdateCustomerSerializer(serializers.ModelSerializer):
             'name', 'email', 'phone', 'company_name', 'contact_person',
             'address', 'city', 'state', 'zip_code', 'country', 'status', 'notes'
         ]
+        extra_kwargs = {
+            'name': {'required': False},
+            'email': {'required': False},
+            'phone': {'required': False},
+            'company_name': {'required': False},
+            'contact_person': {'required': False},
+            'address': {'required': False},
+            'city': {'required': False},
+            'state': {'required': False},
+            'zip_code': {'required': False},
+            'country': {'required': False},
+            'status': {'required': False},
+            'notes': {'required': False},
+        }
     
     def validate_email(self, value):
         """
@@ -95,25 +109,32 @@ class CustomerInvitationSerializer(serializers.ModelSerializer):
     """
     Serializer for CustomerInvitation model.
     """
-    customer_name = serializers.CharField(source='customer.name', read_only=True)
-    invited_by_name = serializers.CharField(source='invited_by.full_name', read_only=True)
+    customer = CustomerSerializer(read_only=True)
+    invited_by = serializers.SerializerMethodField()
     is_valid = serializers.SerializerMethodField()
     
     class Meta:
         model = CustomerInvitation
         fields = [
-            'id', 'customer', 'customer_name', 'email', 'token', 'status',
-            'invited_by', 'invited_by_name', 'is_valid',
+            'id', 'customer', 'email', 'token', 'status',
+            'invited_by', 'is_valid',
             'created_at', 'expires_at', 'accepted_at'
         ]
         read_only_fields = [
-            'id', 'token', 'status', 'invited_by', 'created_at',
+            'id', 'token', 'status', 'created_at',
             'expires_at', 'accepted_at'
         ]
+    
+    def get_invited_by(self, obj):
+        """Get invited by user's full name."""
+        if obj.invited_by:
+            return obj.invited_by.full_name
+        return None
     
     def get_is_valid(self, obj):
         """Check if invitation is still valid."""
         return obj.is_valid()
+
 
 
 class InviteCustomerSerializer(serializers.Serializer):

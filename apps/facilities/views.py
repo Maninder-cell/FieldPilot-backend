@@ -14,6 +14,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter
 import logging
 
 from .models import Customer, CustomerInvitation, Facility, Building, Location
+from .emails import send_customer_invitation_email
 from .serializers import (
     CustomerSerializer, CreateCustomerSerializer, UpdateCustomerSerializer,
     CustomerInvitationSerializer, InviteCustomerSerializer, AcceptInvitationSerializer,
@@ -314,8 +315,8 @@ def customer_invite(request):
                 invited_by=request.user
             )
             
-            # TODO: Send invitation email
-            # send_customer_invitation_email(invitation)
+            # Send invitation email
+            send_customer_invitation_email(invitation)
             
             logger.info(f"Customer invitation sent: {email} by {request.user.email}")
             
@@ -487,6 +488,69 @@ def accept_customer_invitation(request):
         logger.error(f"Failed to accept invitation: {str(e)}", exc_info=True)
         return error_response(
             message='Failed to accept invitation',
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Customers'],
+    summary='Get or update customer profile',
+    description='Get the authenticated customer\'s profile information or update it',
+    request=UpdateCustomerSerializer,
+    responses={
+        200: CustomerSerializer,
+        400: {'description': 'Invalid data or not a customer'},
+        404: {'description': 'Customer profile not found'},
+    }
+)
+@api_view(['GET', 'PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def update_customer_profile(request):
+    """
+    Get or update customer profile.
+    Only accessible by customers (users with linked customer profiles).
+    """
+    try:
+        # Check if user has a customer profile
+        if not hasattr(request.user, 'customer_profile') or not request.user.customer_profile:
+            return error_response(
+                message='No customer profile found for this user',
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+        
+        customer = request.user.customer_profile
+        
+        # GET request - return customer profile
+        if request.method == 'GET':
+            return success_response(
+                data=CustomerSerializer(customer).data,
+                message='Customer profile retrieved successfully'
+            )
+        
+        # PUT/PATCH request - update customer profile
+        # Use partial update for PATCH
+        partial = request.method == 'PATCH'
+        serializer = UpdateCustomerSerializer(customer, data=request.data, partial=partial)
+        
+        if not serializer.is_valid():
+            return error_response(
+                message='Invalid customer data',
+                details=serializer.errors,
+                status_code=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer.save()
+        
+        logger.info(f"Customer profile updated: {customer.email} by {request.user.email}")
+        
+        return success_response(
+            data=CustomerSerializer(customer).data,
+            message='Profile updated successfully'
+        )
+    except Exception as e:
+        logger.error(f"Failed to get/update customer profile: {str(e)}", exc_info=True)
+        return error_response(
+            message='Failed to process request',
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

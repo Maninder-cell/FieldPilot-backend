@@ -157,8 +157,8 @@ def register(request):
         with transaction.atomic():
             user = serializer.save()
             
-            # Create user profile
-            UserProfile.objects.create(user=user)
+            # Create user profile if it doesn't exist
+            UserProfile.objects.get_or_create(user=user)
             
             # Generate JWT tokens
             refresh = RefreshToken.for_user(user)
@@ -252,6 +252,7 @@ def login(request):
         
         # Get tenant membership information
         from apps.tenants.models import TenantMember
+        from django.db import connection
         tenant_membership = None
         tenant_data = None
         
@@ -273,8 +274,40 @@ def login(request):
                     'id': str(membership.tenant.id),
                     'name': membership.tenant.name,
                     'slug': membership.tenant.slug,
-                    'domain': membership.tenant.domain,
                 }
+            else:
+                # Check if user is a customer (customers don't have TenantMember records)
+                # We need to find which tenant schema has this customer
+                from apps.tenants.models import Tenant
+                from django_tenants.utils import schema_context
+                
+                logger.info(f"Checking customer profile for user: {user.email}")
+                
+                for tenant in Tenant.objects.all():
+                    try:
+                        logger.info(f"Checking tenant: {tenant.slug}")
+                        with schema_context(tenant.schema_name):
+                            from apps.facilities.models import Customer
+                            customer = Customer.objects.filter(user=user).first()
+                            if customer:
+                                # Found the customer's tenant
+                                logger.info(f"Found customer in tenant: {tenant.slug}")
+                                tenant_data = {
+                                    'id': str(tenant.id),
+                                    'name': tenant.name,
+                                    'slug': tenant.slug,
+                                }
+                                tenant_membership = {
+                                    'role': 'customer',
+                                    'employee_id': '',
+                                    'department': '',
+                                    'job_title': 'Customer',
+                                }
+                                break
+                    except Exception as ex:
+                        logger.warning(f"Error checking tenant {tenant.slug}: {str(ex)}")
+                        continue
+                        
         except Exception as e:
             logger.warning(f"Could not fetch tenant membership for {user.email}: {str(e)}")
         

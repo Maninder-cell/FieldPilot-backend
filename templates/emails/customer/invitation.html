@@ -1,0 +1,123 @@
+{% extends "emails/base.html" %}
+
+{% block title %}You're Invited to {{ company_name }} Customer Portal{% endblock %}
+
+{% block content %}
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+    <!-- Greeting -->
+    <tr>
+        <td style="padding: 0 0 20px 0;">
+            <h2 style="margin: 0; font-size: 24px; font-weight: 600; color: #111827;">
+                Welcome to {{ company_name }}! 🎉
+            </h2>
+        </td>
+    </tr>
+    
+    <!-- Message -->
+    <tr>
+        <td style="padding: 0 0 30px 0; font-size: 16px; line-height: 24px; color: #374151;">
+            <p style="margin: 0 0 15px 0;">Hi {{ customer_name }},</p>
+            <p style="margin: 0 0 15px 0;">
+                <strong>{{ inviter_name }}</strong> has invited you to access the <strong>{{ company_name }}</strong> Customer Portal on FieldPilot.
+            </p>
+            <p style="margin: 0 0 15px 0;">
+                Through the portal, you can:
+            </p>
+            <ul style="margin: 0 0 15px 0; padding-left: 20px;">
+                <li style="margin-bottom: 8px;">Submit and track service requests</li>
+                <li style="margin-bottom: 8px;">View your equipment and maintenance history</li>
+                <li style="margin-bottom: 8px;">Communicate with our service team</li>
+                <li style="margin-bottom: 8px;">Access reports and documentation</li>
+            </ul>
+        </td>
+    </tr>
+    
+    <!-- Invitation Details Box -->
+    <tr>
+        <td style="padding: 0 0 30px 0;">
+            <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                <tr>
+                    <td style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 12px; padding: 30px;">
+                        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                            <tr>
+                                <td style="padding: 0 0 15px 0; text-align: center;">
+                                    <p style="margin: 0; font-size: 18px; font-weight: 600; color: #ffffff;">
+                                        {{ company_name }} Customer Portal
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <td style="padding: 0 0 15px 0; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+                                        <tr>
+                                            <td style="padding: 5px 0; color: rgba(255,255,255,0.8); font-size: 14px;">
+                                                <strong style="color: #ffffff;">Email:</strong>
+                                            </td>
+                                            <td style="padding: 5px 0; color: #ffffff; font-size: 14px; text-align: right;">
+                                                {{ email }}
+                                            </td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding: 5px 0; color: rgba(255,255,255,0.8); font-size: 14px;">
+                                                <strong style="color: #ffffff;">Invited by:</strong>
+                                            </td>
+                                            <td style="padding: 5px 0; color: #ffffff; font-size: 14px; text-align: right;">
+                                                {{ inviter_name }}
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    
+    <!-- CTA Button -->
+    <tr>
+        <td style="padding: 0 0 30px 0; text-align: center;">
+            <a href="{{ invitation_url }}" style="display: inline-block; padding: 16px 40px; background-color: #10b981; color: #ffffff; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                Accept Invitation & Register
+            </a>
+        </td>
+    </tr>
+    
+    <!-- Invitation Token -->
+    {% if invitation_token %}
+    <tr>
+        <td style="padding: 0 0 20px 0;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280; text-align: center;">
+                Or use this invitation token:
+            </p>
+            <div style="background-color: #f3f4f6; border: 1px solid #d1d5db; border-radius: 8px; padding: 12px; word-break: break-all;">
+                <p style="margin: 0; font-size: 12px; color: #111827; font-family: 'Courier New', monospace; text-align: center;">
+                    {{ invitation_token }}
+                </p>
+            </div>
+        </td>
+    </tr>
+    {% endif %}
+    
+    <!-- Expiry Notice -->
+    <tr>
+        <td style="padding: 20px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px;">
+            <p style="margin: 0; font-size: 14px; line-height: 20px; color: #92400e;">
+                <strong style="color: #78350f;">⏰ Time Sensitive:</strong><br>
+                This invitation will expire in {{ expiry_days|default:"7" }} days. Accept it soon to get started!
+            </p>
+        </td>
+    </tr>
+    
+    <!-- Support -->
+    <tr>
+        <td style="padding: 30px 0 0 0; text-align: center;">
+            <p style="margin: 0 0 10px 0; font-size: 14px; color: #6b7280;">
+                Questions about this invitation?<br>
+                Contact us at <a href="mailto:support@fieldrino.com" style="color: #10b981; text-decoration: none;">support@fieldrino.com</a>
+            </p>
+        </td>
+    </tr>
+</table>
+{% endblock %}
