@@ -969,7 +969,7 @@ export default PaymentPage;
 - Verify `STRIPE_WEBHOOK_SECRET` is correct
 - Check Stripe Dashboard > Webhooks for delivery status
 - Review webhook event logs in Stripe Dashboard
-- Check application logs: `docker-compose logs -f web`
+- Check application logs: `docker compose logs -f web`
 
 #### Subscription Not Renewing
 - Stripe handles renewals automatically - no action needed

@@ -29,10 +29,10 @@ print_error() {
     echo -e "${RED}✗ ${1}${NC}"
 }
 
-# Check if docker-compose is installed
+# Check if docker compose is installed
 check_docker() {
-    if ! command -v docker-compose &> /dev/null; then
-        print_error "docker-compose is not installed"
+    if ! docker compose version &> /dev/null; then
+        print_error "docker compose is not installed"
         exit 1
     fi
 }
@@ -40,7 +40,7 @@ check_docker() {
 # Start all services
 start_all() {
     print_info "Starting all services..."
-    docker-compose up -d
+    docker compose up -d
     print_success "All services started"
     print_info "Access points:"
     echo "  - Django Web: http://localhost:8000"
@@ -52,7 +52,7 @@ start_all() {
 # Stop all services
 stop_all() {
     print_info "Stopping all services..."
-    docker-compose down
+    docker compose down
     print_success "All services stopped"
 }
 
@@ -64,7 +64,7 @@ restart_service() {
         exit 1
     fi
     print_info "Restarting $1..."
-    docker-compose restart "$1"
+    docker compose restart "$1"
     print_success "$1 restarted"
 }
 
@@ -72,17 +72,17 @@ restart_service() {
 view_logs() {
     if [ -z "$1" ]; then
         print_info "Showing logs for all services..."
-        docker-compose logs -f
+        docker compose logs -f
     else
         print_info "Showing logs for $1..."
-        docker-compose logs -f "$1"
+        docker compose logs -f "$1"
     fi
 }
 
 # Check service status
 check_status() {
     print_info "Service status:"
-    docker-compose ps
+    docker compose ps
 }
 
 # Execute Django command
@@ -92,7 +92,7 @@ django_command() {
         exit 1
     fi
     print_info "Executing: python manage.py $*"
-    docker-compose exec web python manage.py "$@"
+    docker compose exec web python manage.py "$@"
 }
 
 # Execute Celery command
@@ -102,26 +102,26 @@ celery_command() {
         exit 1
     fi
     print_info "Executing: celery -A config $*"
-    docker-compose exec web celery -A config "$@"
+    docker compose exec web celery -A config "$@"
 }
 
 # Shell access
 shell_access() {
     service="${1:-web}"
     print_info "Opening shell in $service..."
-    docker-compose exec "$service" /bin/bash
+    docker compose exec "$service" /bin/bash
 }
 
 # Django shell
 django_shell() {
     print_info "Opening Django shell..."
-    docker-compose exec web python manage.py shell
+    docker compose exec web python manage.py shell
 }
 
 # Build containers
 build_containers() {
     print_info "Building containers..."
-    docker-compose build
+    docker compose build
     print_success "Containers built"
 }
 
@@ -132,7 +132,7 @@ cleanup() {
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         print_info "Cleaning up..."
-        docker-compose down -v --rmi all
+        docker compose down -v --rmi all
         print_success "Cleanup complete"
     else
         print_info "Cleanup cancelled"
@@ -143,7 +143,7 @@ cleanup() {
 scale_workers() {
     count="${1:-2}"
     print_info "Scaling celery workers to $count instances..."
-    docker-compose up -d --scale celery-worker="$count"
+    docker compose up -d --scale celery-worker="$count"
     print_success "Workers scaled to $count"
 }
 

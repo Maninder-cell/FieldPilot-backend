@@ -35,12 +35,12 @@ else
     exit 1
 fi
 
-# Step 2: Check docker-compose
-print_status "Checking docker-compose..."
-if command -v docker-compose &> /dev/null; then
-    print_success "docker-compose found"
+# Step 2: Check docker compose
+print_status "Checking docker compose..."
+if docker compose version &> /dev/null; then
+    print_success "docker compose found"
 else
-    print_error "docker-compose not found. Install from: https://docs.docker.com/compose/install/"
+    print_error "docker compose not found. Install from: https://docs.docker.com/compose/install/"
     exit 1
 fi
 # Step 3: Check .env file
@@ -83,16 +83,16 @@ fi
 
 # Step 4: Build Docker images (if needed)
 print_status "Building Docker images..."
-docker-compose build --quiet 2>/dev/null || {
+docker compose build --quiet 2>/dev/null || {
     print_warning "Build had warnings (continuing...)"
 }
 print_success "Docker images ready"
 
 # Step 5: Start Docker services
 print_status "Starting Docker services..."
-docker-compose up -d 2>/dev/null || {
+docker compose up -d 2>/dev/null || {
     print_error "Failed to start some containers"
-    docker-compose ps
+    docker compose ps
     exit 1
 }
 print_success "Docker services started"
@@ -101,7 +101,7 @@ print_success "Docker services started"
 print_status "Waiting for PostgreSQL..."
 MAX_TRIES=30
 TRIES=0
-until docker-compose exec -T postgres pg_isready -U fieldrino_user > /dev/null 2>&1 || [ $TRIES -eq $MAX_TRIES ]; do
+until docker compose exec -T postgres pg_isready -U fieldrino_user > /dev/null 2>&1 || [ $TRIES -eq $MAX_TRIES ]; do
     TRIES=$((TRIES+1))
     echo -n "."
     sleep 1
@@ -109,7 +109,7 @@ done
 echo ""
 if [ $TRIES -eq $MAX_TRIES ]; then
     print_error "PostgreSQL not ready after 30s"
-    print_warning "Check logs: docker-compose logs postgres"
+    print_warning "Check logs: docker compose logs postgres"
 else
     print_success "PostgreSQL ready (${TRIES}s)"
 fi
@@ -117,21 +117,21 @@ fi
 # Step 7: Wait for Redis
 print_status "Waiting for Redis..."
 sleep 2
-docker-compose exec -T redis redis-cli ping > /dev/null 2>&1 && print_success "Redis ready" || print_warning "Redis not responding"
+docker compose exec -T redis redis-cli ping > /dev/null 2>&1 && print_success "Redis ready" || print_warning "Redis not responding"
 
 # Step 8: Run migrations inside Docker container
 print_status "Running database migrations..."
-docker-compose exec -T web python manage.py migrate_schemas --shared 2>/dev/null || {
+docker compose exec -T web python manage.py migrate_schemas --shared 2>/dev/null || {
     print_warning "Shared migrations failed (continuing...)"
 }
-docker-compose exec -T web python manage.py migrate_schemas --tenant 2>/dev/null || {
+docker compose exec -T web python manage.py migrate_schemas --tenant 2>/dev/null || {
     print_warning "Tenant migrations failed (continuing...)"
 }
 print_success "Migrations completed"
 
 # Step 9: Setup public tenant
 print_status "Setting up public tenant..."
-docker-compose exec -T web python manage.py shell <<'EOF' 2>/dev/null || print_warning "Tenant setup failed (continuing...)"
+docker compose exec -T web python manage.py shell <<'EOF' 2>/dev/null || print_warning "Tenant setup failed (continuing...)"
 from apps.tenants.models import Tenant, Domain
 
 public_tenant, created = Tenant.objects.get_or_create(
@@ -150,21 +150,21 @@ EOF
 
 # Step 10: Seed subscription plans
 print_status "Seeding subscription plans..."
-docker-compose exec -T web python manage.py seed_plans > /dev/null 2>&1 || {
+docker compose exec -T web python manage.py seed_plans > /dev/null 2>&1 || {
     print_warning "Plan seeding failed (continuing...)"
 }
 print_success "Plans seeded"
 
 # Step 11: Collect static files
 print_status "Collecting static files..."
-docker-compose exec -T web python manage.py collectstatic --noinput > /dev/null 2>&1 || {
+docker compose exec -T web python manage.py collectstatic --noinput > /dev/null 2>&1 || {
     print_warning "Static collection failed (continuing...)"
 }
 print_success "Static files collected"
 
 # Step 12: Check all services
 print_status "Checking service status..."
-docker-compose ps
+docker compose ps
 
 # Check Celery services
 CELERY_WORKER_RUNNING=$(docker ps --filter "name=fieldrino_celery_worker" --filter "status=running" -q)
@@ -174,19 +174,19 @@ FLOWER_RUNNING=$(docker ps --filter "name=fieldrino_flower" --filter "status=run
 if [ -n "$CELERY_WORKER_RUNNING" ]; then
     print_success "Celery worker is running"
 else
-    print_warning "Celery worker not running (check: docker-compose logs celery-worker)"
+    print_warning "Celery worker not running (check: docker compose logs celery-worker)"
 fi
 
 if [ -n "$CELERY_BEAT_RUNNING" ]; then
     print_success "Celery beat is running"
 else
-    print_warning "Celery beat not running (check: docker-compose logs celery-beat)"
+    print_warning "Celery beat not running (check: docker compose logs celery-beat)"
 fi
 
 if [ -n "$FLOWER_RUNNING" ]; then
     print_success "Flower monitoring is running"
 else
-    print_warning "Flower not running (check: docker-compose logs flower)"
+    print_warning "Flower not running (check: docker compose logs flower)"
 fi
 
 # Success message
@@ -216,19 +216,19 @@ echo ""
 echo "⚙️  Background Tasks:"
 echo "   • Celery Worker:  Running in Docker"
 echo "   • Celery Beat:    Running in Docker (scheduled tasks)"
-echo "   • View logs:      docker-compose logs -f celery-worker"
+echo "   • View logs:      docker compose logs -f celery-worker"
 echo ""
 echo "🐳 Docker Commands:"
-echo "   • View logs:      docker-compose logs -f [service]"
-echo "   • Restart:        docker-compose restart [service]"
-echo "   • Stop all:       docker-compose down"
-echo "   • Django shell:   docker-compose exec web python manage.py shell"
+echo "   • View logs:      docker compose logs -f [service]"
+echo "   • Restart:        docker compose restart [service]"
+echo "   • Stop all:       docker compose down"
+echo "   • Django shell:   docker compose exec web python manage.py shell"
 echo ""
 echo "💡 Tip: Use './docker-manage.sh' for easier Docker management"
 echo ""
 echo "════════════════════════════════════════════════════════════"
 echo ""
 print_success "All services are running in Docker containers!"
-print_status "To view logs: docker-compose logs -f"
-print_status "To stop: docker-compose down"
+print_status "To view logs: docker compose logs -f"
+print_status "To stop: docker compose down"
 echo ""

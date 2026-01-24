@@ -97,7 +97,7 @@ fi
 
 # Step 7: Start only infrastructure services (not web)
 print_status "Starting infrastructure services (PostgreSQL, Redis, Celery)..."
-docker-compose up -d postgres redis celery-worker celery-beat flower cloudbeaver mailhog 2>/dev/null || {
+docker compose up -d postgres redis celery-worker celery-beat flower cloudbeaver mailhog 2>/dev/null || {
     print_error "Failed to start Docker services"
     exit 1
 }
@@ -107,7 +107,7 @@ print_success "Infrastructure services started"
 print_status "Waiting for PostgreSQL..."
 MAX_TRIES=30
 TRIES=0
-until docker-compose exec -T postgres pg_isready -U fieldrino_user > /dev/null 2>&1 || [ $TRIES -eq $MAX_TRIES ]; do
+until docker compose exec -T postgres pg_isready -U fieldrino_user > /dev/null 2>&1 || [ $TRIES -eq $MAX_TRIES ]; do
     TRIES=$((TRIES+1))
     echo -n "."
     sleep 1

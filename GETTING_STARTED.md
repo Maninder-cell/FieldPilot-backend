@@ -45,14 +45,14 @@ cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env
 
 # 3. Start all services
-docker-compose up -d
+docker compose up -d
 
 # 4. Run migrations
-docker-compose exec backend python manage.py migrate_schemas --shared
-docker-compose exec backend python manage.py migrate_schemas --tenant
+docker compose exec backend python manage.py migrate_schemas --shared
+docker compose exec backend python manage.py migrate_schemas --tenant
 
 # 5. Create admin user
-docker-compose exec backend python manage.py createsuperuser
+docker compose exec backend python manage.py createsuperuser
 
 # 6. Access the application
 # Frontend: http://localhost:3000
@@ -75,10 +75,10 @@ docker-compose exec backend python manage.py createsuperuser
 3. **Run Tests**
    ```bash
    # Backend tests
-   docker-compose exec backend python manage.py test
+   docker compose exec backend python manage.py test
    
    # Frontend tests
-   docker-compose exec frontend npm run test
+   docker compose exec frontend npm run test
    ```
 
 4. **Make Your First Contribution**
