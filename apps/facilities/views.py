@@ -25,7 +25,7 @@ from .serializers import (
 from apps.core.responses import success_response, error_response
 from apps.core.permissions import (
     IsAdminUser, IsAdminManagerOwner, MethodRolePermission, 
-    ensure_tenant_role, method_role_permissions
+    ensure_tenant_role, method_role_permissions, with_customer_tenant_context
 )
 from apps.tenants.decorators import check_tenant_permission
 
@@ -537,6 +537,7 @@ def accept_customer_invitation(request):
 )
 @api_view(['GET', 'PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
+@with_customer_tenant_context
 def update_customer_profile(request):
     """
     Get or update customer profile.
@@ -614,6 +615,7 @@ def update_customer_profile(request):
     GET=['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
     POST=['admin', 'manager', 'owner']
 )
+@with_customer_tenant_context
 def facility_list_create(request):
     """
     List facilities with pagination and filtering, or create a new facility.
@@ -722,6 +724,7 @@ def facility_list_create(request):
     PATCH=['admin', 'manager', 'owner'],
     DELETE=['admin', 'manager', 'owner']
 )
+@with_customer_tenant_context
 def facility_detail(request, facility_id):
     """
     Retrieve, update, or delete a facility.
@@ -972,6 +975,7 @@ def facility_equipment(request, facility_id):
     GET=['admin', 'manager', 'owner', 'technician', 'employee', 'customer'],
     POST=['admin', 'manager', 'owner']
 )
+@with_customer_tenant_context
 def building_list_create(request):
     """
     List buildings with pagination and filtering, or create a new building.
@@ -1085,6 +1089,7 @@ def building_list_create(request):
     PATCH=['admin', 'manager', 'owner'],
     DELETE=['admin', 'manager', 'owner']
 )
+@with_customer_tenant_context
 def building_detail(request, building_id):
     """
     Retrieve, update, or delete a building.

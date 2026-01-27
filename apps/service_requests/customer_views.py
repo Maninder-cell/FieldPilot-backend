@@ -17,7 +17,7 @@ from .models import ServiceRequest
 from apps.equipment.models import Equipment
 from apps.tasks.models import Task
 from apps.core.responses import success_response, error_response
-from apps.core.permissions import ensure_tenant_role
+from apps.core.permissions import ensure_tenant_role, with_customer_tenant_context
 
 logger = logging.getLogger(__name__)
 
@@ -78,18 +78,13 @@ logger = logging.getLogger(__name__)
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@with_customer_tenant_context
 def customer_equipment_list(request):
     """
     List customer's equipment.
     Task 12.1: Customer equipment endpoints
     """
-    # Only customers can access
-    ensure_tenant_role(request)
-    if getattr(request, 'tenant_role', None) != 'customer':
-        return error_response(
-            message='This endpoint is for customers only',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
+    # Role check is done by decorator
     
     # Get customer's equipment
     queryset = Equipment.objects.filter(customer__user=request.user)
@@ -189,18 +184,13 @@ def customer_equipment_list(request):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@with_customer_tenant_context
 def customer_equipment_detail(request, equipment_id):
     """
     Get equipment details.
     Task 12.1: Customer equipment endpoints
     """
-    # Only customers can access
-    ensure_tenant_role(request)
-    if getattr(request, 'tenant_role', None) != 'customer':
-        return error_response(
-            message='This endpoint is for customers only',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
+    # Role check is done by decorator
     
     try:
         equipment = Equipment.objects.get(pk=equipment_id)
@@ -302,18 +292,13 @@ def customer_equipment_detail(request, equipment_id):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@with_customer_tenant_context
 def customer_equipment_history(request, equipment_id):
     """
     Get equipment service history.
     Task 12.2: Equipment service history endpoint
     """
-    # Only customers can access
-    ensure_tenant_role(request)
-    if getattr(request, 'tenant_role', None) != 'customer':
-        return error_response(
-            message='This endpoint is for customers only',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
+    # Role check is done by decorator
     
     try:
         equipment = Equipment.objects.get(pk=equipment_id)
@@ -429,18 +414,13 @@ def customer_equipment_history(request, equipment_id):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@with_customer_tenant_context
 def customer_equipment_upcoming(request, equipment_id):
     """
     Get upcoming services for equipment.
     Task 12.3: Upcoming services endpoint
     """
-    # Only customers can access
-    ensure_tenant_role(request)
-    if getattr(request, 'tenant_role', None) != 'customer':
-        return error_response(
-            message='This endpoint is for customers only',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
+    # Role check is done by decorator
     
     try:
         equipment = Equipment.objects.get(pk=equipment_id)
@@ -573,18 +553,13 @@ def customer_equipment_upcoming(request, equipment_id):
 )
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+@with_customer_tenant_context
 def customer_dashboard(request):
     """
     Get customer dashboard metrics.
     Task 13.1: Dashboard metrics endpoint
     """
-    # Only customers can access
-    ensure_tenant_role(request)
-    if getattr(request, 'tenant_role', None) != 'customer':
-        return error_response(
-            message='This endpoint is for customers only',
-            status_code=status.HTTP_403_FORBIDDEN
-        )
+    # Role check is done by decorator
     
     # Get request counts
     requests_pending = ServiceRequest.objects.filter(

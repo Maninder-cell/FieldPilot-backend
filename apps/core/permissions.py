@@ -43,6 +43,94 @@ def method_role_permissions(**role_map):
     return decorator
 
 
+def get_customer_tenant(user):
+    """
+    Find which tenant a customer user belongs to.
+    Searches across all tenant schemas to find the customer profile.
+    
+    Returns:
+        tuple: (tenant, customer) or (None, None) if not found
+    """
+    from apps.tenants.models import Tenant
+    from django_tenants.utils import schema_context
+    
+    if not user or not user.is_authenticated:
+        return None, None
+    
+    # Search across all active tenants
+    tenants = Tenant.objects.filter(is_active=True)
+    
+    for tenant in tenants:
+        try:
+            with schema_context(tenant.schema_name):
+                from apps.facilities.models import Customer
+                customer = Customer.objects.filter(user=user).first()
+                if customer:
+                    logger.info(f"Found customer profile for {user.email} in tenant {tenant.slug}")
+                    return tenant, customer
+        except Exception as e:
+            logger.debug(f"Error checking tenant {tenant.slug} for customer: {str(e)}")
+            continue
+    
+    return None, None
+
+
+def with_customer_tenant_context(view_func):
+    """
+    Decorator to ensure customer views run in the correct tenant schema context.
+    This is needed for customer endpoints that may be accessed without tenant domain.
+    
+    For staff users (admin/manager/etc), it uses the current tenant context.
+    For customer users, it finds and switches to their tenant schema.
+    
+    Usage:
+        @api_view(['GET'])
+        @permission_classes([IsAuthenticated])
+        @with_customer_tenant_context
+        def customer_dashboard(request):
+            ...
+    """
+    from functools import wraps
+    from django.db import connection
+    from django_tenants.utils import schema_context
+    from rest_framework import status as http_status
+    from apps.core.responses import error_response
+    
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        # Ensure tenant role is set
+        ensure_tenant_role(request)
+        
+        user_role = getattr(request, 'tenant_role', None)
+        
+        # If user is a customer, ensure we're in their tenant context
+        if user_role == 'customer':
+            customer_tenant = getattr(request, 'customer_tenant', None)
+            
+            if not customer_tenant:
+                return error_response(
+                    message='Customer tenant not found',
+                    status_code=http_status.HTTP_404_NOT_FOUND
+                )
+            
+            # Execute view in customer's tenant schema
+            with schema_context(customer_tenant.schema_name):
+                return view_func(request, *args, **kwargs)
+        else:
+            # For staff users, check if we have tenant context
+            tenant = getattr(connection, 'tenant', None)
+            if not tenant:
+                return error_response(
+                    message='Tenant context required',
+                    status_code=http_status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Execute view in current tenant context
+            return view_func(request, *args, **kwargs)
+    
+    return wrapper
+
+
 def ensure_tenant_role(request):
     """
     Ensure tenant_role is set on request.
@@ -56,10 +144,6 @@ def ensure_tenant_role(request):
         
         tenant = getattr(connection, 'tenant', None)
         
-        if not tenant:
-            logger.warning(f"No tenant found in connection for user {request.user}")
-            return
-        
         if not request.user.is_authenticated:
             logger.warning("User is not authenticated")
             return
@@ -68,11 +152,14 @@ def ensure_tenant_role(request):
             # Check TenantMember in public schema
             with schema_context('public'):
                 # First try to find membership for current tenant
-                membership = TenantMember.objects.filter(
-                    tenant_id=tenant.id,
-                    user=request.user,
-                    is_active=True
-                ).first()
+                if tenant:
+                    membership = TenantMember.objects.filter(
+                        tenant_id=tenant.id,
+                        user=request.user,
+                        is_active=True
+                    ).first()
+                else:
+                    membership = None
                 
                 if not membership:
                     # Try user's first active membership
@@ -87,22 +174,35 @@ def ensure_tenant_role(request):
                 if membership:
                     request.tenant_role = membership.role
                     request.tenant_membership = membership
+                    # Also set customer_tenant for customer role
+                    if membership.role == 'customer':
+                        request.customer_tenant = membership.tenant
                     logger.info(f"Set tenant_role={membership.role} for user {request.user.email}")
             
-            # If no membership found, check if user is a customer in the current tenant schema
+            # If no membership found, check if user is a customer
             if not hasattr(request, 'tenant_role') or request.tenant_role is None:
-                try:
-                    from apps.facilities.models import Customer
-                    # Query in the current tenant schema (not public)
-                    customer = Customer.objects.filter(user=request.user).first()
-                    if customer:
+                # If we have a tenant context, check in that schema
+                if tenant:
+                    try:
+                        from apps.facilities.models import Customer
+                        customer = Customer.objects.filter(user=request.user).first()
+                        if customer:
+                            request.tenant_role = 'customer'
+                            request.customer_profile = customer
+                            request.customer_tenant = tenant
+                            logger.info(f"Set tenant_role=customer for user {request.user.email}")
+                    except Exception as customer_error:
+                        logger.warning(f"Error checking customer profile: {str(customer_error)}")
+                else:
+                    # No tenant context - search across all tenants for customer
+                    customer_tenant, customer = get_customer_tenant(request.user)
+                    if customer_tenant and customer:
                         request.tenant_role = 'customer'
                         request.customer_profile = customer
-                        logger.info(f"Set tenant_role=customer for user {request.user.email}")
+                        request.customer_tenant = customer_tenant
+                        logger.info(f"Set tenant_role=customer for user {request.user.email} in tenant {customer_tenant.slug}")
                     else:
                         logger.warning(f"No active membership or customer profile found for user {request.user.email}")
-                except Exception as customer_error:
-                    logger.warning(f"Error checking customer profile: {str(customer_error)}")
         except Exception as e:
             logger.error(f"Error getting tenant membership: {str(e)}", exc_info=True)
 

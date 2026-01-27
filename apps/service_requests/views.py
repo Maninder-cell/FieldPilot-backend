@@ -25,7 +25,7 @@ from .serializers import (
     UploadAttachmentSerializer, RequestActionSerializer
 )
 from apps.core.responses import success_response, error_response
-from apps.core.permissions import IsAdminUser, IsAdminManagerOwner, IsCustomerOnly, ensure_tenant_role, MethodRolePermission, method_role_permissions
+from apps.core.permissions import IsAdminUser, IsAdminManagerOwner, IsCustomerOnly, ensure_tenant_role, MethodRolePermission, method_role_permissions, with_customer_tenant_context
 from apps.equipment.models import Equipment
 from apps.tasks.models import Task, TaskAssignment, TaskAttachment
 from .permissions import IsRequestOwnerOrAdmin
@@ -59,6 +59,7 @@ logger = logging.getLogger(__name__)
     GET=['admin', 'manager', 'owner', 'customer'],
     POST=['admin', 'manager', 'owner', 'customer']
 )
+@with_customer_tenant_context
 def service_request_list_create(request):
     """
     List customer's service requests or create a new one.
@@ -187,6 +188,7 @@ def service_request_list_create(request):
 )
 @api_view(['GET', 'PATCH', 'DELETE'])
 @permission_classes([IsAuthenticated, IsRequestOwnerOrAdmin])
+@with_customer_tenant_context
 def service_request_detail(request, request_id):
     """
     Get, update, or delete a service request.
@@ -915,6 +917,7 @@ def request_attachments(request, request_id):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@with_customer_tenant_context
 def submit_feedback(request, request_id):
     """
     Submit customer feedback for a completed request.
@@ -1297,6 +1300,7 @@ def request_clarification(request, request_id):
 )
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
+@with_customer_tenant_context
 def respond_to_clarification(request, request_id):
     """
     Customer responds to clarification request.
