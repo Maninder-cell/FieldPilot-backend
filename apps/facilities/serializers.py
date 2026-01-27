@@ -190,23 +190,69 @@ class AcceptInvitationSerializer(serializers.Serializer):
     Serializer for accepting a customer invitation.
     """
     token = serializers.CharField(required=True)
+    tenant_slug = serializers.CharField(required=False, allow_blank=True)
     
-    def validate_token(self, value):
+    def validate(self, attrs):
         """
         Validate invitation token exists and is valid.
+        Multi-tenant aware: searches across all tenant schemas.
         """
-        try:
-            invitation = CustomerInvitation.objects.get(token=value)
-            
-            if not invitation.is_valid():
-                raise serializers.ValidationError(
-                    "This invitation has expired or is no longer valid."
-                )
-            
-            self.invitation = invitation
-            return value
-        except CustomerInvitation.DoesNotExist:
-            raise serializers.ValidationError("Invalid invitation token.")
+        from django.db import connection
+        from django_tenants.utils import schema_context
+        from apps.tenants.models import Tenant
+        
+        token = attrs.get('token')
+        tenant_slug = attrs.get('tenant_slug')
+        
+        # If tenant_slug is provided, search only in that tenant
+        if tenant_slug:
+            try:
+                tenant = Tenant.objects.get(slug=tenant_slug)
+                with schema_context(tenant.schema_name):
+                    invitation = CustomerInvitation.objects.get(token=token)
+                    
+                    if not invitation.is_valid():
+                        raise serializers.ValidationError({
+                            'token': "This invitation has expired or is no longer valid."
+                        })
+                    
+                    self.invitation = invitation
+                    self.tenant = tenant
+                    return attrs
+            except Tenant.DoesNotExist:
+                raise serializers.ValidationError({
+                    'tenant_slug': "Invalid tenant."
+                })
+            except CustomerInvitation.DoesNotExist:
+                raise serializers.ValidationError({
+                    'token': "Invalid invitation token."
+                })
+        
+        # If no tenant_slug, search across all tenants
+        tenants = Tenant.objects.filter(is_active=True)
+        
+        for tenant in tenants:
+            try:
+                with schema_context(tenant.schema_name):
+                    invitation = CustomerInvitation.objects.get(token=token)
+                    
+                    if not invitation.is_valid():
+                        raise serializers.ValidationError({
+                            'token': "This invitation has expired or is no longer valid."
+                        })
+                    
+                    self.invitation = invitation
+                    self.tenant = tenant
+                    return attrs
+            except CustomerInvitation.DoesNotExist:
+                continue
+        
+        # Token not found in any tenant
+        raise serializers.ValidationError({
+            'token': "Invalid invitation token."
+        })
+        
+        return attrs
 
 
 

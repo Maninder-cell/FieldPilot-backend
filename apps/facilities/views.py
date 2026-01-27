@@ -410,6 +410,8 @@ def verify_customer_invitation(request):
     Verify a customer invitation token.
     This is a public endpoint that customers can use to check if their invitation is valid
     before registering.
+    
+    Multi-tenant aware: searches across all tenant schemas to find the invitation.
     """
     serializer = AcceptInvitationSerializer(data=request.data)
     
@@ -421,10 +423,19 @@ def verify_customer_invitation(request):
         )
     
     try:
+        from django_tenants.utils import schema_context
+        
         invitation = serializer.invitation
+        tenant = serializer.tenant
+        
+        # Return invitation data with tenant context
+        with schema_context(tenant.schema_name):
+            invitation_data = CustomerInvitationSerializer(invitation).data
+            invitation_data['tenant_slug'] = tenant.slug
+            invitation_data['tenant_name'] = tenant.name
         
         return success_response(
-            data=CustomerInvitationSerializer(invitation).data,
+            data=invitation_data,
             message='Invitation is valid'
         )
     except Exception as e:
@@ -451,6 +462,9 @@ def accept_customer_invitation(request):
     """
     Accept a customer invitation.
     User must be authenticated to accept the invitation.
+    
+    Multi-tenant aware: searches across all tenant schemas to find the invitation,
+    then switches to that tenant's schema to accept it.
     """
     serializer = AcceptInvitationSerializer(data=request.data)
     
@@ -462,28 +476,46 @@ def accept_customer_invitation(request):
         )
     
     try:
+        from django_tenants.utils import schema_context
+        
+        invitation = serializer.invitation
+        tenant = serializer.tenant
+        
         with transaction.atomic():
-            invitation = serializer.invitation
-            
-            # Verify email matches
-            if invitation.email.lower() != request.user.email.lower():
-                return error_response(
-                    message='Invitation email does not match your account email',
-                    status_code=status.HTTP_400_BAD_REQUEST
+            # Switch to the tenant's schema to perform the acceptance
+            with schema_context(tenant.schema_name):
+                # Re-fetch the invitation in the correct schema context
+                invitation = CustomerInvitation.objects.get(token=serializer.validated_data['token'])
+                
+                # Verify email matches
+                if invitation.email.lower() != request.user.email.lower():
+                    return error_response(
+                        message='Invitation email does not match your account email',
+                        status_code=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Accept invitation and link user
+                invitation.accept(request.user)
+                
+                # Create tenant membership for the customer
+                from apps.tenants.models import TenantMember
+                TenantMember.objects.get_or_create(
+                    tenant=tenant,
+                    user=request.user,
+                    defaults={'role': 'customer'}
                 )
-            
-            # Accept invitation and link user
-            invitation.accept(request.user)
-            
-            logger.info(f"Customer invitation accepted: {invitation.email} by {request.user.email}")
-            
-            return success_response(
-                data={
-                    'customer': CustomerSerializer(invitation.customer).data,
-                    'invitation': CustomerInvitationSerializer(invitation).data
-                },
-                message='Invitation accepted successfully'
-            )
+                
+                logger.info(f"Customer invitation accepted: {invitation.email} by {request.user.email} for tenant {tenant.slug}")
+                
+                return success_response(
+                    data={
+                        'customer': CustomerSerializer(invitation.customer).data,
+                        'invitation': CustomerInvitationSerializer(invitation).data,
+                        'tenant_slug': tenant.slug,
+                        'tenant_name': tenant.name
+                    },
+                    message='Invitation accepted successfully'
+                )
     except Exception as e:
         logger.error(f"Failed to accept invitation: {str(e)}", exc_info=True)
         return error_response(
