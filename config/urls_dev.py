@@ -50,6 +50,9 @@ urlpatterns = [
     path('api/v1/reports/', include('apps.reports.urls')),
     path('api/v1/files/', include('apps.files.urls')),
     
+    # Organization Dashboard (tenant-specific)
+    path('api/v1/dashboard/', include('apps.tenants.urls_dashboard')),
+    
     # Health check
     path('health/', include('apps.core.urls')),
 ]

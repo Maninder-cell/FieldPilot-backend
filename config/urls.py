@@ -28,6 +28,7 @@ urlpatterns = [
     path('api/v1/service-requests/', include('apps.service_requests.urls')),
     path('api/v1/reports/', include('apps.reports.urls')),
     path('api/v1/files/', include('apps.files.urls')),
+    path('api/v1/dashboard/', include('apps.tenants.urls_dashboard')),
     path('health/', include('apps.core.urls')),
 ]
 

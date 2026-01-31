@@ -1897,7 +1897,7 @@ def organization_dashboard(request):
         facilities_count = Facility.objects.count()
         buildings_count = Building.objects.count()
         equipment_count = Equipment.objects.count()
-        customers_count = Customer.objects.filter(is_active=True).count()
+        customers_count = Customer.objects.filter(status='active').count()
         tasks_count = Task.objects.count()
         teams_count = TechnicianTeam.objects.filter(is_active=True).count()
         
