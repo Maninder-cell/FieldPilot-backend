@@ -41,6 +41,9 @@ urlpatterns = [
     path('profile/memberships/', user_tenant_memberships, name='user_tenant_memberships'),
     path('profile/update/', update_tenant_profile, name='update_tenant_profile'),
     
+    # Organization Dashboard
+    path('dashboard/', views.organization_dashboard, name='organization_dashboard'),
+    
     # Technician Wage Rates (Phase 2)
     path('technicians/wage-rates/', views.get_technician_wage_rates, name='get_technician_wage_rates'),
     path('technicians/wage-rates/create/', views.create_technician_wage_rate, name='create_technician_wage_rate'),

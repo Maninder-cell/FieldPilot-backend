@@ -1844,3 +1844,223 @@ def get_technician_wage_rate_history(request, technician_id):
             message="Failed to retrieve wage rate history",
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+# Organization Dashboard Endpoint
+
+@extend_schema(
+    tags=['Organization'],
+    summary='Get organization dashboard data',
+    description='Get all dashboard statistics and data in a single API call for the organization portal',
+    responses={
+        200: {'description': 'Dashboard data retrieved successfully'},
+        403: {'description': 'Permission denied'},
+    }
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def organization_dashboard(request):
+    """
+    Get comprehensive dashboard data for the organization portal.
+    Returns all stats, charts data, and recent activity in a single call.
+    
+    This endpoint is accessible from tenant subdomains only.
+    """
+    from django.db import connection
+    from django.db.models import Count, Q
+    from django.utils import timezone
+    from datetime import timedelta
+    
+    # Ensure we're on a tenant schema
+    if connection.schema_name == 'public':
+        return error_response(
+            message="This endpoint is only available from the organization portal",
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        # Check user has access to this tenant
+        try:
+            member = TenantMember.objects.get(user=request.user, is_active=True)
+        except TenantMember.DoesNotExist:
+            return error_response(
+                message="You are not a member of this organization",
+                status_code=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Import models
+        from apps.facilities.models import Facility, Building, Customer
+        from apps.equipment.models import Equipment
+        from apps.tasks.models import Task, TechnicianTeam
+        
+        # === COUNTS ===
+        facilities_count = Facility.objects.count()
+        buildings_count = Building.objects.count()
+        equipment_count = Equipment.objects.count()
+        customers_count = Customer.objects.filter(is_active=True).count()
+        tasks_count = Task.objects.count()
+        teams_count = TechnicianTeam.objects.filter(is_active=True).count()
+        
+        # Open tasks (status = new or pending)
+        open_tasks_count = Task.objects.filter(status__in=['new', 'pending']).count()
+        
+        # === TASK STATUS BREAKDOWN ===
+        task_status_counts = Task.objects.values('status').annotate(count=Count('id'))
+        task_status_data = []
+        status_colors = {
+            'new': '#3b82f6',
+            'pending': '#f59e0b', 
+            'closed': '#10b981',
+            'reopened': '#f97316',
+            'rejected': '#ef4444',
+        }
+        status_labels = {
+            'new': 'New',
+            'pending': 'Pending',
+            'closed': 'Closed',
+            'reopened': 'Reopened',
+            'rejected': 'Rejected',
+        }
+        total_tasks = sum(item['count'] for item in task_status_counts)
+        for item in task_status_counts:
+            if item['count'] > 0:
+                task_status_data.append({
+                    'status': status_labels.get(item['status'], item['status'].title()),
+                    'value': item['status'],
+                    'count': item['count'],
+                    'color': status_colors.get(item['status'], '#6b7280'),
+                    'percent': round(item['count'] / total_tasks * 100, 1) if total_tasks > 0 else 0
+                })
+        
+        # === TASK PRIORITY BREAKDOWN ===
+        task_priority_counts = Task.objects.values('priority').annotate(count=Count('id'))
+        task_priority_data = []
+        priority_colors = {
+            'critical': '#dc2626',
+            'high': '#f97316',
+            'medium': '#eab308',
+            'low': '#22c55e',
+        }
+        priority_labels = {
+            'critical': 'Critical',
+            'high': 'High',
+            'medium': 'Medium',
+            'low': 'Low',
+        }
+        for item in task_priority_counts:
+            if item['count'] > 0:
+                task_priority_data.append({
+                    'status': priority_labels.get(item['priority'], item['priority'].title()),
+                    'value': item['priority'],
+                    'count': item['count'],
+                    'color': priority_colors.get(item['priority'], '#6b7280'),
+                    'percent': round(item['count'] / total_tasks * 100, 1) if total_tasks > 0 else 0
+                })
+        
+        # === EQUIPMENT STATUS BREAKDOWN ===
+        equipment_status_counts = Equipment.objects.values('operational_status').annotate(count=Count('id'))
+        equipment_status_data = []
+        equipment_colors = {
+            'operational': '#10b981',
+            'maintenance': '#f59e0b',
+            'broken': '#ef4444',
+            'retired': '#6b7280',
+        }
+        equipment_labels = {
+            'operational': 'Operational',
+            'maintenance': 'Maintenance',
+            'broken': 'Broken',
+            'retired': 'Retired',
+        }
+        total_equipment = sum(item['count'] for item in equipment_status_counts)
+        for item in equipment_status_counts:
+            if item['count'] > 0:
+                equipment_status_data.append({
+                    'status': equipment_labels.get(item['operational_status'], item['operational_status'].title()),
+                    'value': item['operational_status'],
+                    'count': item['count'],
+                    'color': equipment_colors.get(item['operational_status'], '#6b7280'),
+                    'percent': round(item['count'] / total_equipment * 100, 1) if total_equipment > 0 else 0
+                })
+        
+        # === WEEKLY ACTIVITY ===
+        today = timezone.now().date()
+        day_of_week = today.weekday()  # Monday = 0
+        start_of_week = today - timedelta(days=day_of_week)
+        
+        weekly_activity = []
+        days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        
+        for i in range(7):
+            day_date = start_of_week + timedelta(days=i)
+            tasks_created = Task.objects.filter(
+                created_at__date=day_date
+            ).count()
+            equipment_created = Equipment.objects.filter(
+                created_at__date=day_date
+            ).count()
+            
+            weekly_activity.append({
+                'day': days[i],
+                'date': day_date.isoformat(),
+                'tasks': tasks_created,
+                'equipment': equipment_created,
+            })
+        
+        # === RECENT TASKS ===
+        recent_tasks = Task.objects.order_by('-created_at')[:5]
+        recent_tasks_data = []
+        for task in recent_tasks:
+            recent_tasks_data.append({
+                'id': str(task.id),
+                'task_number': task.task_number,
+                'title': task.title,
+                'status': task.status,
+                'priority': task.priority,
+                'created_at': task.created_at.isoformat(),
+            })
+        
+        # === RECENT EQUIPMENT ===
+        recent_equipment = Equipment.objects.order_by('-created_at')[:5]
+        recent_equipment_data = []
+        for eq in recent_equipment:
+            recent_equipment_data.append({
+                'id': str(eq.id),
+                'equipment_number': eq.equipment_number,
+                'name': eq.name,
+                'operational_status': eq.operational_status,
+                'equipment_type': eq.equipment_type,
+                'created_at': eq.created_at.isoformat(),
+            })
+        
+        # === BUILD RESPONSE ===
+        dashboard_data = {
+            'stats': {
+                'facilities_count': facilities_count,
+                'buildings_count': buildings_count,
+                'equipment_count': equipment_count,
+                'customers_count': customers_count,
+                'tasks_count': tasks_count,
+                'teams_count': teams_count,
+                'open_tasks_count': open_tasks_count,
+                'locations_count': 0,  # Add if you have locations model
+            },
+            'task_status': task_status_data,
+            'task_priority': task_priority_data,
+            'equipment_status': equipment_status_data,
+            'weekly_activity': weekly_activity,
+            'recent_tasks': recent_tasks_data,
+            'recent_equipment': recent_equipment_data,
+        }
+        
+        return success_response(
+            data=dashboard_data,
+            message="Dashboard data retrieved successfully"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to get organization dashboard: {str(e)}", exc_info=True)
+        return error_response(
+            message="Failed to retrieve dashboard data",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
