@@ -10,6 +10,15 @@ from .models import Customer, CustomerInvitation, Facility, Building, Location
 from apps.authentication.serializers import UserSerializer
 
 
+class CustomerMinimalSerializer(serializers.ModelSerializer):
+    """
+    Minimal serializer for Customer model.
+    """
+    class Meta:
+        model = Customer
+        fields = ['id', 'name', 'email']
+
+
 class CustomerSerializer(serializers.ModelSerializer):
     """
     Serializer for Customer model with all fields.
@@ -17,6 +26,9 @@ class CustomerSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
     is_active = serializers.ReadOnlyField()
     has_user_account = serializers.ReadOnlyField()
+    facilities_count = serializers.SerializerMethodField()
+    buildings_count = serializers.SerializerMethodField()
+    equipment_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Customer
@@ -24,9 +36,22 @@ class CustomerSerializer(serializers.ModelSerializer):
             'id', 'name', 'email', 'phone', 'company_name', 'contact_person',
             'address', 'city', 'state', 'zip_code', 'country', 'status',
             'user', 'notes', 'is_active', 'has_user_account',
+            'facilities_count', 'buildings_count', 'equipment_count',
             'created_by', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+    
+    def get_facilities_count(self, obj):
+        """Get count of facilities assigned to this customer."""
+        return obj.facilities.count()
+    
+    def get_buildings_count(self, obj):
+        """Get count of buildings assigned to this customer."""
+        return obj.buildings.count()
+    
+    def get_equipment_count(self, obj):
+        """Get count of equipment assigned to this customer."""
+        return obj.equipment_items.count()
 
 
 class CreateCustomerSerializer(serializers.ModelSerializer):
@@ -405,6 +430,7 @@ class FacilityListSerializer(serializers.ModelSerializer):
     Lightweight serializer for facility list views.
     """
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    customer = CustomerMinimalSerializer(read_only=True)
     buildings_count = serializers.ReadOnlyField()
     equipment_count = serializers.ReadOnlyField()
     
@@ -412,7 +438,7 @@ class FacilityListSerializer(serializers.ModelSerializer):
         model = Facility
         fields = [
             'id', 'name', 'code', 'facility_type', 'city', 'state',
-            'operational_status', 'customer_name', 'buildings_count',
+            'operational_status', 'customer_name', 'customer', 'buildings_count',
             'equipment_count', 'created_at'
         ]
 
@@ -581,13 +607,14 @@ class BuildingListSerializer(serializers.ModelSerializer):
     """
     facility_name = serializers.CharField(source='facility.name', read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    customer = CustomerMinimalSerializer(read_only=True)
     equipment_count = serializers.ReadOnlyField()
     
     class Meta:
         model = Building
         fields = [
             'id', 'name', 'code', 'building_type', 'facility_name',
-            'operational_status', 'customer_name', 'equipment_count', 'created_at'
+            'operational_status', 'customer_name', 'customer', 'equipment_count', 'created_at'
         ]
 
 

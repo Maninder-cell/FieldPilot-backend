@@ -6,7 +6,7 @@ This source code is proprietary and confidential.
 """
 from rest_framework import serializers
 from .models import Equipment
-from apps.facilities.serializers import BuildingSerializer, CustomerSerializer
+from apps.facilities.serializers import BuildingSerializer, CustomerSerializer, CustomerMinimalSerializer
 
 
 class EquipmentSerializer(serializers.ModelSerializer):
@@ -176,11 +176,12 @@ class EquipmentListSerializer(serializers.ModelSerializer):
     building_name = serializers.CharField(source='building.name', read_only=True)
     facility_name = serializers.CharField(source='facility.name', read_only=True)
     customer_name = serializers.CharField(source='customer.name', read_only=True)
+    customer = CustomerMinimalSerializer(read_only=True)
     
     class Meta:
         model = Equipment
         fields = [
             'id', 'equipment_number', 'name', 'equipment_type', 'manufacturer', 'model',
             'building_name', 'facility_name', 'operational_status', 'condition',
-            'customer_name', 'created_at'
+            'customer_name', 'customer', 'created_at'
         ]
