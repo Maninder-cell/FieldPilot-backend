@@ -217,11 +217,38 @@ class ServiceRequestSerializer(serializers.ModelSerializer):
     def get_converted_task(self, obj):
         """Get converted task details."""
         if obj.converted_task:
+            task = obj.converted_task
+            
+            # Get assignees (technicians assigned to this task)
+            assignees = []
+            for assignment in task.assignments.select_related('assignee').filter(assignee__isnull=False):
+                if assignment.assignee:
+                    assignees.append({
+                        'id': str(assignment.assignee.id),
+                        'full_name': assignment.assignee.full_name,
+                        'email': assignment.assignee.email,
+                    })
+            
+            # Get team assignment
+            team = None
+            team_assignment = task.assignments.select_related('team').filter(team__isnull=False).first()
+            if team_assignment and team_assignment.team:
+                team = {
+                    'id': str(team_assignment.team.id),
+                    'name': team_assignment.team.name,
+                }
+            
             return {
-                'id': str(obj.converted_task.id),
-                'task_number': obj.converted_task.task_number,
-                'status': obj.converted_task.status,
-                'status_display': obj.converted_task.get_status_display(),
+                'id': str(task.id),
+                'task_number': task.task_number,
+                'status': task.status,  # Administrative status
+                'status_display': task.get_status_display(),
+                'work_status': task.work_status,  # Work status for customer-facing
+                'work_status_display': task.get_work_status_display(),
+                'scheduled_start': task.scheduled_start,
+                'scheduled_end': task.scheduled_end,
+                'assignees': assignees,
+                'team': team,
             }
         return None
     
@@ -285,13 +312,35 @@ class CustomerServiceRequestSerializer(serializers.ModelSerializer):
         """Get converted task details (customer view)."""
         if obj.converted_task:
             task = obj.converted_task
+            
+            # Get assignees (technicians assigned to this task)
+            assignees = []
+            for assignment in task.assignments.select_related('assignee').filter(assignee__isnull=False):
+                if assignment.assignee:
+                    assignees.append({
+                        'id': str(assignment.assignee.id),
+                        'full_name': assignment.assignee.full_name,
+                        'email': assignment.assignee.email,
+                    })
+            
+            # Get team assignment
+            team = None
+            team_assignment = task.assignments.select_related('team').filter(team__isnull=False).first()
+            if team_assignment and team_assignment.team:
+                team = {
+                    'id': str(team_assignment.team.id),
+                    'name': team_assignment.team.name,
+                }
+            
             return {
                 'id': str(task.id),
                 'task_number': task.task_number,
-                'status': task.status,
-                'status_display': task.get_status_display(),
+                'status': task.work_status,  # Use work_status for customer-facing status
+                'status_display': task.get_work_status_display(),
                 'scheduled_start': task.scheduled_start,
                 'scheduled_end': task.scheduled_end,
+                'assignees': assignees,
+                'team': team,
             }
         return None
     
