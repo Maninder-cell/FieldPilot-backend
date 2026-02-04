@@ -220,15 +220,19 @@ def service_request_detail(request, request_id):
         return success_response(data=serializer.data)
     
     elif request.method == 'PATCH':
-        # Only customer can update their own requests
-        if service_request.customer != request.user:
+        # Check permissions: customer can update their own, admin/manager/owner can update any
+        ensure_tenant_role(request)
+        user_role = getattr(request, 'tenant_role', None)
+        
+        if user_role not in ['admin', 'manager', 'owner'] and service_request.customer != request.user:
             return error_response(
                 message='You can only update your own service requests',
                 status_code=status.HTTP_403_FORBIDDEN
             )
         
-        # Can only update if not yet reviewed
-        if not service_request.can_be_modified:
+        # Can only update if not yet reviewed (for customers)
+        # Admin/Manager/Owner can update anytime
+        if user_role not in ['admin', 'manager', 'owner'] and not service_request.can_be_modified:
             return error_response(
                 message='Cannot modify request after it has been reviewed',
                 status_code=status.HTTP_400_BAD_REQUEST
@@ -274,8 +278,11 @@ def service_request_detail(request, request_id):
             )
     
     elif request.method == 'DELETE':
-        # Only customer can cancel their own requests
-        if service_request.customer != request.user:
+        # Check permissions: customer can cancel their own, admin/manager/owner can cancel any
+        ensure_tenant_role(request)
+        user_role = getattr(request, 'tenant_role', None)
+        
+        if user_role not in ['admin', 'manager', 'owner'] and service_request.customer != request.user:
             return error_response(
                 message='You can only cancel your own service requests',
                 status_code=status.HTTP_403_FORBIDDEN
