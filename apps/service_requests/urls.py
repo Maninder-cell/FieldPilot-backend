@@ -33,6 +33,7 @@ urlpatterns = [
     # Comments and Attachments (Task 10)
     path('<uuid:request_id>/comments/', views.request_comments, name='request-comments'),
     path('<uuid:request_id>/attachments/', views.request_attachments, name='request-attachments'),
+    path('<uuid:request_id>/attachments/<uuid:attachment_id>/', views.delete_attachment, name='delete-attachment'),
     
     # Feedback
     path('<uuid:request_id>/feedback/', views.submit_feedback, name='submit-feedback'),

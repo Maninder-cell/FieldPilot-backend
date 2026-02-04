@@ -917,6 +917,70 @@ def request_attachments(request, request_id):
 
 @extend_schema(
     tags=['Service Requests'],
+    summary='Delete attachment',
+    description='Delete an attachment from a service request. Users can only delete their own attachments.',
+    responses={200: {'description': 'Attachment deleted successfully'}}
+)
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated, IsRequestOwnerOrAdmin])
+def delete_attachment(request, request_id, attachment_id):
+    """
+    Delete an attachment from a service request.
+    Users can only delete attachments they uploaded.
+    """
+    try:
+        service_request = ServiceRequest.objects.get(pk=request_id)
+    except ServiceRequest.DoesNotExist:
+        return error_response(
+            message='Service request not found',
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Check object-level permission for the request
+    if not IsRequestOwnerOrAdmin().has_object_permission(request, None, service_request):
+        return error_response(
+            message='You can only access attachments for your own requests',
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        attachment = RequestAttachment.objects.get(pk=attachment_id, request=service_request)
+    except RequestAttachment.DoesNotExist:
+        return error_response(
+            message='Attachment not found',
+            status_code=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Check if user can delete this attachment
+    # Users can only delete their own attachments
+    if attachment.uploaded_by != request.user:
+        return error_response(
+            message='You can only delete attachments you uploaded',
+            status_code=status.HTTP_403_FORBIDDEN
+        )
+    
+    try:
+        with transaction.atomic():
+            # Delete the file from storage
+            if attachment.file:
+                attachment.file.delete(save=False)
+            
+            # Delete the attachment record
+            attachment.delete()
+            
+            logger.info(f"Attachment deleted from request: {service_request.request_number} by {request.user.email}")
+            
+            return success_response(message='Attachment deleted successfully')
+    except Exception as e:
+        logger.error(f"Failed to delete attachment: {str(e)}", exc_info=True)
+        return error_response(
+            message='Failed to delete attachment',
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@extend_schema(
+    tags=['Service Requests'],
     summary='Submit feedback',
     description='Submit customer feedback and rating for a completed request',
     request=SubmitFeedbackSerializer,
