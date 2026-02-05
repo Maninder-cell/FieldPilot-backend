@@ -150,7 +150,11 @@ class TechnicianPerformanceReportGenerator(BaseReportGenerator):
     
     def get_queryset(self):
         """Get technicians with performance data."""
-        queryset = User.objects.filter(role='technician', is_active=True)
+        # Get active users who have task assignments (technicians)
+        queryset = User.objects.filter(
+            is_active=True,
+            task_assignments__isnull=False
+        ).distinct()
         
         # Apply technician filter
         technician_id = self.get_filter_value('technician')
@@ -269,7 +273,11 @@ class TechnicianProductivityReportGenerator(BaseReportGenerator):
     
     def get_queryset(self):
         """Get technicians."""
-        queryset = User.objects.filter(role='technician', is_active=True)
+        # Get active users who have task assignments (technicians)
+        queryset = User.objects.filter(
+            is_active=True,
+            task_assignments__isnull=False
+        ).distinct()
         
         technician_id = self.get_filter_value('technician')
         if technician_id:

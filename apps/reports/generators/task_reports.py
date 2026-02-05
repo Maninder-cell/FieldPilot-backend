@@ -189,13 +189,13 @@ class TaskDetailReportGenerator(BaseReportGenerator):
                     assigned_technicians.append({
                         'id': str(assignment.assignee.id),
                         'name': assignment.assignee.full_name,
-                        'work_status': assignment.work_status,
+                        'email': assignment.assignee.email,
                     })
                 elif assignment.team:
                     assigned_technicians.append({
                         'id': str(assignment.team.id),
                         'name': f"Team: {assignment.team.name}",
-                        'work_status': assignment.work_status,
+                        'is_team': True,
                     })
             
             # Calculate total work hours

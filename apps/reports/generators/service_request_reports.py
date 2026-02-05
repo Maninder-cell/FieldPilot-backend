@@ -251,7 +251,7 @@ class ServiceRequestDetailReportGenerator(BaseReportGenerator):
                 actions.append({
                     'action_type': action.action_type,
                     'description': action.description,
-                    'performed_by': action.performed_by.full_name if action.performed_by else None,
+                    'performed_by': action.user.full_name if action.user else None,
                     'created_at': action.created_at,
                 })
             
@@ -266,7 +266,7 @@ class ServiceRequestDetailReportGenerator(BaseReportGenerator):
                     'id': str(request.customer.id),
                     'name': request.customer.full_name,
                     'email': request.customer.email,
-                    'company': request.customer.company_name,
+                    'company': request.customer.customer_profile.company_name if hasattr(request.customer, 'customer_profile') and request.customer.customer_profile else None,
                 } if request.customer else None,
                 'equipment': {
                     'id': str(request.equipment.id),
