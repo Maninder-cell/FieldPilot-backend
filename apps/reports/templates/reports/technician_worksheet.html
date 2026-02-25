@@ -1,32 +1,82 @@
 {% extends "reports/base_report.html" %}
 
 {% block content %}
-{% if report.data.technician %}
-<div class="summary-box">
-    <h2>Technician: {{ report.data.technician.name }}</h2>
-    <p>Date: {{ report.data.date|default:"N/A" }}</p>
+{% if report.data.worksheets %}
+<h2>Technician Worksheets ({{ report.data.total_technicians }} technicians)</h2>
+
+{% for worksheet in report.data.worksheets %}
+<div class="summary-box" style="page-break-inside: avoid; margin-bottom: 15pt;">
+    <h3>{{ worksheet.technician.name }}</h3>
+    <p style="font-size: 7pt; color: #666;">{{ worksheet.technician.email }}</p>
+    
+    <div style="background-color: #e8f4f8; padding: 6pt; margin: 6pt 0; border-radius: 3pt;">
+        <strong>Summary:</strong>
+        Total Tasks: {{ worksheet.totals.total_tasks }} |
+        Total Hours: {{ worksheet.totals.total_work_hours }}h |
+        Normal: {{ worksheet.totals.normal_hours }}h |
+        Overtime: {{ worksheet.totals.overtime_hours }}h
+    </div>
+
+    <table style="margin-top: 8pt;">
+        <thead>
+            <tr>
+                <th>Task #</th>
+                <th>Task Title</th>
+                <th>Equipment</th>
+                <th>Travel Started</th>
+                <th>Arrived</th>
+                <th>Lunch Start</th>
+                <th>Lunch End</th>
+                <th>Departed</th>
+                <th>Equipment Status</th>
+                <th>Work Hours</th>
+                <th>Normal</th>
+                <th>Overtime</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in worksheet.time_logs %}
+            <tr>
+                <td>{{ log.task_number }}</td>
+                <td>{{ log.task_title }}</td>
+                <td>
+                    {% if log.equipment %}
+                        {{ log.equipment.name }}<br>
+                        <small>({{ log.equipment.number }})</small>
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>{{ log.travel_started_at|date:"m/d H:i"|default:"-" }}</td>
+                <td>{{ log.arrived_at|date:"m/d H:i"|default:"-" }}</td>
+                <td>{{ log.lunch_started_at|date:"H:i"|default:"-" }}</td>
+                <td>{{ log.lunch_ended_at|date:"H:i"|default:"-" }}</td>
+                <td>{{ log.departed_at|date:"m/d H:i" }}</td>
+                <td>{{ log.equipment_status_at_departure|title|default:"-" }}</td>
+                <td><strong>{{ log.total_work_hours|floatformat:2 }}</strong></td>
+                <td>{{ log.normal_hours|floatformat:2 }}</td>
+                <td style="{% if log.overtime_hours > 0 %}color: #d97706; font-weight: bold;{% endif %}">
+                    {{ log.overtime_hours|floatformat:2 }}
+                </td>
+            </tr>
+            {% endfor %}
+            <tr style="background-color: #f0f0f0; font-weight: bold;">
+                <td colspan="9" style="text-align: right;">Totals:</td>
+                <td>{{ worksheet.totals.total_work_hours|floatformat:2 }}h</td>
+                <td>{{ worksheet.totals.normal_hours|floatformat:2 }}h</td>
+                <td style="color: #d97706;">{{ worksheet.totals.overtime_hours|floatformat:2 }}h</td>
+            </tr>
+        </tbody>
+    </table>
 </div>
+
+{% if not forloop.last %}
+<div style="page-break-after: always;"></div>
 {% endif %}
 
-{% if report.data.tasks %}
-<h2>Assigned Tasks</h2>
-<table>
-    <tr>
-        <th>Task</th>
-        <th>Priority</th>
-        <th>Status</th>
-        <th>Due Date</th>
-        <th>Location</th>
-    </tr>
-    {% for task in report.data.tasks %}
-    <tr>
-        <td>{{ task.title }}</td>
-        <td>{{ task.priority|title }}</td>
-        <td>{{ task.status|title }}</td>
-        <td>{{ task.due_date|default:"N/A" }}</td>
-        <td>{{ task.location|default:"N/A" }}</td>
-    </tr>
-    {% endfor %}
-</table>
+{% endfor %}
+
+{% else %}
+<p>No worksheet data found.</p>
 {% endif %}
 {% endblock %}

@@ -1,30 +1,53 @@
 {% extends "reports/base_report.html" %}
 
 {% block content %}
-<div class="summary-box">
-    <h2>Summary</h2>
-    <p>Total Overdue Tasks: {{ report.data.summary.total_overdue|default:"0" }}</p>
-</div>
+{% if report.data.overdue_tasks %}
+<h2>Overdue Tasks ({{ report.data.summary.total_overdue }} tasks)</h2>
 
-{% if report.data.tasks %}
-<h2>Overdue Tasks</h2>
 <table>
-    <tr>
-        <th>Task</th>
-        <th>Priority</th>
-        <th>Due Date</th>
-        <th>Days Overdue</th>
-        <th>Assigned To</th>
-    </tr>
-    {% for task in report.data.tasks %}
-    <tr>
-        <td>{{ task.title }}</td>
-        <td>{{ task.priority|title }}</td>
-        <td>{{ task.due_date }}</td>
-        <td>{{ task.days_overdue|default:"N/A" }}</td>
-        <td>{{ task.assigned_to.name|default:"Unassigned" }}</td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>Task #</th>
+            <th>Title</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Equipment</th>
+            <th>Scheduled End</th>
+            <th>Days Overdue</th>
+            <th>Assigned Technicians</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for task in report.data.overdue_tasks %}
+        <tr>
+            <td>{{ task.task_number }}</td>
+            <td>{{ task.title }}</td>
+            <td>{{ task.priority|title }}</td>
+            <td>{{ task.status|title }}</td>
+            <td>
+                {% if task.equipment %}
+                    {{ task.equipment.name }}<br>
+                    <small>({{ task.equipment.number }})</small>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>{{ task.scheduled_end }}</td>
+            <td style="color: red; font-weight: bold;">{{ task.days_overdue }}</td>
+            <td>
+                {% if task.assigned_technicians %}
+                    {% for tech in task.assigned_technicians %}
+                        {{ tech.name }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                {% else %}
+                    Not assigned
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
+{% else %}
+<p>No overdue tasks found.</p>
 {% endif %}
 {% endblock %}

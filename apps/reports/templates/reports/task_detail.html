@@ -2,43 +2,71 @@
 
 {% block content %}
 {% if report.data.tasks %}
-<h2>Task Details</h2>
-{% for task in report.data.tasks %}
-<div class="summary-box">
-    <h3>{{ task.title }}</h3>
-    <table>
+<h2>Task Details ({{ report.data.total_count }} tasks)</h2>
+
+<table>
+    <thead>
         <tr>
-            <th>Field</th>
-            <th>Value</th>
+            <th>Task #</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Equipment</th>
+            <th>Facility</th>
+            <th>Assigned Technicians</th>
+            <th>Scheduled Start</th>
+            <th>Scheduled End</th>
+            <th>Work Hours</th>
         </tr>
+    </thead>
+    <tbody>
+        {% for task in report.data.tasks %}
         <tr>
-            <td>Status</td>
+            <td>{{ task.task_number }}</td>
+            <td>{{ task.title }}</td>
             <td>{{ task.status|title }}</td>
-        </tr>
-        <tr>
-            <td>Priority</td>
             <td>{{ task.priority|title }}</td>
+            <td>
+                {% if task.equipment %}
+                    {{ task.equipment.name }}<br>
+                    <small>({{ task.equipment.number }})</small>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if task.facility %}
+                    {{ task.facility.name }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if task.assigned_technicians %}
+                    {% for tech in task.assigned_technicians %}
+                        {{ tech.name }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                {% else %}
+                    Not assigned
+                {% endif %}
+            </td>
+            <td>{{ task.scheduled_start|default:"-" }}</td>
+            <td>{{ task.scheduled_end|default:"-" }}</td>
+            <td>
+                {% if task.work_hours %}
+                    {{ task.work_hours.total_hours|floatformat:2 }}h
+                    {% if task.work_hours.overtime_hours > 0 %}
+                        <br><small>(OT: {{ task.work_hours.overtime_hours|floatformat:2 }}h)</small>
+                    {% endif %}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
         </tr>
-        {% if task.assigned_to %}
-        <tr>
-            <td>Assigned To</td>
-            <td>{{ task.assigned_to.name }}</td>
-        </tr>
-        {% endif %}
-        {% if task.due_date %}
-        <tr>
-            <td>Due Date</td>
-            <td>{{ task.due_date }}</td>
-        </tr>
-        {% endif %}
-        {% if task.description %}
-        <tr>
-            <td>Description</td>
-            <td>{{ task.description }}</td>
-        </tr>
-        {% endif %}
-    </table>
-</div>
-{% endfor %}
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No tasks found.</p>
 {% endif %}
 {% endblock %}

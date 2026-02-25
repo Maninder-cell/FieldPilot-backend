@@ -1,23 +1,48 @@
 {% extends "reports/base_report.html" %}
 
 {% block content %}
-{% if report.data.technicians %}
-<h2>Technician Performance</h2>
+{% if report.data.performance %}
+<h2>Technician Performance ({{ report.data.total_technicians }} technicians)</h2>
+
 <table>
-    <tr>
-        <th>Technician</th>
-        <th>Tasks Completed</th>
-        <th>Avg Completion Time</th>
-        <th>On-Time Rate</th>
-    </tr>
-    {% for tech in report.data.technicians %}
-    <tr>
-        <td>{{ tech.name }}</td>
-        <td>{{ tech.tasks_completed|default:"0" }}</td>
-        <td>{{ tech.avg_completion_time|default:"N/A" }}</td>
-        <td>{{ tech.on_time_rate|floatformat:1 }}%</td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>Technician</th>
+            <th>Email</th>
+            <th>Completed Tasks</th>
+            <th>Total Work Hours</th>
+            <th>Avg Task Completion Time</th>
+            <th>Customer Rating</th>
+            <th>Total Ratings</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for tech in report.data.performance %}
+        <tr>
+            <td>{{ tech.technician.name }}</td>
+            <td><small>{{ tech.technician.email }}</small></td>
+            <td>{{ tech.completed_tasks }}</td>
+            <td>{{ tech.total_work_hours|floatformat:2 }}h</td>
+            <td>
+                {% if tech.avg_task_completion_time_hours %}
+                    {{ tech.avg_task_completion_time_hours|floatformat:2 }}h
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if tech.customer_rating.average %}
+                    <strong>{{ tech.customer_rating.average|floatformat:2 }}/5</strong>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>{{ tech.customer_rating.total_ratings }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
+{% else %}
+<p>No performance data found.</p>
 {% endif %}
 {% endblock %}

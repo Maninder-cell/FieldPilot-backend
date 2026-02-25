@@ -2,18 +2,76 @@
 
 {% block content %}
 {% if report.data.equipment %}
-{% for item in report.data.equipment %}
-<div class="summary-box">
-    <h3>{{ item.name }}</h3>
-    <table>
-        <tr><th>Field</th><th>Value</th></tr>
-        <tr><td>Type</td><td>{{ item.equipment_type|default:"N/A" }}</td></tr>
-        <tr><td>Status</td><td>{{ item.status|title }}</td></tr>
-        <tr><td>Location</td><td>{{ item.location|default:"N/A" }}</td></tr>
-        {% if item.serial_number %}<tr><td>Serial Number</td><td>{{ item.serial_number }}</td></tr>{% endif %}
-        {% if item.model %}<tr><td>Model</td><td>{{ item.model }}</td></tr>{% endif %}
-    </table>
-</div>
-{% endfor %}
+<h2>Equipment Details ({{ report.data.total_count }} items)</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Equipment #</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Manufacturer</th>
+            <th>Model</th>
+            <th>Serial #</th>
+            <th>Status</th>
+            <th>Condition</th>
+            <th>Building</th>
+            <th>Facility</th>
+            <th>Customer</th>
+            <th>Purchase Date</th>
+            <th>Warranty</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in report.data.equipment %}
+        <tr>
+            <td>{{ item.equipment_number }}</td>
+            <td>{{ item.name }}</td>
+            <td>{{ item.type|default:"-" }}</td>
+            <td>{{ item.manufacturer|default:"-" }}</td>
+            <td>{{ item.model|default:"-" }}</td>
+            <td>{{ item.serial_number|default:"-" }}</td>
+            <td>{{ item.operational_status|title }}</td>
+            <td>{{ item.condition|title|default:"-" }}</td>
+            <td>
+                {% if item.building %}
+                    {{ item.building.name }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if item.facility %}
+                    {{ item.facility.name }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if item.customer %}
+                    {{ item.customer.name }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>{{ item.purchase_date|default:"-" }}</td>
+            <td>
+                {% if item.warranty_expiration %}
+                    {{ item.warranty_expiration }}
+                    {% if item.is_under_warranty %}
+                        <br><small>(Active)</small>
+                    {% else %}
+                        <br><small>(Expired)</small>
+                    {% endif %}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No equipment found.</p>
 {% endif %}
 {% endblock %}

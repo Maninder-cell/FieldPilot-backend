@@ -1,33 +1,77 @@
 {% extends "reports/base_report.html" %}
 
 {% block content %}
-<div class="summary-box">
-    <h2>Team Performance Summary</h2>
-    <table>
-        <tr><th>Metric</th><th>Value</th></tr>
-        <tr><td>Total Tasks</td><td>{{ report.data.summary.total_tasks|default:"0" }}</td></tr>
-        <tr><td>Completed Tasks</td><td>{{ report.data.summary.completed_tasks|default:"0" }}</td></tr>
-        <tr><td>Team Efficiency</td><td>{{ report.data.summary.efficiency|floatformat:1 }}%</td></tr>
+{% if report.data.teams %}
+<h2>Team Performance ({{ report.data.total_teams }} teams)</h2>
+
+{% for team_data in report.data.teams %}
+<div class="summary-box" style="page-break-inside: avoid; margin-bottom: 15pt;">
+    <h3>{{ team_data.team.name }}</h3>
+    
+    <div style="background-color: #dbeafe; padding: 6pt; margin: 6pt 0; border-radius: 3pt;">
+        <strong>Team Summary:</strong>
+        Members: {{ team_data.total_members }} |
+        Total Tasks: {{ team_data.total_tasks }} |
+        Completed: {{ team_data.completed_tasks }} |
+        Completion Rate: {{ team_data.completion_rate|floatformat:1 }}% |
+        Total Hours: {{ team_data.total_work_hours|floatformat:2 }}h
+    </div>
+
+    {% if team_data.member_contributions %}
+    <h4 style="font-size: 9pt; margin-top: 8pt; margin-bottom: 4pt;">Member Contributions</h4>
+    <table style="margin-top: 6pt;">
+        <thead>
+            <tr>
+                <th>Technician</th>
+                <th>Tasks Completed</th>
+                <th>Work Hours</th>
+                <th>% of Team Tasks</th>
+                <th>% of Team Hours</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for member in team_data.member_contributions %}
+            <tr>
+                <td>{{ member.technician.name }}</td>
+                <td>{{ member.tasks_completed }}</td>
+                <td>{{ member.work_hours|floatformat:2 }}h</td>
+                <td>
+                    {% if team_data.completed_tasks > 0 %}
+                        {% widthratio member.tasks_completed team_data.completed_tasks 100 %}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </td>
+                <td>
+                    {% if team_data.total_work_hours > 0 %}
+                        {% widthratio member.work_hours team_data.total_work_hours 100 %}%
+                    {% else %}
+                        0%
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            <tr style="background-color: #f0f0f0; font-weight: bold;">
+                <td>Team Totals:</td>
+                <td>{{ team_data.completed_tasks }}</td>
+                <td>{{ team_data.total_work_hours|floatformat:2 }}h</td>
+                <td>100%</td>
+                <td>100%</td>
+            </tr>
+        </tbody>
     </table>
+    {% else %}
+    <p style="font-size: 7pt; color: #666; font-style: italic;">No member contributions data</p>
+    {% endif %}
 </div>
 
-{% if report.data.teams %}
-<h2>Team Breakdown</h2>
-<table>
-    <tr>
-        <th>Team</th>
-        <th>Members</th>
-        <th>Tasks Completed</th>
-        <th>Performance Score</th>
-    </tr>
-    {% for team in report.data.teams %}
-    <tr>
-        <td>{{ team.name }}</td>
-        <td>{{ team.member_count }}</td>
-        <td>{{ team.tasks_completed }}</td>
-        <td>{{ team.performance_score|floatformat:1 }}</td>
-    </tr>
-    {% endfor %}
-</table>
+{% if not forloop.last %}
+<div style="page-break-after: always;"></div>
+{% endif %}
+
+{% endfor %}
+
+{% else %}
+<p>No team performance data found.</p>
 {% endif %}
 {% endblock %}

@@ -2,68 +2,86 @@
 
 {% block content %}
 <div class="summary-box">
-    <h2>Summary</h2>
-    <table>
-        <tr>
-            <th>Metric</th>
-            <th>Value</th>
-        </tr>
-        <tr>
-            <td>Total Normal Hours</td>
-            <td>{{ report.data.summary.total_normal_hours|default:"0" }}</td>
-        </tr>
-        <tr>
-            <td>Total Overtime Hours</td>
-            <td>{{ report.data.summary.total_overtime_hours|default:"0" }}</td>
-        </tr>
-        <tr>
-            <td>Total Hours</td>
-            <td>{{ report.data.summary.total_hours|default:"0" }}</td>
-        </tr>
-        <tr>
-            <td>Total Labor Cost</td>
-            <td>${{ report.data.summary.total_cost|default:"0" }}</td>
-        </tr>
-    </table>
+    <h2>Labor Cost Summary</h2>
+    <p>
+        <strong>Total Hours:</strong> {{ report.data.summary.total_hours|floatformat:2 }}h |
+        <strong>Total Cost:</strong> ${{ report.data.summary.total_cost|floatformat:2 }}<br>
+        <strong>Normal Rate:</strong> ${{ report.data.summary.normal_hourly_rate|floatformat:2 }}/hr |
+        <strong>Overtime Rate:</strong> ${{ report.data.summary.overtime_hourly_rate|floatformat:2 }}/hr
+    </p>
 </div>
 
 {% if report.data.by_technician %}
 <h2>Labor Cost by Technician</h2>
 <table>
-    <tr>
-        <th>Technician</th>
-        <th>Normal Hours</th>
-        <th>Overtime Hours</th>
-        <th>Total Hours</th>
-        <th>Total Cost</th>
-    </tr>
-    {% for item in report.data.by_technician %}
-    <tr>
-        <td>{{ item.technician.name }}</td>
-        <td>{{ item.normal_hours|floatformat:2 }}</td>
-        <td>{{ item.overtime_hours|floatformat:2 }}</td>
-        <td>{{ item.total_hours|floatformat:2 }}</td>
-        <td>${{ item.total_cost|floatformat:2 }}</td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>Technician</th>
+            <th>Normal Hours</th>
+            <th>Overtime Hours</th>
+            <th>Normal Cost</th>
+            <th>Overtime Cost</th>
+            <th>Total Cost</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in report.data.by_technician %}
+        <tr>
+            <td>{{ item.technician.name }}</td>
+            <td>{{ item.normal_hours|floatformat:2 }}h</td>
+            <td style="{% if item.overtime_hours > 0 %}color: #d97706;{% endif %}">{{ item.overtime_hours|floatformat:2 }}h</td>
+            <td>${{ item.normal_cost|floatformat:2 }}</td>
+            <td style="{% if item.overtime_cost > 0 %}color: #d97706;{% endif %}">${{ item.overtime_cost|floatformat:2 }}</td>
+            <td><strong>${{ item.total_cost|floatformat:2 }}</strong></td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
 {% endif %}
 
 {% if report.data.by_task %}
-<h2>Labor Cost by Task</h2>
+<h2 style="margin-top: 12pt;">Labor Cost by Task</h2>
 <table>
-    <tr>
-        <th>Task</th>
-        <th>Total Hours</th>
-        <th>Total Cost</th>
-    </tr>
-    {% for item in report.data.by_task %}
-    <tr>
-        <td>{{ item.task.title }}</td>
-        <td>{{ item.total_hours|floatformat:2 }}</td>
-        <td>${{ item.total_cost|floatformat:2 }}</td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>Task #</th>
+            <th>Task Title</th>
+            <th>Total Hours</th>
+            <th>Total Cost</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in report.data.by_task %}
+        <tr>
+            <td>{{ item.task.task_number }}</td>
+            <td>{{ item.task.title }}</td>
+            <td>{{ item.total_hours|floatformat:2 }}h</td>
+            <td><strong>${{ item.total_cost|floatformat:2 }}</strong></td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if report.data.by_customer %}
+<h2 style="margin-top: 12pt;">Labor Cost by Customer</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Customer</th>
+            <th>Total Hours</th>
+            <th>Total Cost</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in report.data.by_customer %}
+        <tr>
+            <td>{{ item.customer.name }}</td>
+            <td>{{ item.total_hours|floatformat:2 }}h</td>
+            <td><strong>${{ item.total_cost|floatformat:2 }}</strong></td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
 {% endif %}
 {% endblock %}

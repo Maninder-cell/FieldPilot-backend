@@ -1,28 +1,34 @@
 {% extends "reports/base_report.html" %}
 
 {% block content %}
-<div class="summary-box">
-    <h2>Productivity Summary</h2>
-    <p>Total Hours Logged: {{ report.data.summary.total_hours|default:"0" }}</p>
-</div>
+{% if report.data.productivity %}
+<h2>Technician Productivity ({{ report.data.total_technicians }} technicians)</h2>
 
-{% if report.data.technicians %}
-<h2>Technician Productivity</h2>
 <table>
-    <tr>
-        <th>Technician</th>
-        <th>Hours Worked</th>
-        <th>Tasks Completed</th>
-        <th>Productivity Score</th>
-    </tr>
-    {% for tech in report.data.technicians %}
-    <tr>
-        <td>{{ tech.name }}</td>
-        <td>{{ tech.hours_worked|floatformat:1 }}</td>
-        <td>{{ tech.tasks_completed }}</td>
-        <td>{{ tech.productivity_score|floatformat:1 }}</td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>Technician</th>
+            <th>Completed Tasks</th>
+            <th>Total Work Hours</th>
+            <th>Date Range (Days)</th>
+            <th>Tasks Per Day</th>
+            <th>Hours Per Task</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for tech in report.data.productivity %}
+        <tr>
+            <td>{{ tech.technician.name }}</td>
+            <td>{{ tech.completed_tasks }}</td>
+            <td>{{ tech.total_work_hours|floatformat:2 }}h</td>
+            <td>{{ tech.date_range_days }} days</td>
+            <td><strong>{{ tech.tasks_per_day|floatformat:2 }}</strong></td>
+            <td><strong>{{ tech.hours_per_task|floatformat:2 }}h</strong></td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
+{% else %}
+<p>No productivity data found.</p>
 {% endif %}
 {% endblock %}

@@ -95,8 +95,8 @@ class PDFExporter:
         """
         return """
         @page {
-            size: A4;
-            margin: 2cm;
+            size: A4 landscape;
+            margin: 1.5cm;
             @top-center {
                 content: "Report";
             }
@@ -107,47 +107,51 @@ class PDFExporter:
         
         body {
             font-family: Arial, sans-serif;
-            font-size: 10pt;
-            line-height: 1.4;
+            font-size: 8pt;
+            line-height: 1.3;
         }
         
         h1 {
-            font-size: 18pt;
+            font-size: 16pt;
             color: #333;
-            margin-bottom: 10pt;
-        }
-        
-        h2 {
-            font-size: 14pt;
-            color: #555;
-            margin-top: 15pt;
             margin-bottom: 8pt;
         }
         
-        h3 {
+        h2 {
             font-size: 12pt;
-            color: #666;
-            margin-top: 10pt;
+            color: #555;
+            margin-top: 12pt;
             margin-bottom: 6pt;
+        }
+        
+        h3 {
+            font-size: 10pt;
+            color: #666;
+            margin-top: 8pt;
+            margin-bottom: 4pt;
         }
         
         table {
             width: 100%;
             border-collapse: collapse;
-            margin: 10pt 0;
+            margin: 8pt 0;
+            font-size: 7pt;
         }
         
         th {
             background-color: #f0f0f0;
-            padding: 8pt;
+            padding: 4pt 3pt;
             text-align: left;
-            border: 1pt solid #ddd;
+            border: 0.5pt solid #ddd;
             font-weight: bold;
+            font-size: 7pt;
         }
         
         td {
-            padding: 6pt 8pt;
-            border: 1pt solid #ddd;
+            padding: 3pt;
+            border: 0.5pt solid #ddd;
+            font-size: 7pt;
+            word-wrap: break-word;
         }
         
         tr:nth-child(even) {
@@ -156,21 +160,26 @@ class PDFExporter:
         
         .header {
             text-align: center;
-            margin-bottom: 20pt;
+            margin-bottom: 15pt;
         }
         
         .summary-box {
             background-color: #f5f5f5;
-            padding: 10pt;
-            margin: 10pt 0;
-            border-left: 3pt solid #007bff;
+            padding: 8pt;
+            margin: 8pt 0;
+            border-left: 2pt solid #007bff;
         }
         
         .footer {
-            margin-top: 20pt;
-            padding-top: 10pt;
-            border-top: 1pt solid #ddd;
-            font-size: 8pt;
+            margin-top: 15pt;
+            padding-top: 8pt;
+            border-top: 0.5pt solid #ddd;
+            font-size: 7pt;
+            color: #666;
+        }
+        
+        small {
+            font-size: 6pt;
             color: #666;
         }
         """

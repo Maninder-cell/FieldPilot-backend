@@ -1,28 +1,95 @@
 {% extends "reports/base_report.html" %}
 
 {% block content %}
-<div class="summary-box">
-    <h2>Utilization Summary</h2>
-    <p>Average Utilization: {{ report.data.summary.avg_utilization|default:"0" }}%</p>
-</div>
+{% if report.data.utilization %}
+<h2>Equipment Utilization ({{ report.data.total_equipment }} equipment)</h2>
 
-{% if report.data.equipment %}
-<h2>Equipment Utilization</h2>
 <table>
-    <tr>
-        <th>Equipment</th>
-        <th>Utilization %</th>
-        <th>Total Hours</th>
-        <th>Available Hours</th>
-    </tr>
-    {% for item in report.data.equipment %}
-    <tr>
-        <td>{{ item.name }}</td>
-        <td>{{ item.utilization_percent|floatformat:1 }}%</td>
-        <td>{{ item.total_hours|floatformat:1 }}</td>
-        <td>{{ item.available_hours|floatformat:1 }}</td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>Equipment #</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>Facility</th>
+            <th>Task Count</th>
+            <th>Completed Tasks</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in report.data.utilization %}
+        <tr>
+            <td>{{ item.equipment_number }}</td>
+            <td>{{ item.name }}</td>
+            <td>{{ item.type }}</td>
+            <td>{{ item.operational_status|title }}</td>
+            <td>
+                {% if item.facility %}
+                    {{ item.facility.name }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td><strong>{{ item.task_count }}</strong></td>
+            <td>{{ item.completed_tasks }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
+
+{% if report.data.most_utilized %}
+<div class="summary-box" style="background-color: #dcfce7; margin-top: 12pt;">
+    <h3>Most Utilized Equipment (Top 5)</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Equipment</th>
+                <th>Type</th>
+                <th>Task Count</th>
+                <th>Completed</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in report.data.most_utilized %}
+            <tr>
+                <td>{{ item.name }}<br><small>({{ item.equipment_number }})</small></td>
+                <td>{{ item.type }}</td>
+                <td style="color: #16a34a; font-weight: bold;">{{ item.task_count }}</td>
+                <td>{{ item.completed_tasks }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% if report.data.least_utilized %}
+<div class="summary-box" style="background-color: #fee2e2; margin-top: 12pt;">
+    <h3>Least Utilized Equipment (Bottom 5)</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Equipment</th>
+                <th>Type</th>
+                <th>Task Count</th>
+                <th>Completed</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in report.data.least_utilized %}
+            <tr>
+                <td>{{ item.name }}<br><small>({{ item.equipment_number }})</small></td>
+                <td>{{ item.type }}</td>
+                <td style="color: #dc2626; font-weight: bold;">{{ item.task_count }}</td>
+                <td>{{ item.completed_tasks }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% else %}
+<p>No utilization data found.</p>
 {% endif %}
 {% endblock %}

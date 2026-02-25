@@ -2,19 +2,99 @@
 
 {% block content %}
 {% if report.data.requests %}
-<h2>Service Request Details</h2>
-{% for request in report.data.requests %}
-<div class="summary-box">
-    <h3>{{ request.title }}</h3>
-    <table>
-        <tr><th>Field</th><th>Value</th></tr>
-        <tr><td>Status</td><td>{{ request.status|title }}</td></tr>
-        <tr><td>Priority</td><td>{{ request.priority|title }}</td></tr>
-        <tr><td>Requested By</td><td>{{ request.requested_by.name|default:"N/A" }}</td></tr>
-        <tr><td>Created Date</td><td>{{ request.created_at }}</td></tr>
-        {% if request.description %}<tr><td>Description</td><td>{{ request.description }}</td></tr>{% endif %}
-    </table>
-</div>
-{% endfor %}
+<h2>Service Request Details ({{ report.data.total_count }} requests)</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Request #</th>
+            <th>Title</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Type</th>
+            <th>Customer</th>
+            <th>Equipment</th>
+            <th>Facility</th>
+            <th>Created</th>
+            <th>Reviewed By</th>
+            <th>Response Time</th>
+            <th>Resolution Time</th>
+            <th>Rating</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for request in report.data.requests %}
+        <tr>
+            <td>{{ request.request_number }}</td>
+            <td>{{ request.title }}</td>
+            <td>{{ request.status|title }}</td>
+            <td>{{ request.priority|title }}</td>
+            <td>{{ request.request_type|title }}</td>
+            <td>
+                {% if request.customer %}
+                    {{ request.customer.name }}<br>
+                    <small>{{ request.customer.company|default:"" }}</small>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if request.equipment %}
+                    {{ request.equipment.name }}<br>
+                    <small>({{ request.equipment.number }})</small>
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if request.facility %}
+                    {{ request.facility.name }}
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>{{ request.created_at|default:"-" }}</td>
+            <td>{{ request.reviewed_by|default:"-" }}</td>
+            <td>
+                {% if request.response_time_hours %}
+                    {{ request.response_time_hours|floatformat:2 }}h
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if request.resolution_time_hours %}
+                    {{ request.resolution_time_hours|floatformat:2 }}h
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+            <td>
+                {% if request.customer_rating %}
+                    {{ request.customer_rating }}/5
+                {% else %}
+                    -
+                {% endif %}
+            </td>
+        </tr>
+        {% if request.description %}
+        <tr>
+            <td colspan="13" style="background-color: #f9f9f9; font-size: 9pt;">
+                <strong>Description:</strong> {{ request.description }}
+            </td>
+        </tr>
+        {% endif %}
+        {% if request.customer_feedback %}
+        <tr>
+            <td colspan="13" style="background-color: #f9f9f9; font-size: 9pt;">
+                <strong>Feedback:</strong> {{ request.customer_feedback }}
+            </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No service requests found.</p>
 {% endif %}
 {% endblock %}

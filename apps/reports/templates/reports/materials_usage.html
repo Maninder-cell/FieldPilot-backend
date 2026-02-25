@@ -3,30 +3,104 @@
 {% block content %}
 <div class="summary-box">
     <h2>Materials Usage Summary</h2>
-    <table>
-        <tr><th>Metric</th><th>Value</th></tr>
-        <tr><td>Total Materials Used</td><td>{{ report.data.summary.total_materials|default:"0" }}</td></tr>
-        <tr><td>Total Cost</td><td>${{ report.data.summary.total_cost|floatformat:2|default:"0.00" }}</td></tr>
-    </table>
+    <p>
+        <strong>Total Tasks:</strong> {{ report.data.total_tasks }} |
+        <strong>Total Material Types:</strong> {{ report.data.total_material_types }}
+    </p>
 </div>
 
-{% if report.data.materials %}
-<h2>Materials Breakdown</h2>
+{% if report.data.material_summary %}
+<h2>Material Summary (Needed vs Received)</h2>
 <table>
-    <tr>
-        <th>Material</th>
-        <th>Quantity Used</th>
-        <th>Unit Cost</th>
-        <th>Total Cost</th>
-    </tr>
-    {% for material in report.data.materials %}
-    <tr>
-        <td>{{ material.name }}</td>
-        <td>{{ material.quantity }}</td>
-        <td>${{ material.unit_cost|floatformat:2 }}</td>
-        <td>${{ material.total_cost|floatformat:2 }}</td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>Material Name</th>
+            <th>Unit</th>
+            <th>Total Needed</th>
+            <th>Total Received</th>
+            <th>Difference</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for material in report.data.material_summary %}
+        <tr>
+            <td>{{ material.material_name }}</td>
+            <td>{{ material.unit }}</td>
+            <td>{{ material.total_needed|floatformat:2 }}</td>
+            <td>{{ material.total_received|floatformat:2 }}</td>
+            <td style="{% if material.difference < 0 %}color: #dc2626;{% elif material.difference > 0 %}color: #16a34a;{% endif %}">
+                {{ material.difference|floatformat:2 }}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
+{% endif %}
+
+{% if report.data.by_task %}
+<h2 style="margin-top: 12pt;">Materials by Task</h2>
+
+{% for task_data in report.data.by_task %}
+<div class="summary-box" style="page-break-inside: avoid; margin-bottom: 10pt;">
+    <h3 style="font-size: 9pt;">{{ task_data.task.task_number }}: {{ task_data.task.title }}</h3>
+    
+    {% if task_data.materials_needed %}
+    <h4 style="font-size: 8pt; margin-top: 6pt; margin-bottom: 3pt;">Materials Needed</h4>
+    <table style="margin-bottom: 6pt;">
+        <thead>
+            <tr>
+                <th>Material</th>
+                <th>Quantity</th>
+                <th>Unit</th>
+                <th>Logged At</th>
+                <th>Logged By</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for material in task_data.materials_needed %}
+            <tr>
+                <td>{{ material.material_name }}</td>
+                <td>{{ material.quantity|floatformat:2 }}</td>
+                <td>{{ material.unit }}</td>
+                <td>{{ material.logged_at|date:"m/d/Y H:i" }}</td>
+                <td>{{ material.logged_by|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    
+    {% if task_data.materials_received %}
+    <h4 style="font-size: 8pt; margin-top: 6pt; margin-bottom: 3pt;">Materials Received</h4>
+    <table>
+        <thead>
+            <tr>
+                <th>Material</th>
+                <th>Quantity</th>
+                <th>Unit</th>
+                <th>Logged At</th>
+                <th>Logged By</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for material in task_data.materials_received %}
+            <tr>
+                <td>{{ material.material_name }}</td>
+                <td>{{ material.quantity|floatformat:2 }}</td>
+                <td>{{ material.unit }}</td>
+                <td>{{ material.logged_at|date:"m/d/Y H:i" }}</td>
+                <td>{{ material.logged_by|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    
+    {% if not task_data.materials_needed and not task_data.materials_received %}
+    <p style="font-size: 7pt; color: #666; font-style: italic;">No materials logged for this task</p>
+    {% endif %}
+</div>
+{% endfor %}
+
 {% endif %}
 {% endblock %}

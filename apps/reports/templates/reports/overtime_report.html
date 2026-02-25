@@ -1,30 +1,75 @@
 {% extends "reports/base_report.html" %}
 
 {% block content %}
+{% if report.data.summary %}
 <div class="summary-box">
     <h2>Overtime Summary</h2>
-    <table>
-        <tr><th>Metric</th><th>Value</th></tr>
-        <tr><td>Total Overtime Hours</td><td>{{ report.data.summary.total_overtime_hours|floatformat:1 }}</td></tr>
-        <tr><td>Total Overtime Cost</td><td>${{ report.data.summary.total_overtime_cost|floatformat:2 }}</td></tr>
+    <p>
+        <strong>Total Technicians with Overtime:</strong> {{ report.data.summary.total_technicians_with_overtime }}<br>
+        <strong>Grand Total Overtime Hours:</strong> {{ report.data.summary.grand_total_overtime_hours|floatformat:2 }}h<br>
+        {% if report.data.summary.grand_total_overtime_cost %}
+            <strong>Grand Total Overtime Cost:</strong> ${{ report.data.summary.grand_total_overtime_cost|floatformat:2 }}<br>
+            <strong>Hourly Rate Used:</strong> ${{ report.data.summary.hourly_rate_used|floatformat:2 }}/hour
+        {% endif %}
+    </p>
+</div>
+{% endif %}
+
+{% if report.data.overtime_by_technician %}
+<h2>Overtime Details by Technician</h2>
+
+{% for tech_data in report.data.overtime_by_technician %}
+<div class="summary-box" style="page-break-inside: avoid; margin-bottom: 12pt;">
+    <h3>{{ tech_data.technician.name }}</h3>
+    <p style="font-size: 7pt; color: #666;">{{ tech_data.technician.email }}</p>
+    
+    <div style="background-color: #fef3c7; padding: 6pt; margin: 6pt 0; border-radius: 3pt;">
+        <strong>Total Overtime Hours:</strong> {{ tech_data.total_overtime_hours|floatformat:2 }}h
+        {% if tech_data.total_overtime_cost %}
+            | <strong>Total Overtime Cost:</strong> ${{ tech_data.total_overtime_cost|floatformat:2 }}
+        {% endif %}
+    </div>
+
+    <table style="margin-top: 8pt;">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Task #</th>
+                <th>Overtime Hours</th>
+                {% if tech_data.total_overtime_cost %}
+                <th>Overtime Cost</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in tech_data.overtime_logs %}
+            <tr>
+                <td>{{ log.date }}</td>
+                <td>{{ log.task_number }}</td>
+                <td style="color: #d97706; font-weight: bold;">{{ log.overtime_hours|floatformat:2 }}h</td>
+                {% if log.overtime_cost %}
+                <td>${{ log.overtime_cost|floatformat:2 }}</td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+            <tr style="background-color: #f0f0f0; font-weight: bold;">
+                <td colspan="2" style="text-align: right;">Totals:</td>
+                <td style="color: #d97706;">{{ tech_data.total_overtime_hours|floatformat:2 }}h</td>
+                {% if tech_data.total_overtime_cost %}
+                <td>${{ tech_data.total_overtime_cost|floatformat:2 }}</td>
+                {% endif %}
+            </tr>
+        </tbody>
     </table>
 </div>
 
-{% if report.data.by_technician %}
-<h2>Overtime by Technician</h2>
-<table>
-    <tr>
-        <th>Technician</th>
-        <th>Overtime Hours</th>
-        <th>Overtime Cost</th>
-    </tr>
-    {% for item in report.data.by_technician %}
-    <tr>
-        <td>{{ item.technician.name }}</td>
-        <td>{{ item.overtime_hours|floatformat:1 }}</td>
-        <td>${{ item.overtime_cost|floatformat:2 }}</td>
-    </tr>
-    {% endfor %}
-</table>
+{% if not forloop.last %}
+<div style="page-break-after: always;"></div>
+{% endif %}
+
+{% endfor %}
+
+{% else %}
+<p>No overtime data found.</p>
 {% endif %}
 {% endblock %}

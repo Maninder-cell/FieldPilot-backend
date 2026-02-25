@@ -2,32 +2,73 @@
 
 {% block content %}
 <div class="summary-box">
-    <h2>Billing Summary</h2>
-    <table>
-        <tr><th>Metric</th><th>Value</th></tr>
-        <tr><td>Total Billable Amount</td><td>${{ report.data.summary.total_billable|floatformat:2|default:"0.00" }}</td></tr>
-        <tr><td>Labor Cost</td><td>${{ report.data.summary.labor_cost|floatformat:2|default:"0.00" }}</td></tr>
-        <tr><td>Materials Cost</td><td>${{ report.data.summary.materials_cost|floatformat:2|default:"0.00" }}</td></tr>
-    </table>
+    <h2>Customer Billing Summary</h2>
+    <p>
+        <strong>Total Customers:</strong> {{ report.data.summary.total_customers }} |
+        <strong>Grand Total Hours:</strong> {{ report.data.summary.grand_total_hours|floatformat:2 }}h |
+        <strong>Grand Total Billable:</strong> ${{ report.data.summary.grand_total_billable|floatformat:2 }}<br>
+        <strong>Normal Rate:</strong> ${{ report.data.summary.normal_hourly_rate|floatformat:2 }}/hr |
+        <strong>Overtime Rate:</strong> ${{ report.data.summary.overtime_hourly_rate|floatformat:2 }}/hr
+    </p>
 </div>
 
-{% if report.data.customers %}
-<h2>Customer Billing Details</h2>
-<table>
-    <tr>
-        <th>Customer</th>
-        <th>Labor Cost</th>
-        <th>Materials Cost</th>
-        <th>Total</th>
-    </tr>
-    {% for customer in report.data.customers %}
-    <tr>
-        <td>{{ customer.name }}</td>
-        <td>${{ customer.labor_cost|floatformat:2 }}</td>
-        <td>${{ customer.materials_cost|floatformat:2 }}</td>
-        <td>${{ customer.total|floatformat:2 }}</td>
-    </tr>
-    {% endfor %}
-</table>
+{% if report.data.billing_by_customer %}
+<h2>Billing Details by Customer</h2>
+
+{% for customer_data in report.data.billing_by_customer %}
+<div class="summary-box" style="page-break-inside: avoid; margin-bottom: 12pt;">
+    <h3>{{ customer_data.customer.company_name }}</h3>
+    <p style="font-size: 7pt; color: #666;">
+        Contact: {{ customer_data.customer.contact_person }} | 
+        Email: {{ customer_data.customer.email }}
+    </p>
+    
+    <div style="background-color: #dcfce7; padding: 6pt; margin: 6pt 0; border-radius: 3pt;">
+        <strong>Billing Summary:</strong><br>
+        Normal Hours: {{ customer_data.labor.normal_hours|floatformat:2 }}h |
+        Overtime Hours: {{ customer_data.labor.overtime_hours|floatformat:2 }}h |
+        Total Hours: {{ customer_data.labor.total_hours|floatformat:2 }}h<br>
+        <strong>Labor Cost: ${{ customer_data.labor.labor_cost|floatformat:2 }}</strong> |
+        Materials: {{ customer_data.materials.materials_received_count }} items |
+        <strong>Total Billable: ${{ customer_data.total_billable|floatformat:2 }}</strong>
+    </div>
+
+    {% if customer_data.task_breakdown %}
+    <h4 style="font-size: 8pt; margin-top: 8pt; margin-bottom: 4pt;">Task Breakdown (Top 10)</h4>
+    <table style="margin-top: 6pt;">
+        <thead>
+            <tr>
+                <th>Task #</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Work Hours</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for task in customer_data.task_breakdown %}
+            <tr>
+                <td>{{ task.task_number }}</td>
+                <td>{{ task.title }}</td>
+                <td>{{ task.status|title }}</td>
+                <td>{{ task.work_hours|floatformat:2 }}h</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+    
+    <p style="font-size: 7pt; color: #666; margin-top: 6pt; font-style: italic;">
+        {{ customer_data.materials.note }}
+    </p>
+</div>
+
+{% if not forloop.last %}
+<div style="page-break-after: always;"></div>
+{% endif %}
+
+{% endfor %}
+
+{% else %}
+<p>No billing data found.</p>
 {% endif %}
 {% endblock %}
