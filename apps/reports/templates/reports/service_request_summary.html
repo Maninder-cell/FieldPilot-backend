@@ -6,22 +6,157 @@
     <table>
         <tr><th>Metric</th><th>Value</th></tr>
         <tr><td>Total Requests</td><td>{{ report.data.summary.total_requests|default:"0" }}</td></tr>
-        <tr><td>Completed</td><td>{{ report.data.summary.completed|default:"0" }}</td></tr>
-        <tr><td>Pending</td><td>{{ report.data.summary.pending|default:"0" }}</td></tr>
-        <tr><td>Avg Response Time</td><td>{{ report.data.summary.avg_response_time|default:"N/A" }}</td></tr>
+        <tr><td>Accepted Requests</td><td>{{ report.data.summary.accepted_requests|default:"0" }}</td></tr>
+        <tr><td>Converted to Tasks</td><td>{{ report.data.summary.converted_to_tasks|default:"0" }}</td></tr>
+        <tr><td>Conversion Rate</td><td>{{ report.data.summary.conversion_rate_percent|default:"0" }}%</td></tr>
+        <tr>
+            <td>Avg Response Time</td>
+            <td>
+                {% if report.data.summary.avg_response_time_hours %}
+                    {{ report.data.summary.avg_response_time_hours|floatformat:2 }}h
+                {% else %}
+                    N/A
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td>Avg Resolution Time</td>
+            <td>
+                {% if report.data.summary.avg_resolution_time_hours %}
+                    {{ report.data.summary.avg_resolution_time_hours|floatformat:2 }}h
+                {% else %}
+                    N/A
+                {% endif %}
+            </td>
+        </tr>
     </table>
 </div>
 
 {% if report.data.by_status %}
 <h2>Requests by Status</h2>
 <table>
-    <tr><th>Status</th><th>Count</th></tr>
-    {% for status, count in report.data.by_status.items %}
-    <tr>
-        <td>{{ status|title }}</td>
-        <td>{{ count }}</td>
-    </tr>
-    {% endfor %}
+    <thead>
+        <tr>
+            <th>Status</th>
+            <th>Count</th>
+            <th>Percentage</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for status, count in report.data.by_status.items %}
+        <tr>
+            <td>{{ status|title }}</td>
+            <td>{{ count }}</td>
+            <td>
+                {% if report.data.summary.total_requests > 0 %}
+                    {% widthratio count report.data.summary.total_requests 100 %}%
+                {% else %}
+                    0%
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
 </table>
+{% endif %}
+
+{% if report.data.by_priority %}
+<h2>Requests by Priority</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Priority</th>
+            <th>Count</th>
+            <th>Percentage</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for priority, count in report.data.by_priority.items %}
+        <tr>
+            <td>{{ priority|title }}</td>
+            <td>{{ count }}</td>
+            <td>
+                {% if report.data.summary.total_requests > 0 %}
+                    {% widthratio count report.data.summary.total_requests 100 %}%
+                {% else %}
+                    0%
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if report.data.by_type %}
+<h2>Requests by Type</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Request Type</th>
+            <th>Count</th>
+            <th>Percentage</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for request_type, count in report.data.by_type.items %}
+        <tr>
+            <td>{{ request_type|title }}</td>
+            <td>{{ count }}</td>
+            <td>
+                {% if report.data.summary.total_requests > 0 %}
+                    {% widthratio count report.data.summary.total_requests 100 %}%
+                {% else %}
+                    0%
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+{% if report.data.customer_satisfaction %}
+<h2>Customer Satisfaction</h2>
+<div class="summary-box" style="margin-bottom: 10pt;">
+    <p>
+        <strong>Average Rating:</strong> 
+        {% if report.data.customer_satisfaction.avg_rating %}
+            {{ report.data.customer_satisfaction.avg_rating|floatformat:2 }} / 5.0
+        {% else %}
+            N/A
+        {% endif %}
+        <br>
+        <strong>Total Feedback Received:</strong> {{ report.data.customer_satisfaction.total_feedback }}
+    </p>
+</div>
+
+{% if report.data.customer_satisfaction.rating_distribution %}
+<h3 style="font-size: 9pt; margin-top: 8pt; margin-bottom: 4pt;">Rating Distribution</h3>
+<table>
+    <thead>
+        <tr>
+            <th>Rating</th>
+            <th>Count</th>
+            <th>Percentage</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for rating, count in report.data.customer_satisfaction.rating_distribution.items %}
+        <tr>
+            <td>{{ rating }} ⭐</td>
+            <td>{{ count }}</td>
+            <td>
+                {% if report.data.customer_satisfaction.total_feedback > 0 %}
+                    {% widthratio count report.data.customer_satisfaction.total_feedback 100 %}%
+                {% else %}
+                    0%
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
 {% endif %}
 {% endblock %}
