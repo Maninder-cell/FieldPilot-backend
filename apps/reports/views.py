@@ -76,14 +76,15 @@ def generate_report(request):
         # Mark audit log as successful
         audit_log.mark_success(execution_time)
         
-        # Return JSON data
-        if output_format == 'json':
-            return success_response(data=report_data)
-        
-        # For PDF/Excel, store report_id in cache for later export
+        # Cache report data for all formats (for history viewing and exports)
         cache_key = f"report_data:{audit_log.id}"
         cache.set(cache_key, report_data, 3600)  # Cache for 1 hour
         
+        # Return JSON data directly
+        if output_format == 'json':
+            return success_response(data=report_data)
+        
+        # For PDF/Excel, return report_id for later export
         return success_response(
             data={
                 'report_id': str(audit_log.id),
