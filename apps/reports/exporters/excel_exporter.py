@@ -57,10 +57,20 @@ class ExcelExporter:
                 self._create_summary_data_sheets(wb)
             elif report_type in ['task_detail', 'equipment_detail', 'service_request_detail']:
                 self._create_detail_data_sheets(wb)
+            elif report_type == 'overdue_tasks':
+                self._create_overdue_tasks_sheets(wb)
+            elif report_type == 'equipment_maintenance_history':
+                self._create_maintenance_history_sheets(wb)
+            elif report_type == 'equipment_utilization':
+                self._create_utilization_sheets(wb)
             elif report_type == 'technician_worksheet':
                 self._create_worksheet_sheets(wb)
             elif report_type in ['technician_performance', 'technician_productivity']:
                 self._create_performance_sheets(wb)
+            elif report_type == 'team_performance':
+                self._create_team_performance_sheets(wb)
+            elif report_type == 'overtime_report':
+                self._create_overtime_sheets(wb)
             elif report_type == 'labor_cost':
                 self._create_labor_cost_sheets(wb)
             elif report_type == 'materials_usage':
@@ -134,20 +144,100 @@ class ExcelExporter:
         # Summary metrics sheet
         if 'summary' in data:
             ws = wb.create_sheet("Metrics")
-            self._write_dict_to_sheet(ws, data['summary'], "Summary Metrics")
+            summary_data = data['summary'].copy()
+            
+            # Remove nested objects from summary for cleaner display
+            for key in list(summary_data.keys()):
+                if isinstance(summary_data[key], dict):
+                    del summary_data[key]
+            
+            self._write_dict_to_sheet(ws, summary_data, "Summary Metrics")
         
-        # Breakdown sheets
+        # Get total for percentage calculations
+        total_count = data.get('summary', {}).get('total_requests', 0) or \
+                     data.get('summary', {}).get('total_tasks', 0) or \
+                     data.get('summary', {}).get('total_equipment', 0)
+        
+        # Breakdown sheets with percentages
         if 'by_status' in data:
             ws = wb.create_sheet("By Status")
-            self._write_breakdown_to_sheet(ws, data['by_status'], "Status", "Count")
+            self._write_breakdown_to_sheet(ws, data['by_status'], "Status", "Count", total_count)
         
         if 'by_priority' in data:
             ws = wb.create_sheet("By Priority")
-            self._write_breakdown_to_sheet(ws, data['by_priority'], "Priority", "Count")
+            self._write_breakdown_to_sheet(ws, data['by_priority'], "Priority", "Count", total_count)
         
         if 'by_type' in data:
             ws = wb.create_sheet("By Type")
-            self._write_breakdown_to_sheet(ws, data['by_type'], "Type", "Count")
+            self._write_breakdown_to_sheet(ws, data['by_type'], "Type", "Count", total_count)
+        
+        if 'by_operational_status' in data:
+            ws = wb.create_sheet("By Operational Status")
+            self._write_breakdown_to_sheet(ws, data['by_operational_status'], "Status", "Count", total_count)
+        
+        if 'by_condition' in data:
+            ws = wb.create_sheet("By Condition")
+            self._write_breakdown_to_sheet(ws, data['by_condition'], "Condition", "Count", total_count)
+        
+        # Warranty alerts for equipment summary
+        if 'warranty_alerts' in data:
+            ws = wb.create_sheet("Warranty Alerts")
+            alerts = data['warranty_alerts']
+            
+            ws['A1'] = 'Alert Type'
+            ws['B1'] = 'Count'
+            ws['A1'].font = Font(bold=True)
+            ws['B1'].font = Font(bold=True)
+            ws['A1'].fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+            ws['B1'].fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+            
+            ws['A2'] = 'Expiring within 30 days'
+            ws['B2'] = alerts.get('expiring_within_30_days', 0)
+            ws['A3'] = 'Expiring within 90 days'
+            ws['B3'] = alerts.get('expiring_within_90_days', 0)
+            ws['A4'] = 'Already expired'
+            ws['B4'] = alerts.get('expired', 0)
+            
+            ws.column_dimensions['A'].width = 30
+            ws.column_dimensions['B'].width = 15
+        
+        # Customer satisfaction for service requests
+        if 'customer_satisfaction' in data:
+            ws = wb.create_sheet("Customer Satisfaction")
+            satisfaction = data['customer_satisfaction']
+            
+            # Summary stats
+            ws['A1'] = 'Average Rating'
+            ws['B1'] = f"{satisfaction.get('avg_rating', 0):.2f} / 5.0" if satisfaction.get('avg_rating') else 'N/A'
+            ws['A2'] = 'Total Feedback'
+            ws['B2'] = satisfaction.get('total_feedback', 0)
+            
+            # Rating distribution
+            if 'rating_distribution' in satisfaction:
+                ws['A4'] = 'Rating Distribution'
+                ws['A4'].font = Font(bold=True)
+                
+                ws['A5'] = 'Rating'
+                ws['B5'] = 'Count'
+                ws['C5'] = 'Percentage'
+                ws['A5'].font = Font(bold=True)
+                ws['B5'].font = Font(bold=True)
+                ws['C5'].font = Font(bold=True)
+                ws['A5'].fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+                ws['B5'].fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+                ws['C5'].fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+                
+                row = 6
+                total = satisfaction.get('total_feedback', 0)
+                for rating, count in satisfaction['rating_distribution'].items():
+                    ws[f'A{row}'] = f"{rating} Stars"
+                    ws[f'B{row}'] = count
+                    ws[f'C{row}'] = f"{(count / total * 100):.1f}%" if total > 0 else "0%"
+                    row += 1
+                
+                ws.column_dimensions['A'].width = 15
+                ws.column_dimensions['B'].width = 10
+                ws.column_dimensions['C'].width = 15
     
     def _create_detail_data_sheets(self, wb):
         """Create sheets for detail reports."""
@@ -155,25 +245,142 @@ class ExcelExporter:
         
         # Get the main data list
         items = None
+        sheet_name = None
+        
         if 'tasks' in data:
             items = data['tasks']
             sheet_name = "Tasks"
+            # Flatten task data for better Excel display
+            flattened = []
+            for task in items:
+                equipment = task.get('equipment', {})
+                facility = task.get('facility', {})
+                building = task.get('building', {})
+                assigned_techs = task.get('assigned_technicians', [])
+                tech_names = ', '.join([t.get('name', '') for t in assigned_techs]) if assigned_techs else 'Unassigned'
+                work_hours = task.get('work_hours', {})
+                
+                flattened.append({
+                    'task_number': task.get('task_number'),
+                    'title': task.get('title'),
+                    'description': task.get('description', '')[:200],  # Increased from 100
+                    'status': task.get('status'),
+                    'priority': task.get('priority'),
+                    'equipment_name': equipment.get('name', ''),
+                    'equipment_number': equipment.get('number', ''),
+                    'facility': facility.get('name', ''),
+                    'building': building.get('name', '') if building else '',
+                    'assigned_to': tech_names,
+                    'total_hours': work_hours.get('total_hours', 0),
+                    'overtime_hours': work_hours.get('overtime_hours', 0),
+                    'scheduled_start': task.get('scheduled_start'),
+                    'scheduled_end': task.get('scheduled_end'),
+                    'actual_start': task.get('actual_start'),
+                    'actual_end': task.get('actual_end'),
+                    'created_at': task.get('created_at'),
+                    'created_by': task.get('created_by', ''),
+                })
+            items = flattened
+            
         elif 'equipment' in data:
             items = data['equipment']
             sheet_name = "Equipment"
+            # Flatten equipment data - match PDF template fields
+            flattened = []
+            for equip in items:
+                facility = equip.get('facility', {})
+                building = equip.get('building', {})
+                customer = equip.get('customer', {})
+                
+                flattened.append({
+                    'equipment_number': equip.get('equipment_number') or equip.get('number'),
+                    'name': equip.get('name'),
+                    'type': equip.get('type'),
+                    'manufacturer': equip.get('manufacturer'),
+                    'model': equip.get('model'),
+                    'serial_number': equip.get('serial_number'),
+                    'status': equip.get('operational_status') or equip.get('status'),
+                    'condition': equip.get('condition'),
+                    'building': building.get('name', ''),
+                    'facility': facility.get('name', ''),
+                    'customer_name': customer.get('name', ''),
+                    'customer_company': customer.get('company', '') or customer.get('company_name', ''),
+                    'purchase_date': equip.get('purchase_date'),
+                    'warranty_expiration': equip.get('warranty_expiration') or equip.get('warranty_expiry_date'),
+                    'is_under_warranty': 'Yes' if equip.get('is_under_warranty') else 'No',
+                    'last_maintenance': equip.get('last_maintenance_date'),
+                    'next_maintenance': equip.get('next_maintenance_date'),
+                    'total_tasks': equip.get('total_tasks', 0),
+                    'total_work_hours': equip.get('total_work_hours', 0),
+                })
+            items = flattened
+            
         elif 'requests' in data:
             items = data['requests']
-            sheet_name = "Requests"
+            sheet_name = "Service Requests"
+            # Flatten service request data - match PDF template fields
+            flattened = []
+            for req in items:
+                customer = req.get('customer', {})
+                equipment = req.get('equipment', {})
+                facility = req.get('facility', {})
+                converted_task = req.get('converted_task', {})
+                
+                flattened.append({
+                    'request_number': req.get('request_number'),
+                    'title': req.get('title'),
+                    'description': req.get('description', '')[:200],  # Increased from 100
+                    'status': req.get('status'),
+                    'priority': req.get('priority'),
+                    'request_type': req.get('request_type'),
+                    'customer_name': customer.get('name', ''),
+                    'customer_company': customer.get('company', '') or customer.get('company_name', ''),
+                    'customer_email': customer.get('email', ''),
+                    'equipment_name': equipment.get('name', ''),
+                    'equipment_number': equipment.get('number', ''),
+                    'facility': facility.get('name', ''),
+                    'created_at': req.get('created_at'),
+                    'reviewed_by': req.get('reviewed_by', ''),
+                    'response_time_hours': req.get('response_time_hours'),
+                    'resolution_time_hours': req.get('resolution_time_hours'),
+                    'customer_rating': req.get('customer_rating'),
+                    'customer_feedback': req.get('customer_feedback', '')[:200] if req.get('customer_feedback') else '',
+                    'converted_to_task': converted_task.get('task_number', ''),
+                })
+            items = flattened
         
-        if items:
+        if items and sheet_name:
             ws = wb.create_sheet(sheet_name)
             self._write_list_to_sheet(ws, items)
+        
+        # Add summary if available
+        if 'summary' in data:
+            ws = wb.create_sheet("Summary")
+            self._write_dict_to_sheet(ws, data['summary'], f"{sheet_name} Summary")
     
     def _create_worksheet_sheets(self, wb):
         """Create sheets for technician worksheets."""
         data = self.data.get('data', {})
         worksheets = data.get('worksheets', [])
         
+        # Overview sheet
+        if worksheets:
+            ws_overview = wb.create_sheet("Worksheet Overview")
+            overview = []
+            for worksheet in worksheets:
+                tech = worksheet.get('technician', {})
+                totals = worksheet.get('totals', {})
+                overview.append({
+                    'technician_name': tech.get('name', ''),
+                    'technician_email': tech.get('email', ''),
+                    'total_tasks': totals.get('total_tasks', 0),
+                    'total_work_hours': totals.get('total_work_hours', 0),
+                    'normal_hours': totals.get('normal_hours', 0),
+                    'overtime_hours': totals.get('overtime_hours', 0),
+                })
+            self._write_list_to_sheet(ws_overview, overview)
+        
+        # Individual technician sheets
         for worksheet in worksheets:
             tech_name = worksheet.get('technician', {}).get('name', 'Unknown')
             ws = wb.create_sheet(tech_name[:31])  # Excel sheet name limit
@@ -181,11 +388,37 @@ class ExcelExporter:
             # Write technician info
             ws['A1'] = 'Technician:'
             ws['B1'] = tech_name
-            ws['A2'] = 'Total Hours:'
-            ws['B2'] = worksheet.get('totals', {}).get('total_work_hours', 0)
+            ws['A2'] = 'Email:'
+            ws['B2'] = worksheet.get('technician', {}).get('email', '')
+            ws['A3'] = 'Total Hours:'
+            ws['B3'] = worksheet.get('totals', {}).get('total_work_hours', 0)
+            ws['A4'] = 'Normal Hours:'
+            ws['B4'] = worksheet.get('totals', {}).get('normal_hours', 0)
+            ws['A5'] = 'Overtime Hours:'
+            ws['B5'] = worksheet.get('totals', {}).get('overtime_hours', 0)
             
-            # Write time logs
-            self._write_list_to_sheet(ws, worksheet.get('time_logs', []), start_row=4)
+            # Write time logs - flatten nested data with all fields from PDF
+            time_logs = worksheet.get('time_logs', [])
+            if time_logs:
+                flattened = []
+                for log in time_logs:
+                    equipment = log.get('equipment', {})
+                    flattened.append({
+                        'task_number': log.get('task_number'),
+                        'task_title': log.get('task_title'),
+                        'equipment_name': equipment.get('name', ''),
+                        'equipment_number': equipment.get('number', ''),
+                        'travel_started_at': log.get('travel_started_at'),
+                        'arrived_at': log.get('arrived_at'),
+                        'lunch_started_at': log.get('lunch_started_at'),
+                        'lunch_ended_at': log.get('lunch_ended_at'),
+                        'departed_at': log.get('departed_at'),
+                        'equipment_status': log.get('equipment_status_at_departure', ''),
+                        'total_work_hours': log.get('total_work_hours', 0),
+                        'normal_hours': log.get('normal_hours', 0),
+                        'overtime_hours': log.get('overtime_hours', 0),
+                    })
+                self._write_list_to_sheet(ws, flattened, start_row=7)
     
     def _create_performance_sheets(self, wb):
         """Create sheets for performance reports."""
@@ -193,11 +426,38 @@ class ExcelExporter:
         
         if 'performance' in data:
             ws = wb.create_sheet("Performance")
-            self._write_list_to_sheet(ws, data['performance'])
+            # Flatten nested data
+            flattened = []
+            for perf in data['performance']:
+                tech = perf.get('technician', {})
+                customer_rating = perf.get('customer_rating', {})
+                flattened.append({
+                    'technician_name': tech.get('name', ''),
+                    'technician_email': tech.get('email', ''),
+                    'completed_tasks': perf.get('completed_tasks', 0),
+                    'total_work_hours': perf.get('total_work_hours', 0),
+                    'avg_task_completion_time_hours': perf.get('avg_task_completion_time_hours', 0),
+                    'avg_customer_rating': customer_rating.get('average', 0),
+                    'total_ratings': customer_rating.get('total_ratings', 0),
+                })
+            self._write_list_to_sheet(ws, flattened)
         
         if 'productivity' in data:
             ws = wb.create_sheet("Productivity")
-            self._write_list_to_sheet(ws, data['productivity'])
+            # Flatten nested data
+            flattened = []
+            for prod in data['productivity']:
+                tech = prod.get('technician', {})
+                flattened.append({
+                    'technician_name': tech.get('name', ''),
+                    'technician_email': tech.get('email', ''),
+                    'completed_tasks': prod.get('completed_tasks', 0),
+                    'total_work_hours': prod.get('total_work_hours', 0),
+                    'tasks_per_day': prod.get('tasks_per_day', 0),
+                    'hours_per_task': prod.get('hours_per_task', 0),
+                    'date_range_days': prod.get('date_range_days', 0),
+                })
+            self._write_list_to_sheet(ws, flattened)
     
     def _create_labor_cost_sheets(self, wb):
         """Create sheets for labor cost reports."""
@@ -205,15 +465,64 @@ class ExcelExporter:
         
         if 'by_technician' in data:
             ws = wb.create_sheet("By Technician")
-            self._write_list_to_sheet(ws, data['by_technician'])
+            # Flatten nested data - match PDF template
+            flattened = []
+            for item in data['by_technician']:
+                tech = item.get('technician', {})
+                flattened.append({
+                    'technician_name': tech.get('name', ''),
+                    'technician_email': tech.get('email', ''),
+                    'normal_hours': item.get('normal_hours', 0),
+                    'overtime_hours': item.get('overtime_hours', 0),
+                    'total_hours': item.get('total_hours', 0),
+                    'normal_cost': item.get('normal_cost', 0),
+                    'overtime_cost': item.get('overtime_cost', 0),
+                    'total_cost': item.get('total_cost', 0),
+                })
+            self._write_list_to_sheet(ws, flattened)
         
         if 'by_task' in data:
             ws = wb.create_sheet("By Task")
-            self._write_list_to_sheet(ws, data['by_task'])
+            # Flatten nested data - match PDF template
+            flattened = []
+            for item in data['by_task']:
+                task = item.get('task', {})
+                equipment = task.get('equipment', {})
+                flattened.append({
+                    'task_number': task.get('task_number', ''),
+                    'task_title': task.get('title', ''),
+                    'equipment_name': equipment.get('name', ''),
+                    'equipment_number': equipment.get('number', ''),
+                    'total_hours': item.get('total_hours', 0),
+                    'total_cost': item.get('total_cost', 0),
+                })
+            self._write_list_to_sheet(ws, flattened)
         
         if 'by_customer' in data:
             ws = wb.create_sheet("By Customer")
-            self._write_list_to_sheet(ws, data['by_customer'])
+            # Flatten nested data - match PDF template
+            flattened = []
+            for item in data['by_customer']:
+                customer = item.get('customer', {})
+                flattened.append({
+                    'customer_name': customer.get('name', ''),
+                    'company_name': customer.get('company_name', '') or customer.get('company', ''),
+                    'contact_email': customer.get('email', ''),
+                    'total_hours': item.get('total_hours', 0),
+                    'total_cost': item.get('total_cost', 0),
+                })
+            self._write_list_to_sheet(ws, flattened)
+        
+        # Summary metrics - match PDF template
+        if 'summary' in data:
+            ws = wb.create_sheet("Summary")
+            summary_data = {
+                'total_hours': data['summary'].get('total_hours', 0),
+                'total_cost': data['summary'].get('total_cost', 0),
+                'normal_hourly_rate': data['summary'].get('normal_hourly_rate', 0),
+                'overtime_hourly_rate': data['summary'].get('overtime_hourly_rate', 0),
+            }
+            self._write_dict_to_sheet(ws, summary_data, "Labor Cost Summary")
     
     def _create_materials_sheets(self, wb):
         """Create sheets for materials reports."""
@@ -221,48 +530,416 @@ class ExcelExporter:
         
         if 'material_summary' in data:
             ws = wb.create_sheet("Material Summary")
-            self._write_list_to_sheet(ws, data['material_summary'])
+            # Match PDF template fields
+            flattened = []
+            for material in data['material_summary']:
+                flattened.append({
+                    'material_name': material.get('material_name'),
+                    'unit': material.get('unit'),
+                    'total_needed': material.get('total_needed', 0),
+                    'total_received': material.get('total_received', 0),
+                    'difference': material.get('difference', 0),
+                })
+            self._write_list_to_sheet(ws, flattened)
         
         if 'by_task' in data:
-            ws = wb.create_sheet("By Task")
-            # Flatten the nested structure
-            flattened = []
+            # Create two sheets: one for needed, one for received
+            ws_needed = wb.create_sheet("Materials Needed")
+            ws_received = wb.create_sheet("Materials Received")
+            
+            needed_list = []
+            received_list = []
+            
             for task_data in data['by_task']:
                 task_info = task_data.get('task', {})
+                task_number = task_info.get('task_number')
+                task_title = task_info.get('title')
+                
+                # Materials needed
                 for material in task_data.get('materials_needed', []):
-                    flattened.append({
-                        'task_number': task_info.get('task_number'),
-                        'type': 'Needed',
-                        **material
+                    needed_list.append({
+                        'task_number': task_number,
+                        'task_title': task_title,
+                        'material_name': material.get('material_name'),
+                        'quantity': material.get('quantity', 0),
+                        'unit': material.get('unit'),
+                        'logged_at': material.get('logged_at'),
+                        'logged_by': material.get('logged_by', ''),
                     })
+                
+                # Materials received
                 for material in task_data.get('materials_received', []):
-                    flattened.append({
-                        'task_number': task_info.get('task_number'),
-                        'type': 'Received',
-                        **material
+                    received_list.append({
+                        'task_number': task_number,
+                        'task_title': task_title,
+                        'material_name': material.get('material_name'),
+                        'quantity': material.get('quantity', 0),
+                        'unit': material.get('unit'),
+                        'logged_at': material.get('logged_at'),
+                        'logged_by': material.get('logged_by', ''),
                     })
-            self._write_list_to_sheet(ws, flattened)
+            
+            if needed_list:
+                self._write_list_to_sheet(ws_needed, needed_list)
+            else:
+                ws_needed['A1'] = 'No materials needed'
+            
+            if received_list:
+                self._write_list_to_sheet(ws_received, received_list)
+            else:
+                ws_received['A1'] = 'No materials received'
     
     def _create_billing_sheets(self, wb):
         """Create sheets for billing reports."""
         data = self.data.get('data', {})
         
+        # Summary sheet first - match PDF template
+        if 'summary' in data:
+            ws = wb.create_sheet("Summary")
+            summary_data = {
+                'total_customers': data['summary'].get('total_customers', 0),
+                'grand_total_hours': data['summary'].get('grand_total_hours', 0),
+                'grand_total_billable': data['summary'].get('grand_total_billable', 0),
+                'normal_hourly_rate': data['summary'].get('normal_hourly_rate', 0),
+                'overtime_hourly_rate': data['summary'].get('overtime_hourly_rate', 0),
+            }
+            self._write_dict_to_sheet(ws, summary_data, "Customer Billing Summary")
+        
         if 'billing_by_customer' in data:
-            ws = wb.create_sheet("Customer Billing")
-            # Flatten nested structure
-            flattened = []
+            # Overview sheet with all customers
+            ws_overview = wb.create_sheet("Customer Overview")
+            overview = []
             for billing in data['billing_by_customer']:
                 customer = billing.get('customer', {})
                 labor = billing.get('labor', {})
+                materials = billing.get('materials', {})
+                overview.append({
+                    'company_name': customer.get('company_name', ''),
+                    'contact_person': customer.get('contact_person', ''),
+                    'email': customer.get('email', ''),
+                    'normal_hours': labor.get('normal_hours', 0),
+                    'overtime_hours': labor.get('overtime_hours', 0),
+                    'total_hours': labor.get('total_hours', 0),
+                    'labor_cost': labor.get('labor_cost', 0),
+                    'materials_count': materials.get('materials_received_count', 0),
+                    'total_billable': billing.get('total_billable', 0),
+                    'total_tasks': billing.get('total_tasks', 0),
+                })
+            self._write_list_to_sheet(ws_overview, overview)
+            
+            # Individual customer sheets with task breakdown
+            for idx, billing in enumerate(data['billing_by_customer']):
+                customer = billing.get('customer', {})
+                company_name = customer.get('company_name', 'Customer')
+                sheet_name = f"{company_name[:25]}"
+                if idx > 0:
+                    sheet_name = f"{sheet_name}_{idx}"
+                
+                ws = wb.create_sheet(sheet_name)
+                
+                # Customer info
+                labor = billing.get('labor', {})
+                materials = billing.get('materials', {})
+                
+                ws['A1'] = 'Company:'
+                ws['B1'] = company_name
+                ws['A2'] = 'Contact:'
+                ws['B2'] = customer.get('contact_person', '')
+                ws['A3'] = 'Email:'
+                ws['B3'] = customer.get('email', '')
+                ws['A4'] = 'Normal Hours:'
+                ws['B4'] = f"{labor.get('normal_hours', 0):.2f}h"
+                ws['A5'] = 'Overtime Hours:'
+                ws['B5'] = f"{labor.get('overtime_hours', 0):.2f}h"
+                ws['A6'] = 'Total Hours:'
+                ws['B6'] = f"{labor.get('total_hours', 0):.2f}h"
+                ws['A7'] = 'Labor Cost:'
+                ws['B7'] = f"${labor.get('labor_cost', 0):.2f}"
+                ws['A8'] = 'Materials Count:'
+                ws['B8'] = materials.get('materials_received_count', 0)
+                ws['A9'] = 'Total Billable:'
+                ws['B9'] = f"${billing.get('total_billable', 0):.2f}"
+                
+                # Task breakdown
+                task_breakdown = billing.get('task_breakdown', [])
+                if task_breakdown:
+                    flattened = []
+                    for task in task_breakdown:
+                        flattened.append({
+                            'task_number': task.get('task_number', ''),
+                            'title': task.get('title', ''),
+                            'status': task.get('status', ''),
+                            'work_hours': task.get('work_hours', 0),
+                        })
+                    self._write_list_to_sheet(ws, flattened, start_row=11)
+                else:
+                    ws['A11'] = 'No task breakdown available'
+                
+                # Materials note
+                if materials.get('note'):
+                    note_row = 11 + len(task_breakdown) + 2 if task_breakdown else 12
+                    ws[f'A{note_row}'] = 'Note:'
+                    ws[f'B{note_row}'] = materials.get('note', '')
+    
+    def _create_overdue_tasks_sheets(self, wb):
+        """Create sheets for overdue tasks report."""
+        data = self.data.get('data', {})
+        
+        if 'overdue_tasks' in data:
+            ws = wb.create_sheet("Overdue Tasks")
+            # Flatten nested structure for better Excel display
+            flattened = []
+            for task in data['overdue_tasks']:
+                equipment = task.get('equipment', {})
+                facility = task.get('facility', {})
+                assigned_techs = task.get('assigned_technicians', [])
+                tech_names = ', '.join([t.get('name', '') for t in assigned_techs]) if assigned_techs else 'Unassigned'
+                
                 flattened.append({
-                    'company_name': customer.get('company_name'),
-                    'contact_name': customer.get('contact_name'),
-                    'total_hours': labor.get('total_hours'),
-                    'labor_cost': labor.get('labor_cost'),
-                    'total_billable': billing.get('total_billable'),
-                    'total_tasks': billing.get('total_tasks'),
+                    'task_number': task.get('task_number'),
+                    'title': task.get('title'),
+                    'priority': task.get('priority'),
+                    'status': task.get('status'),
+                    'equipment_name': equipment.get('name', ''),
+                    'equipment_number': equipment.get('number', ''),
+                    'facility': facility.get('name', ''),
+                    'scheduled_end': task.get('scheduled_end'),
+                    'days_overdue': task.get('days_overdue'),
+                    'assigned_to': tech_names,
                 })
             self._write_list_to_sheet(ws, flattened)
+        
+        # Summary metrics
+        if 'summary' in data:
+            ws = wb.create_sheet("Summary")
+            self._write_dict_to_sheet(ws, data['summary'], "Overdue Tasks Summary")
+    
+    def _create_maintenance_history_sheets(self, wb):
+        """Create sheets for equipment maintenance history report."""
+        data = self.data.get('data', {})
+        
+        if 'equipment_history' in data:
+            for idx, equipment_data in enumerate(data['equipment_history']):
+                # Equipment info is at top level, not nested
+                sheet_name = f"{equipment_data.get('name', 'Equipment')[:25]}"
+                if idx > 0:
+                    sheet_name = f"{sheet_name}_{idx}"
+                
+                ws = wb.create_sheet(sheet_name)
+                
+                # Equipment info - match PDF template
+                ws['A1'] = 'Equipment:'
+                ws['B1'] = equipment_data.get('name', '')
+                ws['A2'] = 'Equipment #:'
+                ws['B2'] = equipment_data.get('equipment_number', '')
+                ws['A3'] = 'Type:'
+                ws['B3'] = equipment_data.get('type', '')
+                ws['A4'] = 'Status:'
+                ws['B4'] = equipment_data.get('operational_status', '')
+                
+                # Maintenance summary
+                maintenance_summary = equipment_data.get('maintenance_summary', {})
+                ws['A5'] = 'Total Tasks:'
+                ws['B5'] = maintenance_summary.get('total_tasks', 0)
+                ws['A6'] = 'Completed Tasks:'
+                ws['B6'] = maintenance_summary.get('completed_tasks', 0)
+                ws['A7'] = 'Last Maintenance:'
+                ws['B7'] = maintenance_summary.get('last_maintenance_date', '')
+                
+                # Recent tasks - match PDF template fields
+                recent_tasks = equipment_data.get('recent_tasks', [])
+                if recent_tasks:
+                    flattened = []
+                    for task in recent_tasks:
+                        flattened.append({
+                            'task_number': task.get('task_number'),
+                            'title': task.get('title'),
+                            'status': task.get('status'),
+                            'priority': task.get('priority'),
+                            'created_at': task.get('created_at'),
+                            'scheduled_start': task.get('scheduled_start'),
+                            'scheduled_end': task.get('scheduled_end'),
+                        })
+                    self._write_list_to_sheet(ws, flattened, start_row=9)
+                else:
+                    ws['A9'] = 'No recent maintenance tasks'
+    
+    def _create_utilization_sheets(self, wb):
+        """Create sheets for equipment utilization report."""
+        data = self.data.get('data', {})
+        
+        if 'utilization' in data:
+            ws = wb.create_sheet("Equipment Utilization")
+            # Flatten nested structure - match PDF template
+            flattened = []
+            for util in data['utilization']:
+                facility = util.get('facility', {})
+                flattened.append({
+                    'equipment_number': util.get('equipment_number', ''),
+                    'name': util.get('name', ''),
+                    'type': util.get('type', ''),
+                    'operational_status': util.get('operational_status', ''),
+                    'facility': facility.get('name', '') if facility else '',
+                    'task_count': util.get('task_count', 0),
+                    'completed_tasks': util.get('completed_tasks', 0),
+                })
+            self._write_list_to_sheet(ws, flattened)
+        
+        # Most utilized equipment
+        if 'most_utilized' in data:
+            ws = wb.create_sheet("Most Utilized (Top 5)")
+            flattened = []
+            for item in data['most_utilized']:
+                flattened.append({
+                    'equipment_number': item.get('equipment_number', ''),
+                    'name': item.get('name', ''),
+                    'type': item.get('type', ''),
+                    'task_count': item.get('task_count', 0),
+                    'completed_tasks': item.get('completed_tasks', 0),
+                })
+            self._write_list_to_sheet(ws, flattened)
+        
+        # Least utilized equipment
+        if 'least_utilized' in data:
+            ws = wb.create_sheet("Least Utilized (Bottom 5)")
+            flattened = []
+            for item in data['least_utilized']:
+                flattened.append({
+                    'equipment_number': item.get('equipment_number', ''),
+                    'name': item.get('name', ''),
+                    'type': item.get('type', ''),
+                    'task_count': item.get('task_count', 0),
+                    'completed_tasks': item.get('completed_tasks', 0),
+                })
+            self._write_list_to_sheet(ws, flattened)
+        
+        # Summary metrics
+        if 'summary' in data:
+            ws = wb.create_sheet("Summary")
+            self._write_dict_to_sheet(ws, data['summary'], "Utilization Summary")
+    
+    def _create_team_performance_sheets(self, wb):
+        """Create sheets for team performance report."""
+        data = self.data.get('data', {})
+        
+        if 'teams' in data:
+            # Overview sheet
+            ws_overview = wb.create_sheet("Team Overview")
+            team_overview = []
+            for team in data['teams']:
+                team_info = team.get('team', {})
+                team_overview.append({
+                    'team_name': team_info.get('name', ''),
+                    'total_members': team.get('total_members', 0),
+                    'total_tasks': team.get('total_tasks', 0),
+                    'completed_tasks': team.get('completed_tasks', 0),
+                    'completion_rate': team.get('completion_rate', 0),
+                    'total_work_hours': team.get('total_work_hours', 0),
+                })
+            self._write_list_to_sheet(ws_overview, team_overview)
+            
+            # Individual team sheets with member contributions
+            for idx, team in enumerate(data['teams']):
+                team_info = team.get('team', {})
+                sheet_name = f"{team_info.get('name', 'Team')[:25]}"
+                if idx > 0:
+                    sheet_name = f"{sheet_name}_{idx}"
+                
+                ws = wb.create_sheet(sheet_name)
+                
+                # Team info
+                ws['A1'] = 'Team:'
+                ws['B1'] = team_info.get('name', '')
+                ws['A2'] = 'Total Members:'
+                ws['B2'] = team.get('total_members', 0)
+                ws['A3'] = 'Total Tasks:'
+                ws['B3'] = team.get('total_tasks', 0)
+                ws['A4'] = 'Completed Tasks:'
+                ws['B4'] = team.get('completed_tasks', 0)
+                ws['A5'] = 'Completion Rate:'
+                ws['B5'] = f"{team.get('completion_rate', 0):.1f}%"
+                ws['A6'] = 'Total Work Hours:'
+                ws['B6'] = f"{team.get('total_work_hours', 0):.2f}h"
+                
+                # Member contributions with percentages
+                members = team.get('member_contributions', [])
+                if members:
+                    flattened = []
+                    team_completed = team.get('completed_tasks', 0)
+                    team_hours = team.get('total_work_hours', 0)
+                    
+                    for member in members:
+                        tech = member.get('technician', {})
+                        tasks_completed = member.get('tasks_completed', 0)
+                        work_hours = member.get('work_hours', 0)
+                        
+                        # Calculate percentages
+                        pct_tasks = (tasks_completed / team_completed * 100) if team_completed > 0 else 0
+                        pct_hours = (work_hours / team_hours * 100) if team_hours > 0 else 0
+                        
+                        flattened.append({
+                            'technician_name': tech.get('name', ''),
+                            'tasks_completed': tasks_completed,
+                            'work_hours': work_hours,
+                            'pct_of_team_tasks': f"{pct_tasks:.1f}%",
+                            'pct_of_team_hours': f"{pct_hours:.1f}%",
+                        })
+                    
+                    # Add totals row
+                    flattened.append({
+                        'technician_name': 'TEAM TOTALS',
+                        'tasks_completed': team_completed,
+                        'work_hours': team_hours,
+                        'pct_of_team_tasks': '100.0%',
+                        'pct_of_team_hours': '100.0%',
+                    })
+                    
+                    self._write_list_to_sheet(ws, flattened, start_row=8)
+    
+    def _create_overtime_sheets(self, wb):
+        """Create sheets for overtime report."""
+        data = self.data.get('data', {})
+        
+        # Summary metrics first - match PDF template
+        if 'summary' in data:
+            ws = wb.create_sheet("Summary")
+            summary_data = {
+                'total_technicians_with_overtime': data['summary'].get('total_technicians_with_overtime', 0),
+                'grand_total_overtime_hours': data['summary'].get('grand_total_overtime_hours', 0),
+                'grand_total_overtime_cost': data['summary'].get('grand_total_overtime_cost', 0),
+                'hourly_rate_used': data['summary'].get('hourly_rate_used', 0),
+            }
+            self._write_dict_to_sheet(ws, summary_data, "Overtime Summary")
+        
+        if 'overtime_by_technician' in data:
+            # Overview sheet
+            ws_overview = wb.create_sheet("Overtime Overview")
+            overview = []
+            for overtime in data['overtime_by_technician']:
+                tech = overtime.get('technician', {})
+                overview.append({
+                    'technician_name': tech.get('name', ''),
+                    'technician_email': tech.get('email', ''),
+                    'total_overtime_hours': overtime.get('total_overtime_hours', 0),
+                    'total_overtime_cost': overtime.get('total_overtime_cost', 0),
+                    'number_of_entries': len(overtime.get('overtime_logs', [])),
+                })
+            self._write_list_to_sheet(ws_overview, overview)
+            
+            # Detailed overtime logs
+            ws_detail = wb.create_sheet("Overtime Details")
+            all_logs = []
+            for overtime in data['overtime_by_technician']:
+                tech = overtime.get('technician', {})
+                for log in overtime.get('overtime_logs', []):
+                    all_logs.append({
+                        'technician_name': tech.get('name', ''),
+                        'date': log.get('date'),
+                        'task_number': log.get('task_number'),
+                        'overtime_hours': log.get('overtime_hours', 0),
+                        'overtime_cost': log.get('overtime_cost', 0) if log.get('overtime_cost') else '',
+                    })
+            self._write_list_to_sheet(ws_detail, all_logs)
     
     def _create_generic_data_sheet(self, wb):
         """Create generic data sheet for unknown report types."""
@@ -288,8 +965,8 @@ class ExcelExporter:
         ws.column_dimensions['A'].width = 30
         ws.column_dimensions['B'].width = 20
     
-    def _write_breakdown_to_sheet(self, ws, data_dict, col1_name, col2_name):
-        """Write breakdown data to sheet."""
+    def _write_breakdown_to_sheet(self, ws, data_dict, col1_name, col2_name, total=None):
+        """Write breakdown data to sheet with optional percentage column."""
         from openpyxl.styles import Font, PatternFill
         
         # Headers
@@ -300,15 +977,26 @@ class ExcelExporter:
         ws['A1'].fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
         ws['B1'].fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
         
+        # Add percentage column if total provided
+        if total and total > 0:
+            ws['C1'] = 'Percentage'
+            ws['C1'].font = Font(bold=True)
+            ws['C1'].fill = PatternFill(start_color="CCCCCC", end_color="CCCCCC", fill_type="solid")
+        
         # Data
         row = 2
         for key, value in data_dict.items():
             ws[f'A{row}'] = str(key).title()
             ws[f'B{row}'] = value
+            if total and total > 0:
+                percentage = (value / total * 100) if value else 0
+                ws[f'C{row}'] = f"{percentage:.1f}%"
             row += 1
         
         ws.column_dimensions['A'].width = 20
         ws.column_dimensions['B'].width = 15
+        if total and total > 0:
+            ws.column_dimensions['C'].width = 15
     
     def _write_list_to_sheet(self, ws, data_list, start_row=1):
         """Write list of dictionaries to sheet as table."""
