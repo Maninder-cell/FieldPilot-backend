@@ -85,7 +85,7 @@ def current_user_profile(request):
         membership = request.tenant_membership
         
         data = {
-            'user': UserSerializer(request.user).data,
+            'user': UserSerializer(request.user, context={'request': request}).data,
             'tenant_membership': {
                 'id': str(membership.id),
                 'role': membership.role,
