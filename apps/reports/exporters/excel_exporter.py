@@ -253,12 +253,12 @@ class ExcelExporter:
             # Flatten task data for better Excel display
             flattened = []
             for task in items:
-                equipment = task.get('equipment', {})
-                facility = task.get('facility', {})
-                building = task.get('building', {})
-                assigned_techs = task.get('assigned_technicians', [])
+                equipment = task.get('equipment') or {}
+                facility = task.get('facility') or {}
+                building = task.get('building')
+                assigned_techs = task.get('assigned_technicians', []) or []
                 tech_names = ', '.join([t.get('name', '') for t in assigned_techs]) if assigned_techs else 'Unassigned'
-                work_hours = task.get('work_hours', {})
+                work_hours = task.get('work_hours') or {}
                 
                 flattened.append({
                     'task_number': task.get('task_number'),
@@ -288,9 +288,9 @@ class ExcelExporter:
             # Flatten equipment data - match PDF template fields
             flattened = []
             for equip in items:
-                facility = equip.get('facility', {})
-                building = equip.get('building', {})
-                customer = equip.get('customer', {})
+                facility = equip.get('facility') or {}
+                building = equip.get('building')
+                customer = equip.get('customer') or {}
                 
                 flattened.append({
                     'equipment_number': equip.get('equipment_number') or equip.get('number'),
@@ -301,7 +301,7 @@ class ExcelExporter:
                     'serial_number': equip.get('serial_number'),
                     'status': equip.get('operational_status') or equip.get('status'),
                     'condition': equip.get('condition'),
-                    'building': building.get('name', ''),
+                    'building': building.get('name', '') if building else '',
                     'facility': facility.get('name', ''),
                     'customer_name': customer.get('name', ''),
                     'customer_company': customer.get('company', '') or customer.get('company_name', ''),
@@ -321,10 +321,10 @@ class ExcelExporter:
             # Flatten service request data - match PDF template fields
             flattened = []
             for req in items:
-                customer = req.get('customer', {})
-                equipment = req.get('equipment', {})
-                facility = req.get('facility', {})
-                converted_task = req.get('converted_task', {})
+                customer = req.get('customer', {}) or {}
+                equipment = req.get('equipment', {}) or {}
+                facility = req.get('facility', {}) or {}
+                converted_task = req.get('converted_task') or {}
                 
                 flattened.append({
                     'request_number': req.get('request_number'),
@@ -345,7 +345,7 @@ class ExcelExporter:
                     'resolution_time_hours': req.get('resolution_time_hours'),
                     'customer_rating': req.get('customer_rating'),
                     'customer_feedback': req.get('customer_feedback', '')[:200] if req.get('customer_feedback') else '',
-                    'converted_to_task': converted_task.get('task_number', ''),
+                    'converted_to_task': converted_task.get('task_number', '') if converted_task else '',
                 })
             items = flattened
         
@@ -402,7 +402,7 @@ class ExcelExporter:
             if time_logs:
                 flattened = []
                 for log in time_logs:
-                    equipment = log.get('equipment', {})
+                    equipment = log.get('equipment') or {}
                     flattened.append({
                         'task_number': log.get('task_number'),
                         'task_title': log.get('task_title'),
@@ -474,7 +474,7 @@ class ExcelExporter:
                     'technician_email': tech.get('email', ''),
                     'normal_hours': item.get('normal_hours', 0),
                     'overtime_hours': item.get('overtime_hours', 0),
-                    'total_hours': item.get('total_hours', 0),
+                    'total_hours': item.get('normal_hours', 0) + item.get('overtime_hours', 0),
                     'normal_cost': item.get('normal_cost', 0),
                     'overtime_cost': item.get('overtime_cost', 0),
                     'total_cost': item.get('total_cost', 0),
@@ -690,9 +690,9 @@ class ExcelExporter:
             # Flatten nested structure for better Excel display
             flattened = []
             for task in data['overdue_tasks']:
-                equipment = task.get('equipment', {})
-                facility = task.get('facility', {})
-                assigned_techs = task.get('assigned_technicians', [])
+                equipment = task.get('equipment') or {}
+                facility = task.get('facility') or {}
+                assigned_techs = task.get('assigned_technicians', []) or []
                 tech_names = ', '.join([t.get('name', '') for t in assigned_techs]) if assigned_techs else 'Unassigned'
                 
                 flattened.append({
@@ -773,7 +773,7 @@ class ExcelExporter:
             # Flatten nested structure - match PDF template
             flattened = []
             for util in data['utilization']:
-                facility = util.get('facility', {})
+                facility = util.get('facility')
                 flattened.append({
                     'equipment_number': util.get('equipment_number', ''),
                     'name': util.get('name', ''),
@@ -1044,10 +1044,14 @@ class ExcelExporter:
     
     def _format_value(self, value):
         """Format value for Excel cell."""
+        from uuid import UUID
+        
         if isinstance(value, (datetime, date)):
             return value.isoformat()
         elif isinstance(value, Decimal):
             return float(value)
+        elif isinstance(value, UUID):
+            return str(value)
         elif isinstance(value, (list, dict)):
             return str(value)
         elif value is None:

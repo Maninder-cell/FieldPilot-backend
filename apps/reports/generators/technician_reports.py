@@ -320,6 +320,7 @@ class TechnicianProductivityReportGenerator(BaseReportGenerator):
                 'technician': {
                     'id': str(technician.id),
                     'name': technician.full_name,
+                    'email': technician.email,
                 },
                 'completed_tasks': total_tasks,
                 'total_work_hours': round(float(total_hours), 2),

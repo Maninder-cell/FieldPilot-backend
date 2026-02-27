@@ -139,6 +139,7 @@ class LaborCostReportGenerator(BaseReportGenerator):
                     'technician': {
                         'id': tech_id,
                         'name': log.technician.full_name,
+                        'email': log.technician.email,
                     },
                     'normal_hours': 0,
                     'overtime_hours': 0,
@@ -160,6 +161,10 @@ class LaborCostReportGenerator(BaseReportGenerator):
                         'id': task_id,
                         'task_number': log.task.task_number,
                         'title': log.task.title,
+                        'equipment': {
+                            'name': log.task.equipment.name if log.task.equipment else '',
+                            'number': log.task.equipment.equipment_number if log.task.equipment else '',
+                        },
                     },
                     'total_hours': 0,
                     'total_cost': 0,
@@ -175,7 +180,9 @@ class LaborCostReportGenerator(BaseReportGenerator):
                     customer_costs[customer_id] = {
                         'customer': {
                             'id': customer_id,
-                            'name': log.task.equipment.customer.company_name,
+                            'name': log.task.equipment.customer.contact_person or '',
+                            'company_name': log.task.equipment.customer.company_name,
+                            'email': log.task.equipment.customer.email or '',
                         },
                         'total_hours': 0,
                         'total_cost': 0,
