@@ -321,6 +321,9 @@ def login(request):
         serializer_context = {}
         if membership:
             serializer_context['membership'] = membership
+        elif tenant_membership:
+            # For customers (no TenantMember record), pass tenant_membership dict
+            serializer_context['tenant_membership'] = tenant_membership
         
         response_data = {
             'user': UserSerializer(user, context=serializer_context).data,
@@ -943,7 +946,7 @@ def me(request):
     Note: User info is only available from the public schema (localhost).
     """
     try:
-        serializer = UserSerializer(request.user)
+        serializer = UserSerializer(request.user, context={'request': request})
         
         return success_response(
             data=serializer.data,
