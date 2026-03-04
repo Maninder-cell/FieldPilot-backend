@@ -3,7 +3,7 @@
 resource "aws_db_instance" "main" {
   identifier     = "${var.project_name}-db"
   engine         = "postgres"
-  engine_version = "15.4"
+  engine_version = "16.13"
   
   instance_class    = var.rds_instance_class
   allocated_storage = var.rds_allocated_storage
@@ -51,31 +51,36 @@ resource "aws_db_instance" "main" {
 # DB Parameter Group
 resource "aws_db_parameter_group" "main" {
   name   = "${var.project_name}-db-params"
-  family = "postgres15"
+  family = "postgres16"
   
   parameter {
-    name  = "max_connections"
-    value = "100"
+    name         = "max_connections"
+    value        = "100"
+    apply_method = "pending-reboot"  # Static parameter
   }
   
   parameter {
-    name  = "shared_buffers"
-    value = "{DBInstanceClassMemory/32768}"  # 128MB for t3.micro
+    name         = "shared_buffers"
+    value        = "{DBInstanceClassMemory/32768}"  # 128MB for t3.micro
+    apply_method = "pending-reboot"  # Static parameter
   }
   
   parameter {
-    name  = "effective_cache_size"
-    value = "{DBInstanceClassMemory/10922}"  # 384MB for t3.micro
+    name         = "effective_cache_size"
+    value        = "{DBInstanceClassMemory/10922}"  # 384MB for t3.micro
+    apply_method = "immediate"  # Dynamic parameter
   }
   
   parameter {
-    name  = "maintenance_work_mem"
-    value = "65536"  # 64MB
+    name         = "maintenance_work_mem"
+    value        = "65536"  # 64MB
+    apply_method = "immediate"  # Dynamic parameter
   }
   
   parameter {
-    name  = "log_min_duration_statement"
-    value = "1000"  # Log queries slower than 1 second
+    name         = "log_min_duration_statement"
+    value        = "1000"  # Log queries slower than 1 second
+    apply_method = "immediate"  # Dynamic parameter
   }
   
   tags = {
