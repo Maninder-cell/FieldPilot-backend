@@ -50,37 +50,37 @@ resource "aws_db_instance" "main" {
 
 # DB Parameter Group
 resource "aws_db_parameter_group" "main" {
-  name   = "${var.project_name}-db-params"
+  name   = "${var.project_name}-db-params-v2"
   family = "postgres16"
   
   parameter {
     name         = "max_connections"
     value        = "100"
-    apply_method = "pending-reboot"  # Static parameter
+    apply_method = "pending-reboot"
   }
   
   parameter {
     name         = "shared_buffers"
-    value        = "{DBInstanceClassMemory/32768}"  # 128MB for t3.micro
-    apply_method = "pending-reboot"  # Static parameter
+    value        = "32768"  # 128MB in 8KB pages
+    apply_method = "pending-reboot"
   }
   
   parameter {
     name         = "effective_cache_size"
-    value        = "{DBInstanceClassMemory/10922}"  # 384MB for t3.micro
-    apply_method = "immediate"  # Dynamic parameter
+    value        = "98304"  # 384MB in 8KB pages
+    apply_method = "immediate"
   }
   
   parameter {
     name         = "maintenance_work_mem"
-    value        = "65536"  # 64MB
-    apply_method = "immediate"  # Dynamic parameter
+    value        = "65536"  # 64MB in KB
+    apply_method = "immediate"
   }
   
   parameter {
     name         = "log_min_duration_statement"
     value        = "1000"  # Log queries slower than 1 second
-    apply_method = "immediate"  # Dynamic parameter
+    apply_method = "immediate"
   }
   
   tags = {

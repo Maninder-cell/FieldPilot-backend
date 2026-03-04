@@ -52,6 +52,22 @@ logs/
 *.sqlite3
 *.db
 
+# Terraform
+aws/terraform/.terraform/
+aws/terraform/.terraform.lock.hcl
+aws/terraform/terraform.tfstate
+aws/terraform/terraform.tfstate.backup
+aws/terraform/*.tfvars
+aws/terraform/tfplan
+aws/deployment-info.txt
+aws/deployment-outputs.json
+
+# Deployment outputs (contain sensitive info)
+deployment-info.txt
+deployment-outputs.json
+**/deployment-info.txt
+**/deployment-outputs.json
+
 .kiro
 
 celerybeat-schedule
