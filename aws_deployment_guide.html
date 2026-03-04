@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 11pt; color: #1a1a2e; background: #fff; }
+
+  /* Cover Page */
+  .cover {
+    height: 100vh;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
+    text-align: center; padding: 60px;
+    page-break-after: always;
+  }
+  .cover .badge {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #e0e0ff;
+    padding: 6px 20px; border-radius: 20px;
+    font-size: 10pt; letter-spacing: 2px;
+    text-transform: uppercase; margin-bottom: 30px;
+  }
+  .cover h1 { color: #ffffff; font-size: 32pt; font-weight: 700; line-height: 1.2; margin-bottom: 12px; }
+  .cover h2 { color: #a8d8ff; font-size: 16pt; font-weight: 400; margin-bottom: 40px; }
+  .cover .divider { width: 80px; height: 3px; background: #e94560; margin: 0 auto 40px; border-radius: 2px; }
+  .cover .meta { color: rgba(255,255,255,0.6); font-size: 10pt; line-height: 1.8; }
+  .cover .meta span { color: #a8d8ff; font-weight: 600; }
+
+  /* Page layout */
+  .content { padding: 50px 60px; max-width: 100%; }
+
+  /* Section headers */
+  .section-title {
+    font-size: 18pt; font-weight: 700; color: #0f3460;
+    border-left: 5px solid #e94560;
+    padding-left: 14px; margin: 40px 0 18px;
+  }
+  .sub-title {
+    font-size: 13pt; font-weight: 700; color: #16213e;
+    margin: 28px 0 10px;
+  }
+  .sub-sub-title {
+    font-size: 11pt; font-weight: 700; color: #0f3460;
+    margin: 18px 0 8px;
+  }
+
+  /* Alert / callout boxes */
+  .alert {
+    border-radius: 8px; padding: 16px 20px; margin: 20px 0;
+    border-left: 5px solid;
+  }
+  .alert-warning { background: #fff8e1; border-color: #f5a623; }
+  .alert-info    { background: #e8f4ff; border-color: #2196f3; }
+  .alert-success { background: #e8f5e9; border-color: #4caf50; }
+  .alert-danger  { background: #fce4ec; border-color: #e94560; }
+  .alert .alert-title { font-weight: 700; font-size: 11pt; margin-bottom: 6px; }
+
+  /* Architecture diagram box */
+  .arch-box {
+    background: #f8f9ff; border: 2px solid #dee2ff;
+    border-radius: 10px; padding: 24px;
+    font-family: 'Courier New', monospace; font-size: 9.5pt;
+    color: #1a1a2e; line-height: 1.8; margin: 20px 0;
+    white-space: pre;
+  }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 10pt; }
+  thead { background: #0f3460; color: white; }
+  thead th { padding: 10px 14px; text-align: left; font-weight: 600; }
+  tbody tr:nth-child(even) { background: #f4f6ff; }
+  tbody tr:nth-child(odd)  { background: #ffffff; }
+  tbody td { padding: 9px 14px; border-bottom: 1px solid #e0e4f0; vertical-align: top; }
+  .total-row { background: #e8f5e9 !important; font-weight: 700; }
+  .highlight-row { background: #fff3e0 !important; }
+
+  /* Code blocks */
+  .code-block {
+    background: #1a1a2e; color: #a8d8ff;
+    padding: 16px 20px; border-radius: 8px;
+    font-family: 'Courier New', monospace; font-size: 9pt;
+    line-height: 1.7; margin: 12px 0;
+    white-space: pre;
+  }
+  .code-comment { color: #6a9955; }
+  .code-key { color: #ce9178; }
+  .code-val { color: #b5cea8; }
+
+  /* Pills / badges */
+  .pill {
+    display: inline-block; padding: 2px 10px;
+    border-radius: 12px; font-size: 9pt; font-weight: 600;
+  }
+  .pill-green  { background: #e8f5e9; color: #2e7d32; }
+  .pill-red    { background: #fce4ec; color: #c62828; }
+  .pill-blue   { background: #e3f2fd; color: #1565c0; }
+  .pill-orange { background: #fff3e0; color: #e65100; }
+
+  /* Numbered steps */
+  .steps { list-style: none; padding: 0; counter-reset: steps; }
+  .steps li {
+    counter-increment: steps;
+    padding: 10px 14px 10px 50px;
+    position: relative; margin: 8px 0;
+    background: #f8f9ff; border-radius: 6px;
+  }
+  .steps li::before {
+    content: counter(steps);
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    background: #0f3460; color: white;
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9pt; font-weight: 700;
+    line-height: 24px; text-align: center;
+  }
+
+  /* Footer */
+  .page-footer {
+    margin-top: 60px; padding-top: 16px;
+    border-top: 2px solid #e0e4f0;
+    display: flex; justify-content: space-between;
+    color: #888; font-size: 9pt;
+  }
+
+  /* Page break */
+  .page-break { page-break-before: always; }
+
+  p { margin: 8px 0; line-height: 1.6; }
+  ul { padding-left: 24px; margin: 8px 0; }
+  ul li { margin: 4px 0; line-height: 1.6; }
+  strong { color: #0f3460; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ COVER PAGE ═══════════════ -->
+<div class="cover">
+  <div class="badge">Infrastructure &amp; Deployment Guide</div>
+  <h1>FieldPilot on AWS</h1>
+  <h2>Production Deployment Strategy</h2>
+  <div class="divider"></div>
+  <div class="meta">
+    <div>Prepared for: <span>FieldPilot / FieldRino Team</span></div>
+    <div>Budget Target: <span>$40 / month</span></div>
+    <div>Date: <span>March 2026</span></div>
+    <div>Status: <span>Recommended Architecture</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════ CONTENT ═══════════════ -->
+<div class="content">
+
+  <!-- SECTION 1: HONEST ASSESSMENT -->
+  <div class="section-title">1. Honest Assessment</div>
+
+  <div class="alert alert-warning">
+    <div class="alert-title">⚠ Budget vs. Scale Trade-off</div>
+    <strong>$40/month vs. "thousands of users + zero downtime"</strong> — there is an important tension here.
+    True high-availability (multi-AZ, auto-scaling, ALB) on AWS costs <strong>$80–120/month minimum</strong>.
+    At $40/month you can serve thousands of <em>registered</em> users (not thousands of simultaneous concurrent users)
+    reliably — but with a single point of failure on the application server.
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Requirement</th><th>$40/mo Setup</th><th>True HA Setup ($80–120/mo)</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Thousands of registered users</td><td><span class="pill pill-green">✓ Yes</span></td><td><span class="pill pill-green">✓ Yes</span></td></tr>
+      <tr><td>Hundreds of daily active users</td><td><span class="pill pill-green">✓ Yes</span></td><td><span class="pill pill-green">✓ Yes</span></td></tr>
+      <tr><td>App server high-availability</td><td><span class="pill pill-red">✗ No (single EC2)</span></td><td><span class="pill pill-green">✓ Yes (ALB + 2 EC2s)</span></td></tr>
+      <tr><td>Database failover (Multi-AZ)</td><td><span class="pill pill-red">✗ No</span></td><td><span class="pill pill-green">✓ Yes</span></td></tr>
+      <tr><td>Zero-downtime deploys</td><td><span class="pill pill-orange">Partial</span></td><td><span class="pill pill-green">✓ Yes</span></td></tr>
+      <tr><td>Auto-scaling under load</td><td><span class="pill pill-red">✗ No</span></td><td><span class="pill pill-green">✓ Yes</span></td></tr>
+    </tbody>
+  </table>
+
+  <!-- SECTION 2: ARCHITECTURE -->
+  <div class="section-title page-break">2. Recommended Architecture (~$40/month)</div>
+
+  <div class="arch-box">
+                         ┌─────────────────────────────┐
+                         │         INTERNET             │
+                         └────────────┬────────────────┘
+                                      │
+                          ┌───────────▼──────────────┐
+                          │    Route 53 (DNS)         │
+                          │  *.domain.com → EC2 IP    │
+                          └───────────┬──────────────┘
+                                      │
+                          ┌───────────▼──────────────┐
+                          │  ACM (Free SSL/TLS)       │
+                          └───────────┬──────────────┘
+                                      │
+              ┌───────────────────────▼───────────────────────┐
+              │          EC2 t3a.small  (2 vCPU / 2 GB RAM)   │
+              │                                                │
+              │   Nginx ──► Gunicorn (Django)                  │
+              │             Celery Worker                      │
+              │             Celery Beat                        │
+              │             Supervisor (process manager)       │
+              └──────┬──────────────────────┬─────────────────┘
+                     │                      │
+       ┌─────────────▼──────────┐  ┌───────▼────────────────┐
+       │  RDS PostgreSQL        │  │  ElastiCache Redis      │
+       │  db.t3.micro           │  │  cache.t3.micro         │
+       │  (django-tenants)      │  │  (Celery + caching)     │
+       └────────────────────────┘  └────────────────────────┘
+                     │
+       ┌─────────────▼──────────────────────────────┐
+       │  S3  ──►  CloudFront CDN                    │
+       │  (Media files, Static assets, PDF reports)  │
+       └────────────────────────────────────────────┘
+  </div>
+
+  <!-- SECTION 3: SERVICE BREAKDOWN -->
+  <div class="section-title">3. Service-by-Service Cost Breakdown</div>
+
+  <table>
+    <thead>
+      <tr><th>AWS Service</th><th>Tier / Config</th><th>On-Demand/mo</th><th>1-Yr Reserved/mo</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>EC2 t3a.small</strong></td>
+        <td>2 vCPU, 2 GB RAM</td>
+        <td>~$13.50</td>
+        <td>~$8.50</td>
+        <td>Django + Celery + Nginx (all-in-one)</td>
+      </tr>
+      <tr>
+        <td><strong>RDS PostgreSQL db.t3.micro</strong></td>
+        <td>Single-AZ, 20 GB gp3</td>
+        <td>~$12.50</td>
+        <td>~$8.00</td>
+        <td>Primary DB — multi-tenant schemas</td>
+      </tr>
+      <tr>
+        <td><strong>ElastiCache cache.t3.micro</strong></td>
+        <td>Redis, single-node</td>
+        <td>~$12.50</td>
+        <td>~$8.50</td>
+        <td>Celery task queue + app caching</td>
+      </tr>
+      <tr>
+        <td><strong>S3 Standard</strong></td>
+        <td>Pay-per-use</td>
+        <td>~$1–2</td>
+        <td>~$1–2</td>
+        <td>Media files, static assets, report exports</td>
+      </tr>
+      <tr>
+        <td><strong>CloudFront</strong></td>
+        <td>Pay-per-use CDN</td>
+        <td>~$0.50–1</td>
+        <td>~$0.50–1</td>
+        <td>CDN for static/media — reduces EC2 load</td>
+      </tr>
+      <tr>
+        <td><strong>Route 53</strong></td>
+        <td>Hosted zone</td>
+        <td>~$0.50</td>
+        <td>~$0.50</td>
+        <td>DNS + subdomain routing for multi-tenancy</td>
+      </tr>
+      <tr>
+        <td><strong>ACM (SSL)</strong></td>
+        <td>Wildcard cert</td>
+        <td>Free</td>
+        <td>Free</td>
+        <td>SSL/TLS certificates</td>
+      </tr>
+      <tr>
+        <td><strong>SES</strong></td>
+        <td>$0.10/1000 emails</td>
+        <td>~$0.10–1</td>
+        <td>~$0.10–1</td>
+        <td>OTPs, notifications, report delivery</td>
+      </tr>
+      <tr class="total-row">
+        <td colspan="2"><strong>TOTAL (On-Demand)</strong></td>
+        <td><strong>~$40–42/mo</strong></td>
+        <td><strong>~$27–29/mo</strong></td>
+        <td>1-yr reserved saves ~$13/month</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="alert alert-success">
+    <div class="alert-title">💡 Pro Tip: Use Reserved Instances</div>
+    Purchase 1-year reserved (no upfront) for EC2, RDS, and ElastiCache.
+    This drops your total bill to <strong>~$27–29/month</strong> — saving ~$13/month
+    and giving you headroom for S3, CloudFront, SES, and Route 53 within $40.
+  </div>
+
+  <!-- SECTION 4: EC2 SETUP -->
+  <div class="section-title page-break">4. EC2 Server Setup</div>
+
+  <p>All application processes run on a single EC2 t3a.small instance managed by Supervisor:</p>
+
+  <div class="arch-box">
+  EC2 t3a.small  (2 vCPU, 2 GB RAM)
+  ├── Nginx          → Reverse proxy, SSL termination, static file serving
+  ├── Gunicorn       → Django WSGI server (4 workers)
+  ├── Celery Worker  → Background tasks: report generation, emails, file ops
+  ├── Celery Beat    → Scheduled tasks: cron jobs, report scheduling
+  └── Supervisor     → Process manager — auto-restarts crashed processes
+  </div>
+
+  <div class="sub-title">Gunicorn Configuration</div>
+  <div class="code-block"><span class="code-comment"># gunicorn.conf.py</span>
+<span class="code-key">workers</span>          = 4          <span class="code-comment"># 2 × vCPUs (standard rule)</span>
+<span class="code-key">worker_class</span>     = "sync"
+<span class="code-key">timeout</span>          = 120
+<span class="code-key">keepalive</span>        = 5
+<span class="code-key">max_requests</span>     = 1000       <span class="code-comment"># Restart workers periodically (prevent memory leaks)</span>
+<span class="code-key">max_requests_jitter</span> = 100
+<span class="code-key">bind</span>             = "0.0.0.0:8000"
+<span class="code-key">accesslog</span>        = "/var/log/gunicorn/access.log"
+<span class="code-key">errorlog</span>         = "/var/log/gunicorn/error.log"</div>
+
+  <div class="sub-title">Storage</div>
+  <ul>
+    <li>Use <strong>EBS gp3 volume</strong> (30 GB) — faster than gp2 at same cost (~$2.40/month)</li>
+    <li>Enable <strong>EC2 Auto Recovery</strong> (free) — automatically restarts the instance on underlying hardware failure</li>
+    <li>Assign an <strong>Elastic IP</strong> (free while attached) — static IP that survives reboots</li>
+  </ul>
+
+  <!-- SECTION 5: DATABASE -->
+  <div class="section-title">5. RDS PostgreSQL Configuration</div>
+
+  <p>Your app uses <strong>django-tenants</strong> with schema-per-tenant isolation. The database is the most critical component.</p>
+
+  <div class="code-block"><span class="code-comment"># Key RDS settings for db.t3.micro</span>
+<span class="code-key">max_connections</span>      = 100      <span class="code-comment"># Hard limit on t3.micro</span>
+<span class="code-key">shared_buffers</span>       = 128MB
+<span class="code-key">effective_cache_size</span> = 384MB
+<span class="code-key">maintenance_work_mem</span> = 64MB
+
+<span class="code-comment"># Django DATABASE settings</span>
+<span class="code-key">CONN_MAX_AGE</span>         = 60       <span class="code-comment"># Persistent connections (reduce overhead)</span>
+<span class="code-key">OPTIONS</span>: connect_timeout = 10</div>
+
+  <table>
+    <thead>
+      <tr><th>RDS Setting</th><th>Recommended Value</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Automated Backups</td><td>7-day retention (free within storage limit)</td></tr>
+      <tr><td>Backup Window</td><td>Low-traffic hours (e.g., 02:00–03:00 UTC)</td></tr>
+      <tr><td>Maintenance Window</td><td>Off-peak hours</td></tr>
+      <tr><td>Performance Insights</td><td>Enable (free tier: 7 days retention)</td></tr>
+      <tr><td>Storage Auto Scaling</td><td>Enable — max threshold 100 GB</td></tr>
+      <tr><td>Deletion Protection</td><td>Enable</td></tr>
+      <tr><td>Snapshot before deploy</td><td>Always — before every deployment</td></tr>
+    </tbody>
+  </table>
+
+  <!-- SECTION 6: REDIS -->
+  <div class="section-title page-break">6. ElastiCache Redis Configuration</div>
+
+  <p>Redis serves two purposes in this application: <strong>Celery task queue</strong> and <strong>Django caching</strong> (report caching, session data).</p>
+
+  <div class="code-block"><span class="code-comment"># Django settings for Redis</span>
+<span class="code-key">CELERY_BROKER_URL</span>  = "redis://your-elasticache-endpoint:6379/0"
+<span class="code-key">CELERY_RESULT_BACKEND</span> = "redis://your-elasticache-endpoint:6379/0"
+
+<span class="code-key">CACHES</span> = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": "redis://your-elasticache-endpoint:6379/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "SOCKET_CONNECT_TIMEOUT": 5,
+            "SOCKET_TIMEOUT": 5,
+        }
+    }
+}</div>
+
+  <!-- SECTION 7: S3 + CLOUDFRONT -->
+  <div class="section-title">7. S3 + CloudFront Setup</div>
+
+  <p>S3 stores all media files, static assets, and generated reports (PDF/Excel). CloudFront serves them globally at low latency, reducing load on your EC2.</p>
+
+  <div class="code-block"><span class="code-comment"># Django settings — django-storages with S3</span>
+<span class="code-key">DEFAULT_FILE_STORAGE</span>   = 'storages.backends.s3boto3.S3Boto3Storage'
+<span class="code-key">STATICFILES_STORAGE</span>    = 'storages.backends.s3boto3.S3StaticStorage'
+<span class="code-key">AWS_STORAGE_BUCKET_NAME</span> = 'fieldrino-media-prod'
+<span class="code-key">AWS_S3_REGION_NAME</span>     = 'ap-south-1'    <span class="code-comment"># Mumbai — closest for India</span>
+<span class="code-key">AWS_S3_CUSTOM_DOMAIN</span>   = 'cdn.yourdomain.com'   <span class="code-comment"># CloudFront domain</span>
+<span class="code-key">AWS_DEFAULT_ACL</span>        = 'private'
+<span class="code-key">AWS_S3_FILE_OVERWRITE</span>  = False
+<span class="code-key">AWS_S3_OBJECT_PARAMETERS</span> = {'CacheControl': 'max-age=86400'}</div>
+
+  <table>
+    <thead>
+      <tr><th>S3 Bucket</th><th>Purpose</th><th>ACL</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>fieldrino-media-prod</td><td>User uploads, report files, equipment images</td><td>Private</td></tr>
+      <tr><td>fieldrino-static-prod</td><td>Django static files (JS, CSS, icons)</td><td>Public via CloudFront</td></tr>
+    </tbody>
+  </table>
+
+  <!-- SECTION 8: MULTI-TENANT DNS -->
+  <div class="section-title page-break">8. Multi-Tenant Subdomain Routing</div>
+
+  <p>Your app uses subdomain-based tenant detection (e.g., <code>tenant1.yourdomain.com</code>). Route 53 must route all subdomains to your EC2 instance.</p>
+
+  <table>
+    <thead>
+      <tr><th>DNS Record</th><th>Type</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>yourdomain.com</td><td>A</td><td>EC2 Elastic IP</td></tr>
+      <tr><td>*.yourdomain.com</td><td>A</td><td>EC2 Elastic IP (wildcard — covers all tenants)</td></tr>
+      <tr><td>api.yourdomain.com</td><td>A</td><td>EC2 Elastic IP</td></tr>
+      <tr><td>cdn.yourdomain.com</td><td>CNAME</td><td>CloudFront distribution domain</td></tr>
+    </tbody>
+  </table>
+
+  <div class="alert alert-info">
+    <div class="alert-title">ℹ ACM Wildcard Certificate</div>
+    Request a wildcard SSL certificate from AWS ACM: <strong>*.yourdomain.com</strong>
+    This single free certificate covers all tenant subdomains automatically.
+    Attach it to your Nginx config (via Certbot or import into ACM for CloudFront).
+  </div>
+
+  <!-- SECTION 9: SECURITY -->
+  <div class="section-title">9. Security Configuration</div>
+
+  <div class="sub-title">EC2 Security Group Rules</div>
+  <table>
+    <thead>
+      <tr><th>Port</th><th>Protocol</th><th>Source</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>80</td><td>TCP</td><td>0.0.0.0/0</td><td>HTTP (redirect to HTTPS)</td></tr>
+      <tr><td>443</td><td>TCP</td><td>0.0.0.0/0</td><td>HTTPS (Nginx)</td></tr>
+      <tr><td>22</td><td>TCP</td><td>Your IP only</td><td>SSH access</td></tr>
+    </tbody>
+  </table>
+
+  <div class="sub-title">RDS Security Group</div>
+  <table>
+    <thead>
+      <tr><th>Port</th><th>Protocol</th><th>Source</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>5432</td><td>TCP</td><td>EC2 Security Group ID only</td></tr>
+    </tbody>
+  </table>
+
+  <div class="sub-title">ElastiCache Security Group</div>
+  <table>
+    <thead>
+      <tr><th>Port</th><th>Protocol</th><th>Source</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>6379</td><td>TCP</td><td>EC2 Security Group ID only</td></tr>
+    </tbody>
+  </table>
+
+  <div class="sub-title">IAM Role for EC2</div>
+  <p>Attach an IAM Role to EC2 with the following policies — <strong>never hardcode AWS credentials</strong>:</p>
+  <ul>
+    <li><strong>AmazonS3FullAccess</strong> (or scoped to your bucket ARN)</li>
+    <li><strong>AmazonSESFullAccess</strong> (or SES send-only policy)</li>
+    <li><strong>CloudWatchAgentServerPolicy</strong> (for metrics and logs)</li>
+  </ul>
+
+  <!-- SECTION 10: MONITORING -->
+  <div class="section-title page-break">10. Monitoring &amp; Alerts (Free / Low Cost)</div>
+
+  <table>
+    <thead>
+      <tr><th>Tool</th><th>Cost</th><th>What to Monitor</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>CloudWatch Metrics</td><td>Free tier</td><td>EC2 CPU, RDS connections, ElastiCache memory</td></tr>
+      <tr><td>CloudWatch Agent</td><td>Free</td><td>EC2 RAM usage, disk space (not default metrics)</td></tr>
+      <tr><td>CloudWatch Alarms</td><td>10 free alarms</td><td>CPU &gt; 80%, DB connections &gt; 80, disk &gt; 75%</td></tr>
+      <tr><td>CloudWatch Logs</td><td>5 GB free/mo</td><td>Django logs, Nginx access/error logs, Celery logs</td></tr>
+      <tr><td>RDS Performance Insights</td><td>Free (7-day)</td><td>Slow queries, wait events, connection counts</td></tr>
+      <tr><td>Sentry (free tier)</td><td>Free</td><td>Application errors and exceptions</td></tr>
+    </tbody>
+  </table>
+
+  <div class="sub-title">Key CloudWatch Alarms to Set Up</div>
+  <ul>
+    <li><strong>EC2 CPU &gt; 80%</strong> for 5 minutes → SNS email alert</li>
+    <li><strong>EC2 StatusCheckFailed</strong> → triggers Auto Recovery</li>
+    <li><strong>RDS FreeStorageSpace &lt; 2 GB</strong> → email alert</li>
+    <li><strong>RDS DatabaseConnections &gt; 80</strong> → email alert</li>
+    <li><strong>ElastiCache Evictions &gt; 100</strong> → email alert</li>
+  </ul>
+
+  <!-- SECTION 11: DEPLOYMENT PROCESS -->
+  <div class="section-title">11. Deployment Process (Zero Risk)</div>
+
+  <ol class="steps">
+    <li>Take a <strong>manual RDS snapshot</strong> before every deployment (takes ~2 minutes, free)</li>
+    <li>SSH into EC2, pull latest code from git repository</li>
+    <li>Install dependencies: <code>pip install -r requirements.txt</code></li>
+    <li>Run migrations: <code>python manage.py migrate --noinput</code></li>
+    <li>Collect static files: <code>python manage.py collectstatic --noinput</code></li>
+    <li>Reload Gunicorn gracefully: <code>sudo supervisorctl restart gunicorn</code> (existing connections finish before restart)</li>
+    <li>Reload Celery workers: <code>sudo supervisorctl restart celery</code></li>
+    <li>Verify health endpoint responds: <code>curl https://yourdomain.com/api/health/</code></li>
+  </ol>
+
+  <div class="alert alert-info">
+    <div class="alert-title">ℹ Minimizing Downtime During Deploys</div>
+    Use Gunicorn's <strong>--graceful-timeout</strong> (default 30s) — it lets active requests finish
+    before restarting workers. Total downtime is effectively 0–5 seconds.
+    Schedule deployments during low-traffic hours for safety.
+  </div>
+
+  <!-- SECTION 12: WHEN TO UPGRADE -->
+  <div class="section-title page-break">12. When to Upgrade (Scale Signals)</div>
+
+  <table>
+    <thead>
+      <tr><th>Signal / Trigger</th><th>Upgrade Action</th><th>Additional Cost</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>EC2 CPU consistently &gt; 70%</td><td>Upgrade to t3a.medium (4 GB RAM)</td><td>+$13/mo</td></tr>
+      <tr><td>Memory pressure / OOM kills</td><td>Upgrade to t3a.medium</td><td>+$13/mo</td></tr>
+      <tr><td>DB connections maxing out (100)</td><td>Add PgBouncer on EC2 OR upgrade to db.t3.small</td><td>+$12/mo</td></tr>
+      <tr><td>Need true zero-downtime deploys</td><td>Add ALB + 2nd EC2 instance</td><td>+$30/mo</td></tr>
+      <tr><td>DB failover requirement (SLA)</td><td>Upgrade to db.t3.micro Multi-AZ</td><td>+$12/mo</td></tr>
+      <tr><td>Celery overloaded / task queue lag</td><td>Separate Celery to its own t3a.micro EC2</td><td>+$8/mo</td></tr>
+      <tr><td>Thousands of concurrent users</td><td>ECS Fargate + ALB + Multi-AZ RDS</td><td>~$80–120/mo total</td></tr>
+    </tbody>
+  </table>
+
+  <!-- SECTION 13: TRUE HA ARCHITECTURE -->
+  <div class="section-title">13. True HA Architecture (~$90–110/month)</div>
+
+  <p>When your business grows and revenue justifies it, this is the proper production-grade HA setup:</p>
+
+  <div class="arch-box">
+                         ┌──────────────────────────────┐
+                         │          INTERNET             │
+                         └──────────────┬───────────────┘
+                                        │
+                         ┌──────────────▼───────────────┐
+                         │   CloudFront + WAF            │
+                         └──────────────┬───────────────┘
+                                        │
+                         ┌──────────────▼───────────────┐
+                         │   ALB (Application LB)        │
+                         │   (Multi-AZ, SSL termination) │
+                         └──────┬───────────────┬────────┘
+                                │               │
+               ┌────────────────▼──┐     ┌──────▼────────────────┐
+               │ EC2 t3a.small     │     │ EC2 t3a.small          │
+               │ (AZ 1 — Primary)  │     │ (AZ 2 — Standby)       │
+               └────────────────┬──┘     └──────┬────────────────┘
+                                │               │
+               ┌────────────────▼───────────────▼────────────────┐
+               │   RDS PostgreSQL db.t3.small   Multi-AZ          │
+               │   (Primary AZ1)  ──failover──  (Standby AZ2)     │
+               └─────────────────────────────────────────────────┘
+               ┌─────────────────────────────────────────────────┐
+               │   ElastiCache Redis  cache.t3.small              │
+               └─────────────────────────────────────────────────┘
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Service</th><th>Tier</th><th>Cost/mo</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>ALB</td><td>Application Load Balancer</td><td>~$16</td></tr>
+      <tr><td>EC2 × 2</td><td>t3a.small × 2 (reserved)</td><td>~$17</td></tr>
+      <tr><td>RDS Multi-AZ</td><td>db.t3.small (reserved)</td><td>~$28</td></tr>
+      <tr><td>ElastiCache</td><td>cache.t3.micro (reserved)</td><td>~$8.50</td></tr>
+      <tr><td>S3 + CloudFront + SES + Route 53</td><td>—</td><td>~$3–5</td></tr>
+      <tr class="total-row"><td colspan="2"><strong>Total HA Setup</strong></td><td><strong>~$72–75/mo</strong></td></tr>
+    </tbody>
+  </table>
+
+  <!-- SECTION 14: SUMMARY -->
+  <div class="section-title page-break">14. Summary &amp; Recommended Action Plan</div>
+
+  <div class="alert alert-success">
+    <div class="alert-title">✅ Start Here — $40/month Production Setup</div>
+    EC2 t3a.small + RDS db.t3.micro + ElastiCache cache.t3.micro + S3 + CloudFront + Route 53 + ACM + SES.
+    Buy 1-year reserved instances for EC2, RDS, and ElastiCache to bring the bill to ~$27–29/month.
+  </div>
+
+  <div class="sub-title">Phase 1: Launch (Month 1) — ~$40/mo</div>
+  <ul>
+    <li>Set up VPC with public + private subnets across 2 AZs</li>
+    <li>Launch EC2 t3a.small with Nginx + Gunicorn + Supervisor</li>
+    <li>Create RDS PostgreSQL db.t3.micro (single-AZ, automated backups on)</li>
+    <li>Create ElastiCache Redis cache.t3.micro</li>
+    <li>Configure S3 buckets + CloudFront distribution</li>
+    <li>Set up Route 53 wildcard DNS for multi-tenant subdomains</li>
+    <li>Configure ACM wildcard SSL certificate</li>
+    <li>Set up SES for transactional emails</li>
+    <li>Configure CloudWatch alarms for CPU, memory, storage, connections</li>
+  </ul>
+
+  <div class="sub-title">Phase 2: Optimize (Month 2–3) — ~$27/mo</div>
+  <ul>
+    <li>Purchase 1-year reserved instances for EC2, RDS, ElastiCache</li>
+    <li>Add PgBouncer for PostgreSQL connection pooling</li>
+    <li>Integrate Sentry for error tracking</li>
+    <li>Set up automated deployment scripts (GitHub Actions → SSH deploy)</li>
+  </ul>
+
+  <div class="sub-title">Phase 3: Scale (When Revenue Allows) — ~$75-110/mo</div>
+  <ul>
+    <li>Add ALB and second EC2 instance for high-availability</li>
+    <li>Upgrade RDS to Multi-AZ for database failover</li>
+    <li>Separate Celery to its own instance</li>
+    <li>Consider ECS Fargate for auto-scaling</li>
+  </ul>
+
+  <div class="alert alert-warning">
+    <div class="alert-title">⚠ Key Limitations to Communicate to Stakeholders</div>
+    At $40/month, this architecture handles <strong>hundreds of daily active users</strong> and
+    <strong>thousands of total registered users</strong> comfortably. However, it has a single
+    app server and single-AZ database — meaning a hardware failure or AZ outage could cause
+    5–15 minutes of downtime. For guaranteed 99.9% uptime SLA, budget $75–110/month.
+  </div>
+
+  <div class="page-footer">
+    <span>FieldPilot — AWS Deployment Guide</span>
+    <span>Confidential &amp; Internal Use Only</span>
+    <span>March 2026</span>
+  </div>
+
+</div>
+</body>
+</html>

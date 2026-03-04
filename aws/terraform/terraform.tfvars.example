@@ -1,0 +1,37 @@
+# FieldRino Terraform Variables
+# Copy this file to terraform.tfvars and fill in your values
+
+# AWS Configuration
+aws_region = "ap-south-1"  # Mumbai region
+environment = "production"
+
+# Domain Configuration
+domain_name = "yourdomain.com"  # Replace with your actual domain
+
+# Database Configuration
+db_name     = "fieldrino_db"
+db_username = "fieldrino_admin"
+db_password = "CHANGE_ME_STRONG_PASSWORD_HERE"  # Generate a strong password
+
+# Django Configuration
+django_secret_key = "CHANGE_ME_GENERATE_STRONG_SECRET_KEY"  # Generate with: python -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'
+
+# Stripe Configuration (get from Stripe dashboard)
+stripe_secret_key      = "sk_live_..."
+stripe_publishable_key = "pk_live_..."
+stripe_webhook_secret  = "whsec_..."
+
+# Email Configuration (for SES or SMTP)
+email_host_user     = "your-email@yourdomain.com"
+email_host_password = "your-smtp-password"
+
+# SSH Configuration
+ssh_key_name     = "your-ec2-key-pair-name"  # Create this in AWS EC2 console first
+allowed_ssh_cidr = "YOUR_IP_ADDRESS/32"      # Restrict SSH to your IP for security
+
+# Instance Configuration (optimized for $40/month)
+ec2_instance_type       = "t3a.small"
+rds_instance_class      = "db.t3.micro"
+elasticache_node_type   = "cache.t3.micro"
+rds_allocated_storage   = 20
+rds_max_allocated_storage = 100

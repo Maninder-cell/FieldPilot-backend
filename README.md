@@ -148,6 +148,26 @@ Comprehensive documentation is available in the `/docs` folder:
 - **[Contributing](docs/CONTRIBUTING.md)** - Contribution guidelines
 </div>
 
+## 🚀 AWS Deployment
+
+Complete AWS infrastructure setup is available in the `aws/` directory:
+
+- **[Quick Start Guide](aws/GETTING_STARTED.md)** - Deploy in 30 minutes
+- **[Complete Deployment Guide](aws/DEPLOYMENT_GUIDE.md)** - Step-by-step walkthrough
+- **[Setup Checklist](aws/SETUP_CHECKLIST.md)** - Comprehensive checklist
+- **[Cost Breakdown](aws/COST_BREAKDOWN.md)** - ~$40/month budget
+- **[Quick Reference](aws/QUICK_REFERENCE.md)** - Common commands
+
+### Infrastructure Includes
+- EC2 t3a.small (Django + Celery + Nginx)
+- RDS PostgreSQL (Multi-tenant database)
+- ElastiCache Redis (Cache + task queue)
+- S3 + CloudFront (File storage + CDN)
+- Route 53 (DNS with wildcard subdomains)
+- CloudWatch (Monitoring + alerts)
+
+**See [AWS_SETUP_SUMMARY.md](AWS_SETUP_SUMMARY.md) for complete details.**
+
 ## 🗺️ Roadmap
 
 ### ✅ MVP (Month 1) - COMPLETED
@@ -156,6 +176,7 @@ Comprehensive documentation is available in the `/docs` folder:
 - Mobile technician interface
 - Stripe subscriptions
 - Basic reporting
+- AWS deployment infrastructure
 
 ### 🚧 v1.0 (Month 2-3) - IN PROGRESS
 - Scheduled maintenance automation
